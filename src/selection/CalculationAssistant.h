@@ -41,6 +41,8 @@ struct LensCalculationEstimate {
     double effectiveFovHeightMm = 0.0;
     double objectPixelSizeUm = 0.0;
     double magnification = 0.0;
+    double estimatedDofMm = 0.0;
+    double distortionErrorUm = 0.0;
     double residualTelecentricErrorUm = 0.0;
     bool fovOk = false;
     bool samplingOk = false;

@@ -112,9 +112,15 @@ void appendCommonLensJudgement(const SelectionRequest &request,
             .arg(camera.lensMount, estimate->lens.lensMount));
     }
 
-    if (request.detectionType == DetectionType::Measurement && estimate->lens.distortionPercent > 0.1) {
-        estimate->score -= 6.0;
-        estimate->risks.append(QString::fromUtf8("\346\265\213\351\207\217\344\273\273\345\212\241\351\234\200\346\263\250\346\204\217\351\225\234\345\244\264\347\225\270\345\217\230\346\240\241\346\255\243"));
+    if (request.detectionType == DetectionType::Measurement
+        && request.measurementToleranceUm > 0.0
+        && estimate->distortionErrorUm > request.measurementToleranceUm) {
+        estimate->score -= 12.0;
+        estimate->risks.append(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1，高于允许误差")
+            .arg(um(estimate->distortionErrorUm)));
+    } else if (estimate->distortionErrorUm > 0.0) {
+        estimate->reasons.append(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1")
+            .arg(um(estimate->distortionErrorUm)));
     }
 }
 }
@@ -131,10 +137,8 @@ RequirementEstimate CalculationAssistant::estimateRequirement(const SelectionReq
     estimate.requiredBandwidthMBps12Bit = estimate.requiredResolutionX * estimate.requiredResolutionY
         * 12.0 * qMax(1.0, request.requiredFps) / 8.0 / 1000000.0;
     estimate.hasMotionConstraint = request.motionSpeedMmS > 0.0;
-    if (estimate.hasMotionConstraint) {
-        const double targetPixelMm = estimate.targetObjectPixelUm / 1000.0;
-        estimate.maxExposureUsForOnePixelBlur = targetPixelMm / request.motionSpeedMmS * 1000000.0;
-    }
+    if (estimate.hasMotionConstraint)
+        estimate.maxExposureUsForOnePixelBlur = SelectionEngine::maxExposureUsForOnePixelBlur(request);
     estimate.telecentricPreferred = telecentricPreferred(request);
     return estimate;
 }
@@ -209,6 +213,8 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
             estimate.effectiveFovHeightMm = sensorH / lens.pmag;
             estimate.objectPixelSizeUm = camera.pixelSizeUm / lens.pmag;
             estimate.magnification = lens.pmag;
+            estimate.estimatedDofMm = lens.dofMm;
+            estimate.distortionErrorUm = SelectionEngine::distortionErrorUm(lens, estimate.effectiveFovWidthMm, estimate.effectiveFovHeightMm);
             estimate.formulaSummary = QString::fromUtf8("FOV = SensorSize / PMAG\357\274\214ObjectPixel = PixelSize / PMAG");
             const double tolerance = lens.workingDistanceToleranceMm > 0.0 ? lens.workingDistanceToleranceMm : 5.0;
             estimate.workingDistanceOk = lens.nominalWorkingDistanceMm <= 0.0
@@ -253,9 +259,12 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
             estimate.objectPixelSizeUm = qMax(estimate.effectiveFovWidthMm * 1000.0 / camera.resolutionX,
                                              estimate.effectiveFovHeightMm * 1000.0 / camera.resolutionY);
             estimate.magnification = sensorW / qMax(0.001, estimate.effectiveFovWidthMm);
+            estimate.estimatedDofMm = SelectionEngine::estimatedFixedLensDofMm(camera, lens, estimate.magnification);
+            estimate.distortionErrorUm = SelectionEngine::distortionErrorUm(lens, estimate.effectiveFovWidthMm, estimate.effectiveFovHeightMm);
             estimate.formulaSummary = QString::fromUtf8("M = SensorSize / FOV\357\274\214f \342\211\210 WD x SensorSize / (FOV + SensorSize)");
             estimate.workingDistanceOk = request.workingDistanceMm >= lens.minWorkingDistanceMm;
-            estimate.dofOk = true;
+            estimate.dofOk = request.heightVariationMm <= 0.0
+                || (estimate.estimatedDofMm > 0.0 && estimate.estimatedDofMm >= request.heightVariationMm * 1.5);
 
             if (estimate.workingDistanceOk) {
                 estimate.score += 8.0;
@@ -277,6 +286,21 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
             if (telecentricPreferred(request)) {
                 estimate.score -= 10.0;
                 estimate.risks.append(QString::fromUtf8("\351\253\230\347\262\276\345\272\246/\351\253\230\345\272\246\346\263\242\345\212\250\345\234\272\346\231\257\346\231\256\351\200\232\351\225\234\345\244\264\345\255\230\345\234\250\351\200\217\350\247\206\350\257\257\345\267\256"));
+            }
+
+            if (request.heightVariationMm > 0.0) {
+                if (estimate.dofOk) {
+                    estimate.score += 8.0;
+                    estimate.reasons.append(QString::fromUtf8("估算 DOF %1 覆盖高度波动")
+                        .arg(mm(estimate.estimatedDofMm, 2)));
+                } else if (estimate.estimatedDofMm > 0.0) {
+                    estimate.score -= 14.0;
+                    estimate.risks.append(QString::fromUtf8("估算 DOF %1 可能不足")
+                        .arg(mm(estimate.estimatedDofMm, 2)));
+                } else {
+                    estimate.score -= 6.0;
+                    estimate.risks.append(QString::fromUtf8("缺少 F/# 或 DOF 数据，景深需要确认"));
+                }
             }
         }
 

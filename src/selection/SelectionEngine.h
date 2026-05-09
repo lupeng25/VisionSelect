@@ -16,6 +16,15 @@ public:
     static double requiredFovHeight(const SelectionRequest &request);
     static double targetObjectPixelUm(const SelectionRequest &request);
     static double bandwidthRequiredMBps(const CameraSpec &camera, double fps);
+    static double maxExposureUsForOnePixelBlur(const SelectionRequest &request);
+    static double estimatedFixedLensDofMm(const CameraSpec &camera,
+                                          const LensSpec &lens,
+                                          double magnification);
+    static double distortionErrorUm(const LensSpec &lens,
+                                    double fovWidthMm,
+                                    double fovHeightMm);
+    static double lightCoverageMarginPercent(const SelectionRequest &request,
+                                             const LightSpec &light);
 
 private:
     SelectionResult evaluatePair(const SelectionRequest &request,

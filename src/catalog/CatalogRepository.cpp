@@ -26,13 +26,11 @@ bool CatalogRepository::loadDefaults(QString *errorMessage)
     QVector<Row> lensRows;
     QVector<Row> lightRows;
 
-    QFile lights(QStringLiteral(":/data/lights.csv"));
-
     if (!readCsvRows(cameraStoragePath(), &cameraRows, errorMessage))
         return false;
     if (!readCsvRows(lensStoragePath(), &lensRows, errorMessage))
         return false;
-    if (!readCsvRowsFromDevice(&lights, QStringLiteral(":/data/lights.csv"), &lightRows, errorMessage))
+    if (!readCsvRows(lightStoragePath(), &lightRows, errorMessage))
         return false;
 
     return loadCameraRows(cameraRows, QString::fromUtf8("\345\206\205\347\275\256\347\233\270\346\234\272\345\272\223"), errorMessage)
@@ -60,6 +58,11 @@ QString CatalogRepository::lensStoragePath() const
     return QDir(effectiveStorageDirectory()).filePath(QStringLiteral("lenses.csv"));
 }
 
+QString CatalogRepository::lightStoragePath() const
+{
+    return QDir(effectiveStorageDirectory()).filePath(QStringLiteral("lights.csv"));
+}
+
 bool CatalogRepository::ensureLocalCatalogs(QString *errorMessage)
 {
     QDir dir(effectiveStorageDirectory());
@@ -74,6 +77,10 @@ bool CatalogRepository::ensureLocalCatalogs(QString *errorMessage)
     }
     if (!QFileInfo::exists(lensStoragePath())
         && !copyResourceToFile(QStringLiteral(":/data/lenses.csv"), lensStoragePath(), false, errorMessage)) {
+        return false;
+    }
+    if (!QFileInfo::exists(lightStoragePath())
+        && !copyResourceToFile(QStringLiteral(":/data/lights.csv"), lightStoragePath(), false, errorMessage)) {
         return false;
     }
     return true;
@@ -141,8 +148,17 @@ bool CatalogRepository::loadLensCsv(const QString &filePath, QString *errorMessa
 bool CatalogRepository::loadLightCsv(const QString &filePath, QString *errorMessage)
 {
     QVector<Row> rows;
-    return readCsvRows(filePath, &rows, errorMessage)
-        && loadLightRows(rows, filePath, errorMessage);
+    QVector<LightSpec> previous = m_lights;
+    if (!readCsvRows(filePath, &rows, errorMessage)
+        || !loadLightRows(rows, filePath, errorMessage)) {
+        m_lights = previous;
+        return false;
+    }
+    if (!saveLights(errorMessage)) {
+        m_lights = previous;
+        return false;
+    }
+    return true;
 }
 
 bool CatalogRepository::exportCameraCsv(const QString &filePath, QString *errorMessage) const
@@ -153,6 +169,41 @@ bool CatalogRepository::exportCameraCsv(const QString &filePath, QString *errorM
 bool CatalogRepository::exportLensCsv(const QString &filePath, QString *errorMessage) const
 {
     return writeLensCsv(filePath, m_lenses, errorMessage);
+}
+
+bool CatalogRepository::exportLightCsv(const QString &filePath, QString *errorMessage) const
+{
+    return writeLightCsv(filePath, m_lights, errorMessage);
+}
+
+bool CatalogRepository::exportCameraCsv(const QString &filePath, const QVector<int> &indexes, QString *errorMessage) const
+{
+    QVector<CameraSpec> selected;
+    for (int index : indexes) {
+        if (index >= 0 && index < m_cameras.size())
+            selected.append(m_cameras.at(index));
+    }
+    return writeCameraCsv(filePath, selected, errorMessage);
+}
+
+bool CatalogRepository::exportLensCsv(const QString &filePath, const QVector<int> &indexes, QString *errorMessage) const
+{
+    QVector<LensSpec> selected;
+    for (int index : indexes) {
+        if (index >= 0 && index < m_lenses.size())
+            selected.append(m_lenses.at(index));
+    }
+    return writeLensCsv(filePath, selected, errorMessage);
+}
+
+bool CatalogRepository::exportLightCsv(const QString &filePath, const QVector<int> &indexes, QString *errorMessage) const
+{
+    QVector<LightSpec> selected;
+    for (int index : indexes) {
+        if (index >= 0 && index < m_lights.size())
+            selected.append(m_lights.at(index));
+    }
+    return writeLightCsv(filePath, selected, errorMessage);
 }
 
 bool CatalogRepository::resetCamerasToBuiltIn(QString *errorMessage)
@@ -171,6 +222,15 @@ bool CatalogRepository::resetLensesToBuiltIn(QString *errorMessage)
     QVector<Row> rows;
     return readCsvRows(lensStoragePath(), &rows, errorMessage)
         && loadLensRows(rows, QString::fromUtf8("\345\206\205\347\275\256\351\225\234\345\244\264\345\272\223"), errorMessage);
+}
+
+bool CatalogRepository::resetLightsToBuiltIn(QString *errorMessage)
+{
+    if (!copyResourceToFile(QStringLiteral(":/data/lights.csv"), lightStoragePath(), true, errorMessage))
+        return false;
+    QVector<Row> rows;
+    return readCsvRows(lightStoragePath(), &rows, errorMessage)
+        && loadLightRows(rows, QString::fromUtf8("\345\206\205\347\275\256\345\205\211\346\272\220\345\272\223"), errorMessage);
 }
 
 bool CatalogRepository::addCamera(const CameraSpec &camera, QString *errorMessage)
@@ -263,6 +323,51 @@ bool CatalogRepository::removeLens(int index, QString *errorMessage)
     return true;
 }
 
+bool CatalogRepository::addLight(const LightSpec &light, QString *errorMessage)
+{
+    if (!validateLight(light, QString::fromUtf8("新增光源"), errorMessage))
+        return false;
+    m_lights.append(light);
+    if (!saveLights(errorMessage)) {
+        m_lights.removeLast();
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::updateLight(int index, const LightSpec &light, QString *errorMessage)
+{
+    if (index < 0 || index >= m_lights.size()) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("光源行号无效");
+        return false;
+    }
+    if (!validateLight(light, light.model, errorMessage))
+        return false;
+    const LightSpec previous = m_lights.at(index);
+    m_lights[index] = light;
+    if (!saveLights(errorMessage)) {
+        m_lights[index] = previous;
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::removeLight(int index, QString *errorMessage)
+{
+    if (index < 0 || index >= m_lights.size()) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("光源行号无效");
+        return false;
+    }
+    const LightSpec removed = m_lights.takeAt(index);
+    if (!saveLights(errorMessage)) {
+        m_lights.insert(index, removed);
+        return false;
+    }
+    return true;
+}
+
 QString CatalogRepository::summary() const
 {
     return QString::fromUtf8("\347\233\270\346\234\272 %1 \346\254\276\357\274\214\351\225\234\345\244\264 %2 \346\254\276\357\274\214\345\205\211\346\272\220 %3 \346\254\276")
@@ -279,6 +384,11 @@ bool CatalogRepository::saveCameras(QString *errorMessage) const
 bool CatalogRepository::saveLenses(QString *errorMessage) const
 {
     return writeLensCsv(lensStoragePath(), m_lenses, errorMessage);
+}
+
+bool CatalogRepository::saveLights(QString *errorMessage) const
+{
+    return writeLightCsv(lightStoragePath(), m_lights, errorMessage);
 }
 
 bool CatalogRepository::writeCameraCsv(const QString &filePath, const QVector<CameraSpec> &cameras, QString *errorMessage) const
@@ -375,6 +485,53 @@ bool CatalogRepository::writeLensCsv(const QString &filePath, const QVector<Lens
     return true;
 }
 
+bool CatalogRepository::writeLightCsv(const QString &filePath, const QVector<LightSpec> &lights, QString *errorMessage) const
+{
+    QFileInfo info(filePath);
+    if (!QDir().mkpath(info.absolutePath())) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\210\233\345\273\272\347\233\256\345\275\225\357\274\232%1").arg(info.absolutePath());
+        return false;
+    }
+    if (info.exists()) {
+        QFile::setPermissions(filePath,
+                              QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                  | QFileDevice::ReadUser | QFileDevice::WriteUser
+                                  | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+    }
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\206\231\345\205\245 CSV\357\274\232%1").arg(filePath);
+        return false;
+    }
+    QTextStream out(&file);
+    out.setCodec("UTF-8");
+    const QStringList headers = {
+        QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("light_type"), QStringLiteral("color"),
+        QStringLiteral("wavelength_nm"), QStringLiteral("mode"), QStringLiteral("active_width_mm"),
+        QStringLiteral("active_height_mm"), QStringLiteral("best_for")
+    };
+    out << headers.join(QLatin1Char(',')) << "\n";
+    for (const LightSpec &l : lights) {
+        QStringList row;
+        row << l.model << l.manufacturer
+            << (l.lightType == LightType::Backlight ? QStringLiteral("Backlight")
+                : l.lightType == LightType::Ring ? QStringLiteral("Ring")
+                : l.lightType == LightType::Bar ? QStringLiteral("Bar")
+                : l.lightType == LightType::Coaxial ? QStringLiteral("Coaxial")
+                : l.lightType == LightType::Dome ? QStringLiteral("Dome")
+                : l.lightType == LightType::TelecentricBacklight ? QStringLiteral("TelecentricBacklight") : QStringLiteral("DarkField"))
+            << l.color << QString::number(l.wavelengthNm) << l.mode
+            << QString::number(l.activeWidthMm, 'g', 12) << QString::number(l.activeHeightMm, 'g', 12)
+            << l.bestFor;
+        for (QString &value : row)
+            value = csvField(value);
+        out << row.join(QLatin1Char(',')) << "\n";
+    }
+    return true;
+}
+
 QString CatalogRepository::csvField(const QString &value)
 {
     QString escaped = value;
@@ -407,6 +564,16 @@ bool CatalogRepository::validateLens(const LensSpec &lens, const QString &source
     if (!lens.isTelecentric() && lens.focalLengthMm <= 0.0) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("%1 \346\231\256\351\200\232\351\225\234\345\244\264\347\274\272\345\260\221\347\204\246\350\267\235").arg(sourceName);
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::validateLight(const LightSpec &light, const QString &sourceName, QString *errorMessage)
+{
+    if (light.model.trimmed().isEmpty() || light.activeWidthMm <= 0.0 || light.activeHeightMm <= 0.0) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("%1 光源数据无效：型号和有效照明尺寸必须有效").arg(sourceName);
         return false;
     }
     return true;
@@ -681,11 +848,8 @@ bool CatalogRepository::loadLightRows(const QVector<Row> &rows, const QString &s
         spec.activeHeightMm = number(row, QStringLiteral("active_height_mm"));
         spec.bestFor = text(row, QStringLiteral("best_for"));
 
-        if (spec.model.isEmpty() || spec.activeWidthMm <= 0.0 || spec.activeHeightMm <= 0.0) {
-            if (errorMessage)
-                *errorMessage = QString::fromUtf8("%1 \344\270\255\345\205\211\346\272\220\346\225\260\346\215\256\346\227\240\346\225\210\357\274\232\345\236\213\345\217\267\345\222\214\346\234\211\346\225\210\347\205\247\346\230\216\345\260\272\345\257\270\345\277\205\351\241\273\346\234\211\346\225\210").arg(sourceName);
+        if (!validateLight(spec, sourceName, errorMessage))
             return false;
-        }
         imported.append(spec);
     }
 

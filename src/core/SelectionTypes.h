@@ -138,6 +138,10 @@ struct SelectionResult {
     double estimatedFocalLengthMm = 0.0;
     double bandwidthRequiredMBps = 0.0;
     double residualTelecentricErrorUm = 0.0;
+    double maxExposureUsForOnePixelBlur = 0.0;
+    double estimatedDofMm = 0.0;
+    double distortionErrorUm = 0.0;
+    double lightCoverageMarginPercent = 0.0;
     CandidateScore score;
     QString schemeTitle;
     QString formulaSummary;

@@ -4,7 +4,9 @@
 #include "selection/CalculationAssistant.h"
 #include "selection/SelectionEngine.h"
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDialog>
@@ -16,12 +18,13 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QSet>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <QSize>
 #include <QSpinBox>
@@ -48,7 +51,105 @@ QTableWidgetItem *item(const QString &text)
 {
     QTableWidgetItem *tableItem = new QTableWidgetItem(text);
     tableItem->setFlags(tableItem->flags() ^ Qt::ItemIsEditable);
+    tableItem->setToolTip(text);
     return tableItem;
+}
+
+QTableWidgetItem *indexedItem(const QString &text, int sourceIndex)
+{
+    QTableWidgetItem *tableItem = item(text);
+    tableItem->setData(Qt::UserRole, sourceIndex);
+    return tableItem;
+}
+
+int rowSourceIndex(const QTableWidget *table, int row)
+{
+    if (!table || row < 0 || row >= table->rowCount())
+        return -1;
+    const QTableWidgetItem *first = table->item(row, 0);
+    if (!first)
+        return -1;
+    return first->data(Qt::UserRole).toInt();
+}
+
+void copySelectionToClipboard(QTableWidget *table)
+{
+    if (!table)
+        return;
+
+    QList<QTableWidgetSelectionRange> ranges = table->selectedRanges();
+    if (ranges.isEmpty() && table->currentRow() >= 0)
+        ranges.append(QTableWidgetSelectionRange(table->currentRow(), 0, table->currentRow(), table->columnCount() - 1));
+    if (ranges.isEmpty())
+        return;
+
+    QStringList lines;
+    for (const QTableWidgetSelectionRange &range : ranges) {
+        for (int row = range.topRow(); row <= range.bottomRow(); ++row) {
+            QStringList cells;
+            for (int column = range.leftColumn(); column <= range.rightColumn(); ++column) {
+                if (table->isColumnHidden(column))
+                    continue;
+                QTableWidgetItem *cell = table->item(row, column);
+                cells.append(cell ? cell->text() : QString());
+            }
+            lines.append(cells.join(QLatin1Char('\t')));
+        }
+    }
+    QApplication::clipboard()->setText(lines.join(QLatin1Char('\n')));
+}
+
+void installTableCopyShortcut(QTableWidget *table)
+{
+    QShortcut *copyShortcut = new QShortcut(QKeySequence::Copy, table);
+    QObject::connect(copyShortcut, &QShortcut::activated, table, [table]() {
+        copySelectionToClipboard(table);
+    });
+}
+
+QString catalogKey(const QString &manufacturer, const QString &model)
+{
+    return manufacturer.trimmed() + QLatin1Char('\n') + model.trimmed();
+}
+
+QString selectedCatalogKey(const QTableWidget *table)
+{
+    if (!table || table->currentRow() < 0)
+        return QString();
+    const QTableWidgetItem *manufacturer = table->item(table->currentRow(), 1);
+    const QTableWidgetItem *model = table->item(table->currentRow(), 0);
+    if (!manufacturer || !model)
+        return QString();
+    return catalogKey(manufacturer->text(), model->text());
+}
+
+void selectCatalogRow(QTableWidget *table, const QString &key, int fallbackRow)
+{
+    if (!table || table->rowCount() <= 0)
+        return;
+    if (!key.isEmpty()) {
+        for (int row = 0; row < table->rowCount(); ++row) {
+            const QTableWidgetItem *manufacturer = table->item(row, 1);
+            const QTableWidgetItem *model = table->item(row, 0);
+            if (manufacturer && model && catalogKey(manufacturer->text(), model->text()) == key) {
+                table->selectRow(row);
+                return;
+            }
+        }
+    }
+    table->selectRow(qBound(0, fallbackRow, table->rowCount() - 1));
+}
+
+void selectRowBySourceIndex(QTableWidget *table, int sourceIndex)
+{
+    if (!table || sourceIndex < 0)
+        return;
+    for (int row = 0; row < table->rowCount(); ++row) {
+        if (rowSourceIndex(table, row) == sourceIndex) {
+            table->selectRow(row);
+            return;
+        }
+    }
 }
 
 QString number(double value, int decimals = 2)
@@ -71,6 +172,8 @@ void setupTable(QTableWidget *table)
     table->verticalHeader()->setVisible(false);
     table->horizontalHeader()->setStretchLastSection(true);
     table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    table->setSortingEnabled(true);
+    installTableCopyShortcut(table);
 }
 
 QDoubleSpinBox *dialogSpin(double min, double max, double value, const QString &suffix = QString(), int decimals = 3)
@@ -269,6 +372,68 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     return true;
 }
 
+bool editLightDialog(QWidget *parent, LightSpec *light, const QString &title)
+{
+    QDialog dialog(parent);
+    dialog.setWindowTitle(title);
+    QVBoxLayout *outer = new QVBoxLayout(&dialog);
+    QFormLayout *form = new QFormLayout;
+    form->setLabelAlignment(Qt::AlignLeft);
+
+    QLineEdit *model = new QLineEdit(light->model);
+    QLineEdit *manufacturer = new QLineEdit(light->manufacturer);
+    QComboBox *type = new QComboBox;
+    type->addItems({QStringLiteral("Backlight"), QStringLiteral("Ring"), QStringLiteral("Bar"),
+                    QStringLiteral("Coaxial"), QStringLiteral("Dome"), QStringLiteral("TelecentricBacklight"),
+                    QStringLiteral("DarkField")});
+    const QString currentType = light->lightType == LightType::Backlight ? QStringLiteral("Backlight")
+        : light->lightType == LightType::Ring ? QStringLiteral("Ring")
+        : light->lightType == LightType::Bar ? QStringLiteral("Bar")
+        : light->lightType == LightType::Coaxial ? QStringLiteral("Coaxial")
+        : light->lightType == LightType::Dome ? QStringLiteral("Dome")
+        : light->lightType == LightType::TelecentricBacklight ? QStringLiteral("TelecentricBacklight") : QStringLiteral("DarkField");
+    type->setCurrentText(currentType);
+    QComboBox *color = editableCombo({QStringLiteral("White"), QStringLiteral("Red"), QStringLiteral("Blue"),
+                                      QStringLiteral("Green"), QStringLiteral("IR"), QStringLiteral("UV")}, light->color);
+    QSpinBox *wavelength = dialogIntSpin(0, 100000, light->wavelengthNm, QStringLiteral(" nm"));
+    QComboBox *mode = editableCombo({QStringLiteral("Continuous"), QStringLiteral("Strobe"), QStringLiteral("Trigger"), QStringLiteral("Pulse")}, light->mode);
+    QDoubleSpinBox *activeWidth = dialogSpin(0.1, 100000.0, light->activeWidthMm, QStringLiteral(" mm"), 2);
+    QDoubleSpinBox *activeHeight = dialogSpin(0.1, 100000.0, light->activeHeightMm, QStringLiteral(" mm"), 2);
+    QTextEdit *bestFor = new QTextEdit(light->bestFor);
+    bestFor->setMinimumHeight(88);
+
+    form->addRow(QString::fromUtf8("型号"), model);
+    form->addRow(QString::fromUtf8("厂家"), manufacturer);
+    form->addRow(QString::fromUtf8("类型"), type);
+    form->addRow(QString::fromUtf8("颜色"), color);
+    form->addRow(QString::fromUtf8("波长"), wavelength);
+    form->addRow(QString::fromUtf8("模式"), mode);
+    form->addRow(QString::fromUtf8("有效宽度"), activeWidth);
+    form->addRow(QString::fromUtf8("有效高度"), activeHeight);
+    form->addRow(QString::fromUtf8("适用场景"), bestFor);
+    outer->addLayout(form);
+
+    QDialogButtonBox *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    QObject::connect(box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    outer->addWidget(box);
+    dialog.resize(520, 520);
+
+    if (dialog.exec() != QDialog::Accepted)
+        return false;
+
+    light->model = model->text().trimmed();
+    light->manufacturer = manufacturer->text().trimmed();
+    light->lightType = lightTypeFromString(type->currentText().trimmed());
+    light->color = color->currentText().trimmed();
+    light->wavelengthNm = wavelength->value();
+    light->mode = mode->currentText().trimmed();
+    light->activeWidthMm = activeWidth->value();
+    light->activeHeightMm = activeHeight->value();
+    light->bestFor = bestFor->toPlainText().trimmed();
+    return true;
+}
+
 QString allManufacturersText()
 {
     return QString::fromUtf8("全部厂家");
@@ -287,6 +452,11 @@ QString allTypesText()
 QString allMountsText()
 {
     return QString::fromUtf8("全部接口");
+}
+
+QString allModesText()
+{
+    return QString::fromUtf8("全部模式");
 }
 
 void fillComboPreservingText(QComboBox *combo, const QString &allText, const QStringList &values)
@@ -560,7 +730,8 @@ QWidget *MainWindow::createCalculationPage()
     m_assistantCameraTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_assistantCameraTable->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Stretch);
     connect(m_assistantCameraTable, &QTableWidget::cellClicked, this, [this](int row, int) {
-        m_assistantSelectedCameraRow = row;
+        const int sourceRow = rowSourceIndex(m_assistantCameraTable, row);
+        m_assistantSelectedCameraRow = sourceRow >= 0 ? sourceRow : row;
         refreshAssistantLensTable();
     });
     layout->addWidget(m_assistantCameraTable, 1);
@@ -617,7 +788,8 @@ QWidget *MainWindow::createResultsPage()
         m_resultTable->setColumnWidth(column, resultColumnWidths[column]);
     m_resultTable->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Stretch);
     connect(m_resultTable, &QTableWidget::cellClicked, this, [this](int row, int) {
-        refreshResultDetails(row);
+        const int sourceRow = rowSourceIndex(m_resultTable, row);
+        refreshResultDetails(sourceRow >= 0 ? sourceRow : row);
     });
 
     m_resultDetails = new QTextEdit;
@@ -661,17 +833,20 @@ QWidget *MainWindow::createCatalogPage()
     QPushButton *removeCameraButton = new QPushButton(QString::fromUtf8("删除"));
     QPushButton *importCameraButton = new QPushButton(QString::fromUtf8("导入 CSV"));
     QPushButton *exportCameraButton = new QPushButton(QString::fromUtf8("导出 CSV"));
+    QPushButton *exportFilteredCameraButton = new QPushButton(QString::fromUtf8("导出筛选"));
     QPushButton *resetCameraButton = new QPushButton(QString::fromUtf8("重置内置"));
     editCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
     removeCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
     importCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
     exportCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
+    exportFilteredCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
     resetCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
     cameraActions->addWidget(addCameraButton);
     cameraActions->addWidget(editCameraButton);
     cameraActions->addWidget(removeCameraButton);
     cameraActions->addWidget(importCameraButton);
     cameraActions->addWidget(exportCameraButton);
+    cameraActions->addWidget(exportFilteredCameraButton);
     cameraActions->addWidget(resetCameraButton);
     cameraActions->addStretch();
     cameraLayout->addLayout(cameraActions);
@@ -704,17 +879,20 @@ QWidget *MainWindow::createCatalogPage()
     QPushButton *removeLensButton = new QPushButton(QString::fromUtf8("删除"));
     QPushButton *importLensButton = new QPushButton(QString::fromUtf8("导入 CSV"));
     QPushButton *exportLensButton = new QPushButton(QString::fromUtf8("导出 CSV"));
+    QPushButton *exportFilteredLensButton = new QPushButton(QString::fromUtf8("导出筛选"));
     QPushButton *resetLensButton = new QPushButton(QString::fromUtf8("重置内置"));
     editLensButton->setObjectName(QStringLiteral("SecondaryButton"));
     removeLensButton->setObjectName(QStringLiteral("SecondaryButton"));
     importLensButton->setObjectName(QStringLiteral("SecondaryButton"));
     exportLensButton->setObjectName(QStringLiteral("SecondaryButton"));
+    exportFilteredLensButton->setObjectName(QStringLiteral("SecondaryButton"));
     resetLensButton->setObjectName(QStringLiteral("SecondaryButton"));
     lensActions->addWidget(addLensButton);
     lensActions->addWidget(editLensButton);
     lensActions->addWidget(removeLensButton);
     lensActions->addWidget(importLensButton);
     lensActions->addWidget(exportLensButton);
+    lensActions->addWidget(exportFilteredLensButton);
     lensActions->addWidget(resetLensButton);
     lensActions->addStretch();
     lensLayout->addLayout(lensActions);
@@ -727,10 +905,41 @@ QWidget *MainWindow::createCatalogPage()
     QVBoxLayout *lightLayout = new QVBoxLayout(lightPage);
     lightLayout->setContentsMargins(0, 0, 0, 0);
     lightLayout->setSpacing(8);
+    QHBoxLayout *lightFilters = new QHBoxLayout;
+    m_lightSearchEdit = new QLineEdit;
+    m_lightSearchEdit->setPlaceholderText(QString::fromUtf8("搜索型号/厂家/场景"));
+    m_lightManufacturerFilter = new QComboBox;
+    m_lightTypeFilter = new QComboBox;
+    m_lightModeFilter = new QComboBox;
+    QPushButton *clearLightFilterButton = new QPushButton(QString::fromUtf8("清空筛选"));
+    clearLightFilterButton->setObjectName(QStringLiteral("SecondaryButton"));
+    lightFilters->addWidget(m_lightSearchEdit, 2);
+    lightFilters->addWidget(m_lightManufacturerFilter);
+    lightFilters->addWidget(m_lightTypeFilter);
+    lightFilters->addWidget(m_lightModeFilter);
+    lightFilters->addWidget(clearLightFilterButton);
+    lightLayout->addLayout(lightFilters);
     QHBoxLayout *lightActions = new QHBoxLayout;
-    QPushButton *importLightButton = new QPushButton(QString::fromUtf8("导入 lights.csv"));
-    connect(importLightButton, &QPushButton::clicked, this, &MainWindow::importLights);
+    QPushButton *addLightButton = new QPushButton(QString::fromUtf8("新增光源"));
+    QPushButton *editLightButton = new QPushButton(QString::fromUtf8("编辑"));
+    QPushButton *removeLightButton = new QPushButton(QString::fromUtf8("删除"));
+    QPushButton *importLightButton = new QPushButton(QString::fromUtf8("导入 CSV"));
+    QPushButton *exportLightButton = new QPushButton(QString::fromUtf8("导出 CSV"));
+    QPushButton *exportFilteredLightButton = new QPushButton(QString::fromUtf8("导出筛选"));
+    QPushButton *resetLightButton = new QPushButton(QString::fromUtf8("重置内置"));
+    editLightButton->setObjectName(QStringLiteral("SecondaryButton"));
+    removeLightButton->setObjectName(QStringLiteral("SecondaryButton"));
+    importLightButton->setObjectName(QStringLiteral("SecondaryButton"));
+    exportLightButton->setObjectName(QStringLiteral("SecondaryButton"));
+    exportFilteredLightButton->setObjectName(QStringLiteral("SecondaryButton"));
+    resetLightButton->setObjectName(QStringLiteral("SecondaryButton"));
+    lightActions->addWidget(addLightButton);
+    lightActions->addWidget(editLightButton);
+    lightActions->addWidget(removeLightButton);
     lightActions->addWidget(importLightButton);
+    lightActions->addWidget(exportLightButton);
+    lightActions->addWidget(exportFilteredLightButton);
+    lightActions->addWidget(resetLightButton);
     lightActions->addStretch();
     lightLayout->addLayout(lightActions);
     m_lightTable = new QTableWidget;
@@ -747,6 +956,7 @@ QWidget *MainWindow::createCatalogPage()
     connect(removeCameraButton, &QPushButton::clicked, this, &MainWindow::removeCamera);
     connect(importCameraButton, &QPushButton::clicked, this, &MainWindow::importCameras);
     connect(exportCameraButton, &QPushButton::clicked, this, &MainWindow::exportCameras);
+    connect(exportFilteredCameraButton, &QPushButton::clicked, this, &MainWindow::exportFilteredCameras);
     connect(resetCameraButton, &QPushButton::clicked, this, &MainWindow::resetCameras);
     connect(m_cameraTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { editCamera(); });
 
@@ -760,8 +970,23 @@ QWidget *MainWindow::createCatalogPage()
     connect(removeLensButton, &QPushButton::clicked, this, &MainWindow::removeLens);
     connect(importLensButton, &QPushButton::clicked, this, &MainWindow::importLenses);
     connect(exportLensButton, &QPushButton::clicked, this, &MainWindow::exportLenses);
+    connect(exportFilteredLensButton, &QPushButton::clicked, this, &MainWindow::exportFilteredLenses);
     connect(resetLensButton, &QPushButton::clicked, this, &MainWindow::resetLenses);
     connect(m_lensTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { editLens(); });
+
+    connect(m_lightSearchEdit, &QLineEdit::textChanged, this, &MainWindow::refreshLightTable);
+    connect(m_lightManufacturerFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::refreshLightTable);
+    connect(m_lightTypeFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::refreshLightTable);
+    connect(m_lightModeFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::refreshLightTable);
+    connect(clearLightFilterButton, &QPushButton::clicked, this, &MainWindow::clearLightFilters);
+    connect(addLightButton, &QPushButton::clicked, this, &MainWindow::addLight);
+    connect(editLightButton, &QPushButton::clicked, this, &MainWindow::editLight);
+    connect(removeLightButton, &QPushButton::clicked, this, &MainWindow::removeLight);
+    connect(importLightButton, &QPushButton::clicked, this, &MainWindow::importLights);
+    connect(exportLightButton, &QPushButton::clicked, this, &MainWindow::exportLights);
+    connect(exportFilteredLightButton, &QPushButton::clicked, this, &MainWindow::exportFilteredLights);
+    connect(resetLightButton, &QPushButton::clicked, this, &MainWindow::resetLights);
+    connect(m_lightTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { editLight(); });
 
     layout->addWidget(tabs, 1);
 
@@ -865,6 +1090,7 @@ void MainWindow::refreshCalculationAssistant()
         .arg(requirement.requiredResolutionY)
         .arg(requirement.requiredMegapixels, 0, 'f', 2));
 
+    m_assistantCameraTable->setSortingEnabled(false);
     m_assistantCameraTable->setRowCount(m_assistantCameraEstimates.size());
     for (int row = 0; row < m_assistantCameraEstimates.size(); ++row) {
         const CameraCalculationEstimate &estimate = m_assistantCameraEstimates.at(row);
@@ -879,7 +1105,7 @@ void MainWindow::refreshCalculationAssistant()
         if (estimate.globalShutterRecommended)
             verdict.append(QString::fromUtf8("\345\273\272\350\256\256\345\205\250\345\261\200\345\277\253\351\227\250"));
 
-        m_assistantCameraTable->setItem(row, 0, item(camera.model));
+        m_assistantCameraTable->setItem(row, 0, indexedItem(camera.model, row));
         m_assistantCameraTable->setItem(row, 1, item(camera.manufacturer));
         m_assistantCameraTable->setItem(row, 2, item(QStringLiteral("%1 x %2").arg(camera.resolutionX).arg(camera.resolutionY)));
         m_assistantCameraTable->setItem(row, 3, item(QStringLiteral("%1 um").arg(camera.pixelSizeUm, 0, 'f', 2)));
@@ -892,6 +1118,7 @@ void MainWindow::refreshCalculationAssistant()
         m_assistantCameraTable->setItem(row, 8, item(QStringLiteral("%1 MB/s").arg(estimate.bandwidthRequiredMBps, 0, 'f', 1)));
         m_assistantCameraTable->setItem(row, 9, item(verdict.join(QString::fromUtf8("\357\274\233"))));
     }
+    m_assistantCameraTable->setSortingEnabled(true);
 
     if (m_assistantCameraEstimates.isEmpty()) {
         m_assistantSelectedCameraRow = -1;
@@ -899,7 +1126,7 @@ void MainWindow::refreshCalculationAssistant()
         m_assistantSelectedCameraRow = 0;
     }
     if (m_assistantSelectedCameraRow >= 0)
-        m_assistantCameraTable->selectRow(m_assistantSelectedCameraRow);
+        selectRowBySourceIndex(m_assistantCameraTable, m_assistantSelectedCameraRow);
     refreshAssistantLensTable();
 }
 
@@ -936,6 +1163,7 @@ void MainWindow::refreshAssistantLensTable()
 
     const CameraSpec camera = m_assistantCameraEstimates.at(m_assistantSelectedCameraRow).camera;
     m_assistantLensEstimates = CalculationAssistant::estimateLenses(m_request, camera, m_catalog.lenses(), 12);
+    m_assistantLensTable->setSortingEnabled(false);
     m_assistantLensTable->setRowCount(m_assistantLensEstimates.size());
     for (int row = 0; row < m_assistantLensEstimates.size(); ++row) {
         const LensCalculationEstimate &estimate = m_assistantLensEstimates.at(row);
@@ -945,7 +1173,7 @@ void MainWindow::refreshAssistantLensTable()
             : QStringLiteral("%1 mm").arg(lens.focalLengthMm, 0, 'f', 1);
         const QString wdOrDof = lens.isTelecentric()
             ? QStringLiteral("WD %1 / DOF %2").arg(lens.nominalWorkingDistanceMm, 0, 'f', 0).arg(lens.dofMm, 0, 'f', 1)
-            : QStringLiteral("min WD %1").arg(lens.minWorkingDistanceMm, 0, 'f', 0);
+            : QStringLiteral("min WD %1 / DOF %2").arg(lens.minWorkingDistanceMm, 0, 'f', 0).arg(estimate.estimatedDofMm, 0, 'f', 1);
         QStringList verdict;
         verdict.append(estimate.fovOk ? QString::fromUtf8("FOV \346\273\241\350\266\263") : QString::fromUtf8("FOV \344\270\215\350\266\263"));
         verdict.append(estimate.samplingOk ? QString::fromUtf8("\345\203\217\347\264\240\346\273\241\350\266\263") : QString::fromUtf8("\345\203\217\347\264\240\344\270\215\350\266\263"));
@@ -956,7 +1184,7 @@ void MainWindow::refreshAssistantLensTable()
         if (!estimate.dofOk)
             verdict.append(QStringLiteral("DOF"));
 
-        m_assistantLensTable->setItem(row, 0, item(lens.typeLabel()));
+        m_assistantLensTable->setItem(row, 0, indexedItem(lens.typeLabel(), row));
         m_assistantLensTable->setItem(row, 1, item(lens.manufacturer));
         m_assistantLensTable->setItem(row, 2, item(lens.model));
         m_assistantLensTable->setItem(row, 3, item(lens.lensMount));
@@ -967,6 +1195,7 @@ void MainWindow::refreshAssistantLensTable()
         m_assistantLensTable->setItem(row, 8, item(QStringLiteral("%1 mm").arg(lens.imageCircleMm, 0, 'f', 1)));
         m_assistantLensTable->setItem(row, 9, item(verdict.join(QString::fromUtf8("\357\274\233"))));
     }
+    m_assistantLensTable->setSortingEnabled(true);
 
     details += QString::fromUtf8("\n\345\275\223\345\211\215\351\225\234\345\244\264\345\200\231\351\200\211\345\237\272\344\272\216\347\233\270\346\234\272\357\274\232%1\343\200\202\n")
         .arg(productLabel(camera.manufacturer, camera.model));
@@ -977,6 +1206,9 @@ void MainWindow::refreshAssistantLensTable()
             .arg(top.effectiveFovWidthMm, 0, 'f', 2)
             .arg(top.effectiveFovHeightMm, 0, 'f', 2)
             .arg(top.objectPixelSizeUm, 0, 'f', 2);
+        details += QString::fromUtf8("- 工程估算：DOF %1 mm，畸变边缘误差约 %2 um。\n")
+            .arg(top.estimatedDofMm, 0, 'f', 2)
+            .arg(top.distortionErrorUm, 0, 'f', 2);
         details += QString::fromUtf8("- \345\205\254\345\274\217\357\274\232%1\343\200\202\n").arg(top.formulaSummary);
         details += QString::fromUtf8("- \346\216\250\350\215\220\347\220\206\347\224\261\357\274\232%1\343\200\202\n")
             .arg(top.reasons.isEmpty() ? QString::fromUtf8("\346\214\211\347\273\274\345\220\210\345\217\202\346\225\260\346\216\222\345\220\215") : top.reasons.join(QString::fromUtf8("\357\274\233")));
@@ -999,10 +1231,11 @@ void MainWindow::refreshResultTable()
         .arg(SelectionEngine::targetObjectPixelUm(m_request), 0, 'f', 2)
         .arg(m_results.size()));
 
+    m_resultTable->setSortingEnabled(false);
     m_resultTable->setRowCount(m_results.size());
     for (int row = 0; row < m_results.size(); ++row) {
         const SelectionResult &r = m_results.at(row);
-        m_resultTable->setItem(row, 0, item(r.isTelecentric() ? QString::fromUtf8("\350\277\234\345\277\203") : QString::fromUtf8("\346\231\256\351\200\232")));
+        m_resultTable->setItem(row, 0, indexedItem(r.isTelecentric() ? QString::fromUtf8("\350\277\234\345\277\203") : QString::fromUtf8("\346\231\256\351\200\232"), row));
         m_resultTable->setItem(row, 1, item(number(r.score.score, 1)));
         m_resultTable->setItem(row, 2, item(productLabel(r.camera.manufacturer, r.camera.model)));
         m_resultTable->setItem(row, 3, item(productLabel(r.lens.manufacturer, r.lens.model)));
@@ -1015,14 +1248,15 @@ void MainWindow::refreshResultTable()
             ? QStringLiteral("%1x").arg(r.magnification, 0, 'f', 3)
             : QStringLiteral("%1 mm").arg(r.lens.focalLengthMm, 0, 'f', 1)));
         m_resultTable->setItem(row, 8, item(r.isTelecentric()
-            ? QStringLiteral("WD %1 / DOF %2").arg(r.lens.nominalWorkingDistanceMm, 0, 'f', 0).arg(r.lens.dofMm, 0, 'f', 1)
-            : QStringLiteral("min WD %1").arg(r.lens.minWorkingDistanceMm, 0, 'f', 0)));
+            ? QStringLiteral("WD %1 / DOF %2").arg(r.lens.nominalWorkingDistanceMm, 0, 'f', 0).arg(r.estimatedDofMm, 0, 'f', 1)
+            : QStringLiteral("min WD %1 / DOF %2").arg(r.lens.minWorkingDistanceMm, 0, 'f', 0).arg(r.estimatedDofMm, 0, 'f', 1)));
         m_resultTable->setItem(row, 9, item(r.score.risks.isEmpty()
             ? QString::fromUtf8("\346\227\240\344\270\273\350\246\201\351\243\216\351\231\251")
             : r.score.risks.join(QString::fromUtf8("\357\274\233"))));
     }
+    m_resultTable->setSortingEnabled(true);
     if (!m_results.isEmpty()) {
-        m_resultTable->selectRow(0);
+        selectRowBySourceIndex(m_resultTable, 0);
         refreshResultDetails(0);
     }
 }
@@ -1044,13 +1278,21 @@ void MainWindow::refreshResultDetails(int row)
         .arg(r.effectiveFovHeightMm, 0, 'f', 2)
         .arg(r.objectPixelSizeUm, 0, 'f', 2)
         .arg(r.bandwidthRequiredMBps, 0, 'f', 1);
+    if (r.maxExposureUsForOnePixelBlur > 0.0) {
+        text += QString::fromUtf8("<p><b>运动模糊：</b>建议曝光不高于 %1 us 才能控制在约 1 个目标物方像素内。</p>")
+            .arg(r.maxExposureUsForOnePixelBlur, 0, 'f', 1);
+    }
+    text += QString::fromUtf8("<p><b>工程估算：</b>DOF %1 mm；畸变边缘误差约 %2 um；光源覆盖余量 %3%。</p>")
+        .arg(r.estimatedDofMm, 0, 'f', 2)
+        .arg(r.distortionErrorUm, 0, 'f', 2)
+        .arg(r.lightCoverageMarginPercent, 0, 'f', 0);
     if (r.isTelecentric()) {
         text += QString::fromUtf8("<p><b>\350\277\234\345\277\203\345\217\202\346\225\260\357\274\232</b>PMAG %1x\357\274\214\346\240\207\347\247\260 WD %2 mm\357\274\214\350\277\234\345\277\203\345\272\246 %3 deg\357\274\214\347\225\270\345\217\230 %4%\357\274\214DOF %5 mm\357\274\214\346\256\213\344\275\231\350\247\206\345\267\256\344\274\260\347\256\227 %6 um\343\200\202</p>")
             .arg(r.magnification, 0, 'f', 3)
             .arg(r.lens.nominalWorkingDistanceMm, 0, 'f', 1)
             .arg(r.lens.telecentricityDeg, 0, 'f', 3)
             .arg(r.lens.distortionPercent, 0, 'f', 3)
-            .arg(r.lens.dofMm, 0, 'f', 2)
+            .arg(r.estimatedDofMm, 0, 'f', 2)
             .arg(r.residualTelecentricErrorUm, 0, 'f', 2);
     }
     text += QString::fromUtf8("<p><b>\346\216\250\350\215\220\347\220\206\347\224\261\357\274\232</b>%1</p>").arg(r.score.reasons.join(QString::fromUtf8("\357\274\233")));
@@ -1092,12 +1334,27 @@ void MainWindow::refreshCatalogFilterOptions()
     fillComboPreservingText(m_lensManufacturerFilter, allManufacturersText(), lensManufacturers);
     fillComboPreservingText(m_lensTypeFilter, allTypesText(), lensTypes);
     fillComboPreservingText(m_lensMountFilter, allMountsText(), lensMounts);
+
+    QStringList lightManufacturers;
+    QStringList lightTypes;
+    QStringList lightModes;
+    for (const LightSpec &light : m_catalog.lights()) {
+        lightManufacturers.append(light.manufacturer);
+        lightTypes.append(light.typeLabel());
+        lightModes.append(light.mode);
+    }
+    fillComboPreservingText(m_lightManufacturerFilter, allManufacturersText(), lightManufacturers);
+    fillComboPreservingText(m_lightTypeFilter, allTypesText(), lightTypes);
+    fillComboPreservingText(m_lightModeFilter, allModesText(), lightModes);
 }
 
 void MainWindow::refreshCameraTable()
 {
     if (!m_cameraTable)
         return;
+    const QString previousKey = selectedCatalogKey(m_cameraTable);
+    const int previousRow = m_cameraTable->currentRow();
+    m_cameraTable->setSortingEnabled(false);
     m_cameraTable->setColumnCount(10);
     m_cameraTable->setHorizontalHeaderLabels({QString::fromUtf8("\345\236\213\345\217\267"), QString::fromUtf8("\345\216\202\345\256\266"), QString::fromUtf8("\345\210\206\350\276\250\347\216\207"), QString::fromUtf8("\345\203\217\345\205\203"),
         QString::fromUtf8("\344\274\240\346\204\237\345\231\250"), QString::fromUtf8("\351\235\266\351\235\242"), QString::fromUtf8("\345\277\253\351\227\250"), QStringLiteral("fps"),
@@ -1120,7 +1377,7 @@ void MainWindow::refreshCameraTable()
         const int row = m_cameraTable->rowCount();
         m_cameraTable->insertRow(row);
         m_cameraRowMap.append(i);
-        m_cameraTable->setItem(row, 0, item(c.model));
+        m_cameraTable->setItem(row, 0, indexedItem(c.model, i));
         m_cameraTable->setItem(row, 1, item(c.manufacturer));
         m_cameraTable->setItem(row, 2, item(QStringLiteral("%1 x %2").arg(c.resolutionX).arg(c.resolutionY)));
         m_cameraTable->setItem(row, 3, item(QStringLiteral("%1 um").arg(c.pixelSizeUm, 0, 'f', 2)));
@@ -1131,12 +1388,17 @@ void MainWindow::refreshCameraTable()
         m_cameraTable->setItem(row, 8, item(c.interfaceType));
         m_cameraTable->setItem(row, 9, item(c.lensMount));
     }
+    m_cameraTable->setSortingEnabled(true);
+    selectCatalogRow(m_cameraTable, previousKey, previousRow);
 }
 
 void MainWindow::refreshLensTable()
 {
     if (!m_lensTable)
         return;
+    const QString previousKey = selectedCatalogKey(m_lensTable);
+    const int previousRow = m_lensTable->currentRow();
+    m_lensTable->setSortingEnabled(false);
     m_lensTable->setColumnCount(12);
     m_lensTable->setHorizontalHeaderLabels({QString::fromUtf8("\345\236\213\345\217\267"), QString::fromUtf8("\345\216\202\345\256\266"), QString::fromUtf8("\347\261\273\345\236\213"), QString::fromUtf8("\346\216\245\345\217\243"),
         QString::fromUtf8("\347\204\246\350\267\235"), QStringLiteral("PMAG"), QStringLiteral("WD"), QString::fromUtf8("\345\203\217\345\234\206"),
@@ -1163,7 +1425,7 @@ void MainWindow::refreshLensTable()
         const int row = m_lensTable->rowCount();
         m_lensTable->insertRow(row);
         m_lensRowMap.append(i);
-        m_lensTable->setItem(row, 0, item(l.model));
+        m_lensTable->setItem(row, 0, indexedItem(l.model, i));
         m_lensTable->setItem(row, 1, item(l.manufacturer));
         m_lensTable->setItem(row, 2, item(l.typeLabel()));
         m_lensTable->setItem(row, 3, item(l.lensMount));
@@ -1176,27 +1438,53 @@ void MainWindow::refreshLensTable()
         m_lensTable->setItem(row, 10, item(l.isTelecentric() ? QStringLiteral("%1 mm").arg(l.dofMm, 0, 'f', 1) : QStringLiteral("-")));
         m_lensTable->setItem(row, 11, item(boolLabel(l.coaxialIllumination)));
     }
+    m_lensTable->setSortingEnabled(true);
+    selectCatalogRow(m_lensTable, previousKey, previousRow);
 }
 
 void MainWindow::refreshLightTable()
 {
     if (!m_lightTable)
         return;
+    const QString previousKey = selectedCatalogKey(m_lightTable);
+    const int previousRow = m_lightTable->currentRow();
+    m_lightTable->setSortingEnabled(false);
     m_lightTable->setColumnCount(8);
     m_lightTable->setHorizontalHeaderLabels({QString::fromUtf8("\345\236\213\345\217\267"), QString::fromUtf8("\345\216\202\345\256\266"), QString::fromUtf8("\347\261\273\345\236\213"), QString::fromUtf8("\351\242\234\350\211\262"),
         QString::fromUtf8("\346\263\242\351\225\277"), QString::fromUtf8("\346\250\241\345\274\217"), QString::fromUtf8("\346\234\211\346\225\210\351\235\242\347\247\257"), QString::fromUtf8("\351\200\202\347\224\250\345\234\272\346\231\257")});
-    m_lightTable->setRowCount(m_catalog.lights().size());
+    m_lightTable->setRowCount(0);
+    m_lightRowMap.clear();
+    const QString search = m_lightSearchEdit ? m_lightSearchEdit->text() : QString();
+    const QString manufacturer = m_lightManufacturerFilter && m_lightManufacturerFilter->currentIndex() > 0
+        ? m_lightManufacturerFilter->currentText() : QString();
+    const QString type = m_lightTypeFilter && m_lightTypeFilter->currentIndex() > 0
+        ? m_lightTypeFilter->currentText() : QString();
+    const QString mode = m_lightModeFilter && m_lightModeFilter->currentIndex() > 0
+        ? m_lightModeFilter->currentText() : QString();
     for (int i = 0; i < m_catalog.lights().size(); ++i) {
         const LightSpec &l = m_catalog.lights().at(i);
-        m_lightTable->setItem(i, 0, item(l.model));
-        m_lightTable->setItem(i, 1, item(l.manufacturer));
-        m_lightTable->setItem(i, 2, item(l.typeLabel()));
-        m_lightTable->setItem(i, 3, item(l.color));
-        m_lightTable->setItem(i, 4, item(l.wavelengthNm > 0 ? QStringLiteral("%1 nm").arg(l.wavelengthNm) : QString::fromUtf8("\345\256\275\350\260\261")));
-        m_lightTable->setItem(i, 5, item(l.mode));
-        m_lightTable->setItem(i, 6, item(QStringLiteral("%1 x %2 mm").arg(l.activeWidthMm, 0, 'f', 0).arg(l.activeHeightMm, 0, 'f', 0)));
-        m_lightTable->setItem(i, 7, item(l.bestFor));
+        if (!manufacturer.isEmpty() && l.manufacturer != manufacturer)
+            continue;
+        if (!type.isEmpty() && l.typeLabel() != type)
+            continue;
+        if (!mode.isEmpty() && l.mode != mode)
+            continue;
+        if (!textMatches(search, {l.model, l.manufacturer, l.typeLabel(), l.color, l.mode, l.bestFor}))
+            continue;
+        const int row = m_lightTable->rowCount();
+        m_lightTable->insertRow(row);
+        m_lightRowMap.append(i);
+        m_lightTable->setItem(row, 0, indexedItem(l.model, i));
+        m_lightTable->setItem(row, 1, item(l.manufacturer));
+        m_lightTable->setItem(row, 2, item(l.typeLabel()));
+        m_lightTable->setItem(row, 3, item(l.color));
+        m_lightTable->setItem(row, 4, item(l.wavelengthNm > 0 ? QStringLiteral("%1 nm").arg(l.wavelengthNm) : QString::fromUtf8("\345\256\275\350\260\261")));
+        m_lightTable->setItem(row, 5, item(l.mode));
+        m_lightTable->setItem(row, 6, item(QStringLiteral("%1 x %2 mm").arg(l.activeWidthMm, 0, 'f', 0).arg(l.activeHeightMm, 0, 'f', 0)));
+        m_lightTable->setItem(row, 7, item(l.bestFor));
     }
+    m_lightTable->setSortingEnabled(true);
+    selectCatalogRow(m_lightTable, previousKey, previousRow);
 }
 
 void MainWindow::refreshReportPreview()
@@ -1279,6 +1567,58 @@ void MainWindow::exportLenses()
         return;
     QString error;
     if (!m_catalog.exportLensCsv(path, &error)) {
+        showError(error);
+        return;
+    }
+    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+}
+
+void MainWindow::exportLights()
+{
+    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出光源 CSV"), QStringLiteral("lights.csv"), QStringLiteral("CSV (*.csv)"));
+    if (path.isEmpty())
+        return;
+    QString error;
+    if (!m_catalog.exportLightCsv(path, &error)) {
+        showError(error);
+        return;
+    }
+    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+}
+
+void MainWindow::exportFilteredCameras()
+{
+    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出筛选相机 CSV"), QStringLiteral("cameras_filtered.csv"), QStringLiteral("CSV (*.csv)"));
+    if (path.isEmpty())
+        return;
+    QString error;
+    if (!m_catalog.exportCameraCsv(path, visibleCameraCatalogIndexes(), &error)) {
+        showError(error);
+        return;
+    }
+    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+}
+
+void MainWindow::exportFilteredLenses()
+{
+    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出筛选镜头 CSV"), QStringLiteral("lenses_filtered.csv"), QStringLiteral("CSV (*.csv)"));
+    if (path.isEmpty())
+        return;
+    QString error;
+    if (!m_catalog.exportLensCsv(path, visibleLensCatalogIndexes(), &error)) {
+        showError(error);
+        return;
+    }
+    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+}
+
+void MainWindow::exportFilteredLights()
+{
+    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出筛选光源 CSV"), QStringLiteral("lights_filtered.csv"), QStringLiteral("CSV (*.csv)"));
+    if (path.isEmpty())
+        return;
+    QString error;
+    if (!m_catalog.exportLightCsv(path, visibleLightCatalogIndexes(), &error)) {
         showError(error);
         return;
     }
@@ -1401,6 +1741,61 @@ void MainWindow::removeLens()
     calculate();
 }
 
+void MainWindow::addLight()
+{
+    LightSpec light;
+    light.model = QStringLiteral("NEW-LIGHT");
+    light.manufacturer = QStringLiteral("VisionSelect Sample");
+    light.lightType = LightType::Ring;
+    light.color = QStringLiteral("White");
+    light.mode = QStringLiteral("Continuous");
+    light.activeWidthMm = 100.0;
+    light.activeHeightMm = 100.0;
+    if (!editLightDialog(this, &light, QString::fromUtf8("新增光源")))
+        return;
+    QString error;
+    if (!m_catalog.addLight(light, &error)) {
+        showError(error);
+        return;
+    }
+    calculate();
+}
+
+void MainWindow::editLight()
+{
+    const int index = selectedLightCatalogIndex();
+    if (index < 0)
+        return;
+    LightSpec light = m_catalog.lights().at(index);
+    if (!editLightDialog(this, &light, QString::fromUtf8("编辑光源")))
+        return;
+    QString error;
+    if (!m_catalog.updateLight(index, light, &error)) {
+        showError(error);
+        return;
+    }
+    calculate();
+}
+
+void MainWindow::removeLight()
+{
+    const int index = selectedLightCatalogIndex();
+    if (index < 0)
+        return;
+    const LightSpec light = m_catalog.lights().at(index);
+    if (QMessageBox::question(this, QString::fromUtf8("删除光源"),
+            QString::fromUtf8("确定删除光源：%1？").arg(productLabel(light.manufacturer, light.model)))
+        != QMessageBox::Yes) {
+        return;
+    }
+    QString error;
+    if (!m_catalog.removeLight(index, &error)) {
+        showError(error);
+        return;
+    }
+    calculate();
+}
+
 void MainWindow::resetCameras()
 {
     if (QMessageBox::question(this, QString::fromUtf8("重置相机库"),
@@ -1423,6 +1818,20 @@ void MainWindow::resetLenses()
     }
     QString error;
     if (!m_catalog.resetLensesToBuiltIn(&error)) {
+        showError(error);
+        return;
+    }
+    calculate();
+}
+
+void MainWindow::resetLights()
+{
+    if (QMessageBox::question(this, QString::fromUtf8("重置光源库"),
+            QString::fromUtf8("确定用内置光源库覆盖本地光源维护数据？")) != QMessageBox::Yes) {
+        return;
+    }
+    QString error;
+    if (!m_catalog.resetLightsToBuiltIn(&error)) {
         showError(error);
         return;
     }
@@ -1453,24 +1862,77 @@ void MainWindow::clearLensFilters()
     refreshLensTable();
 }
 
+void MainWindow::clearLightFilters()
+{
+    if (m_lightSearchEdit)
+        m_lightSearchEdit->clear();
+    if (m_lightManufacturerFilter)
+        m_lightManufacturerFilter->setCurrentIndex(0);
+    if (m_lightTypeFilter)
+        m_lightTypeFilter->setCurrentIndex(0);
+    if (m_lightModeFilter)
+        m_lightModeFilter->setCurrentIndex(0);
+    refreshLightTable();
+}
+
 int MainWindow::selectedCameraCatalogIndex() const
 {
     if (!m_cameraTable)
         return -1;
-    const int row = m_cameraTable->currentRow();
-    if (row < 0 || row >= m_cameraRowMap.size())
-        return -1;
-    return m_cameraRowMap.at(row);
+    return rowSourceIndex(m_cameraTable, m_cameraTable->currentRow());
 }
 
 int MainWindow::selectedLensCatalogIndex() const
 {
     if (!m_lensTable)
         return -1;
-    const int row = m_lensTable->currentRow();
-    if (row < 0 || row >= m_lensRowMap.size())
+    return rowSourceIndex(m_lensTable, m_lensTable->currentRow());
+}
+
+int MainWindow::selectedLightCatalogIndex() const
+{
+    if (!m_lightTable)
         return -1;
-    return m_lensRowMap.at(row);
+    return rowSourceIndex(m_lightTable, m_lightTable->currentRow());
+}
+
+QVector<int> MainWindow::visibleCameraCatalogIndexes() const
+{
+    QVector<int> indexes;
+    if (!m_cameraTable)
+        return indexes;
+    for (int row = 0; row < m_cameraTable->rowCount(); ++row) {
+        const int index = rowSourceIndex(m_cameraTable, row);
+        if (index >= 0)
+            indexes.append(index);
+    }
+    return indexes;
+}
+
+QVector<int> MainWindow::visibleLensCatalogIndexes() const
+{
+    QVector<int> indexes;
+    if (!m_lensTable)
+        return indexes;
+    for (int row = 0; row < m_lensTable->rowCount(); ++row) {
+        const int index = rowSourceIndex(m_lensTable, row);
+        if (index >= 0)
+            indexes.append(index);
+    }
+    return indexes;
+}
+
+QVector<int> MainWindow::visibleLightCatalogIndexes() const
+{
+    QVector<int> indexes;
+    if (!m_lightTable)
+        return indexes;
+    for (int row = 0; row < m_lightTable->rowCount(); ++row) {
+        const int index = rowSourceIndex(m_lightTable, row);
+        if (index >= 0)
+            indexes.append(index);
+    }
+    return indexes;
 }
 
 void MainWindow::exportPdf()

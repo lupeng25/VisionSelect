@@ -25,6 +25,16 @@ QString um(double value)
 {
     return QString::number(value, 'f', 2);
 }
+
+bool isStrobeLight(const LightSpec &light)
+{
+    const QString mode = light.mode.toLower();
+    return mode.contains(QStringLiteral("strobe"))
+        || mode.contains(QStringLiteral("trigger"))
+        || mode.contains(QStringLiteral("pulse"))
+        || mode.contains(QString::fromUtf8("\351\242\221\351\227\252"))
+        || mode.contains(QString::fromUtf8("\350\247\246\345\217\221"));
+}
 }
 
 QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request,
@@ -40,8 +50,8 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
                 continue;
             QStringList lightReasons;
             const LightSpec light = chooseLight(request, lens, lights, &lightReasons);
+            Q_UNUSED(lightReasons)
             SelectionResult result = evaluatePair(request, camera, lens, light);
-            result.score.reasons.append(lightReasons);
             results.append(result);
         }
     }
@@ -102,6 +112,44 @@ double SelectionEngine::bandwidthRequiredMBps(const CameraSpec &camera, double f
     return bitsPerFrame * fps / 8.0 / 1000000.0;
 }
 
+double SelectionEngine::maxExposureUsForOnePixelBlur(const SelectionRequest &request)
+{
+    if (request.motionSpeedMmS <= 0.0)
+        return 0.0;
+    const double targetPixelMm = targetObjectPixelUm(request) / 1000.0;
+    return targetPixelMm / request.motionSpeedMmS * 1000000.0;
+}
+
+double SelectionEngine::estimatedFixedLensDofMm(const CameraSpec &camera,
+                                                const LensSpec &lens,
+                                                double magnification)
+{
+    if (lens.dofMm > 0.0)
+        return lens.dofMm;
+    if (lens.fNumber <= 0.0 || camera.pixelSizeUm <= 0.0 || magnification <= 0.0)
+        return 0.0;
+
+    const double circleOfConfusionMm = camera.pixelSizeUm * 2.0 / 1000.0;
+    return 2.0 * lens.fNumber * circleOfConfusionMm * (1.0 + magnification)
+        / (magnification * magnification);
+}
+
+double SelectionEngine::distortionErrorUm(const LensSpec &lens, double fovWidthMm, double fovHeightMm)
+{
+    if (lens.distortionPercent <= 0.0)
+        return 0.0;
+    return qMax(fovWidthMm, fovHeightMm) * 1000.0 * lens.distortionPercent / 100.0;
+}
+
+double SelectionEngine::lightCoverageMarginPercent(const SelectionRequest &request, const LightSpec &light)
+{
+    const double requiredW = requiredFovWidth(request);
+    const double requiredH = requiredFovHeight(request);
+    if (requiredW <= 0.0 || requiredH <= 0.0 || light.activeWidthMm <= 0.0 || light.activeHeightMm <= 0.0)
+        return -100.0;
+    return (qMin(light.activeWidthMm / requiredW, light.activeHeightMm / requiredH) - 1.0) * 100.0;
+}
+
 SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
                                              const CameraSpec &camera,
                                              const LensSpec &lens,
@@ -113,6 +161,8 @@ SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
     result.light = light;
     result.requiredFovWidthMm = requiredFovWidth(request);
     result.requiredFovHeightMm = requiredFovHeight(request);
+    result.maxExposureUsForOnePixelBlur = maxExposureUsForOnePixelBlur(request);
+    result.lightCoverageMarginPercent = lightCoverageMarginPercent(request, light);
     result.score.score = 50.0;
     result.schemeTitle = lens.isTelecentric()
         ? QString::fromUtf8("\350\277\234\345\277\203\351\225\234\345\244\264\346\226\271\346\241\210")
@@ -198,10 +248,40 @@ double SelectionEngine::scoreLight(const SelectionRequest &request,
     if (request.detectionType == DetectionType::Positioning && light.lightType == LightType::Ring)
         score += 6.0;
 
-    if (light.activeWidthMm < requiredFovWidth(request) || light.activeHeightMm < requiredFovHeight(request)) {
-        score -= 16.0;
+    const double coverageMargin = lightCoverageMarginPercent(request, light);
+    if (coverageMargin < 0.0) {
+        score -= 24.0;
         if (reasons)
-            reasons->append(QString::fromUtf8("\345\205\211\346\272\220\346\234\211\346\225\210\347\205\247\346\230\216\351\235\242\347\247\257\345\260\217\344\272\216\351\234\200\346\261\202\350\247\206\351\207\216\357\274\214\351\234\200\350\246\201\347\241\256\350\256\244\345\256\211\350\243\205\344\270\216\344\272\256\345\272\246"));
+            reasons->append(QString::fromUtf8("光源有效照明面积小于需求 FOV，需要确认安装与亮度"));
+    } else if (coverageMargin < 10.0) {
+        score -= 8.0;
+        if (reasons)
+            reasons->append(QString::fromUtf8("光源覆盖余量低于 10%，边缘亮度可能不足"));
+    } else {
+        score += 6.0;
+        if (reasons)
+            reasons->append(QString::fromUtf8("光源覆盖需求 FOV，覆盖余量约 %1%").arg(coverageMargin, 0, 'f', 0));
+    }
+
+    if (request.motionSpeedMmS > 20.0) {
+        if (isStrobeLight(light)) {
+            score += 12.0;
+            if (reasons)
+                reasons->append(QString::fromUtf8("高速运动优先频闪光源以压低曝光时间"));
+        } else {
+            score -= 8.0;
+            if (reasons)
+                reasons->append(QString::fromUtf8("高速运动场景建议确认频闪能力和曝光时间"));
+        }
+    }
+
+    if (reflective
+        && light.lightType != LightType::Coaxial
+        && light.lightType != LightType::Dome
+        && light.lightType != LightType::TelecentricBacklight) {
+        score -= 6.0;
+        if (reasons)
+            reasons->append(QString::fromUtf8("反光/透明表面使用当前光型可能需要额外控反光验证"));
     }
 
     return score;
@@ -262,6 +342,8 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
         / (result->requiredFovWidthMm + camera.sensorWidthMm());
     result->objectPixelSizeUm = qMax(fovW * 1000.0 / camera.resolutionX,
                                      fovH * 1000.0 / camera.resolutionY);
+    result->estimatedDofMm = estimatedFixedLensDofMm(camera, lens, result->magnification);
+    result->distortionErrorUm = distortionErrorUm(lens, fovW, fovH);
     result->formulaSummary = QString::fromUtf8("\346\231\256\351\200\232\351\225\234\345\244\264\357\274\232M = SensorSize / FOV\357\274\214f \342\211\210 WD \303\227 SensorSize / (FOV + SensorSize)");
 
     const double targetPixel = targetObjectPixelUm(request);
@@ -308,6 +390,26 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
         result->score.risks.append(QString::fromUtf8("\345\267\245\344\275\234\350\267\235\347\246\273\345\260\217\344\272\216\351\225\234\345\244\264\346\234\200\345\260\217\345\267\245\344\275\234\350\267\235\347\246\273"));
     }
 
+    if (request.heightVariationMm > 0.0) {
+        if (result->estimatedDofMm > 0.0 && result->estimatedDofMm >= request.heightVariationMm * 1.5) {
+            result->score.score += 8.0;
+            result->score.reasons.append(QString::fromUtf8("估算 DOF %1 mm 覆盖高度波动").arg(mm(result->estimatedDofMm)));
+        } else if (result->estimatedDofMm > 0.0) {
+            result->score.score -= 16.0;
+            result->score.risks.append(QString::fromUtf8("估算 DOF %1 mm 可能不足以覆盖高度波动").arg(mm(result->estimatedDofMm)));
+        } else {
+            result->score.score -= 6.0;
+            result->score.risks.append(QString::fromUtf8("缺少 F/# 或 DOF 数据，普通镜头景深需要确认"));
+        }
+    }
+
+    if (request.detectionType == DetectionType::Measurement && result->distortionErrorUm > request.measurementToleranceUm) {
+        result->score.score -= 18.0;
+        result->score.risks.append(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1 um，高于允许误差").arg(um(result->distortionErrorUm)));
+    } else if (result->distortionErrorUm > 0.0) {
+        result->score.reasons.append(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1 um").arg(um(result->distortionErrorUm)));
+    }
+
     if (lens.megapixelRating > 0.0 && lens.megapixelRating < camera.megapixels()) {
         result->score.score -= 12.0;
         result->score.risks.append(QString::fromUtf8("\351\225\234\345\244\264\346\240\207\347\247\260 MP \344\275\216\344\272\216\347\233\270\346\234\272\345\203\217\347\264\240\357\274\214\345\217\257\350\203\275\346\227\240\346\263\225\345\226\202\346\273\241\344\274\240\346\204\237\345\231\250"));
@@ -347,6 +449,8 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
     result->magnification = lens.pmag;
     result->objectPixelSizeUm = camera.pixelSizeUm / lens.pmag;
     result->estimatedFocalLengthMm = 0.0;
+    result->estimatedDofMm = lens.dofMm;
+    result->distortionErrorUm = distortionErrorUm(lens, result->effectiveFovWidthMm, result->effectiveFovHeightMm);
     result->formulaSummary = QString::fromUtf8("\350\277\234\345\277\203\351\225\234\345\244\264\357\274\232FOV = SensorSize / PMAG\357\274\214ObjectPixel = PixelSize / PMAG");
 
     const double targetPixel = targetObjectPixelUm(request);
@@ -408,6 +512,13 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
     } else if (request.heightVariationMm > 0.0) {
         result->score.score -= 14.0;
         result->score.risks.append(QString::fromUtf8("\350\277\234\345\277\203 DOF \345\217\257\350\203\275\344\270\215\350\266\263\357\274\214\351\234\200\350\246\201\347\241\256\350\256\244\345\205\211\345\234\210\345\222\214\346\231\257\346\267\261"));
+    }
+
+    if (request.detectionType == DetectionType::Measurement && result->distortionErrorUm > request.measurementToleranceUm) {
+        result->score.score -= 12.0;
+        result->score.risks.append(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1 um，高于允许误差").arg(um(result->distortionErrorUm)));
+    } else if (result->distortionErrorUm > 0.0) {
+        result->score.reasons.append(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1 um").arg(um(result->distortionErrorUm)));
     }
 
     result->residualTelecentricErrorUm = request.heightVariationMm * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
