@@ -44,15 +44,42 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
                                                 int limit) const
 {
     QVector<SelectionResult> results;
+    QVector<LightSpec> bestLights;
+    bestLights.reserve(lenses.size());
+    for (const LensSpec &lens : lenses) {
+        QStringList lightReasons;
+        bestLights.append(chooseLight(request, lens, lights, &lightReasons));
+    }
+
+    const auto appendCandidate = [&results, limit](const SelectionResult &candidate) {
+        if (limit <= 0) {
+            results.append(candidate);
+            return;
+        }
+        if (results.size() < limit) {
+            results.append(candidate);
+            return;
+        }
+        int worstIndex = 0;
+        double worstScore = results.first().score.score;
+        for (int i = 1; i < results.size(); ++i) {
+            if (results.at(i).score.score < worstScore) {
+                worstScore = results.at(i).score.score;
+                worstIndex = i;
+            }
+        }
+        if (candidate.score.score > worstScore)
+            results[worstIndex] = candidate;
+    };
+
     for (const CameraSpec &camera : cameras) {
-        for (const LensSpec &lens : lenses) {
+        for (int lensIndex = 0; lensIndex < lenses.size(); ++lensIndex) {
+            const LensSpec &lens = lenses.at(lensIndex);
             if (!request.allowTelecentric && lens.isTelecentric())
                 continue;
-            QStringList lightReasons;
-            const LightSpec light = chooseLight(request, lens, lights, &lightReasons);
-            Q_UNUSED(lightReasons)
+            const LightSpec light = bestLights.value(lensIndex);
             SelectionResult result = evaluatePair(request, camera, lens, light);
-            results.append(result);
+            appendCandidate(result);
         }
     }
 
@@ -108,8 +135,39 @@ double SelectionEngine::targetObjectPixelUm(const SelectionRequest &request)
 
 double SelectionEngine::bandwidthRequiredMBps(const CameraSpec &camera, double fps)
 {
+    return framePayloadMB(camera) * fps;
+}
+
+double SelectionEngine::framePayloadMB(const CameraSpec &camera)
+{
     const double bitsPerFrame = camera.resolutionX * camera.resolutionY * camera.bitDepth;
-    return bitsPerFrame * fps / 8.0 / 1000000.0;
+    return bitsPerFrame / 8.0 / 1000000.0;
+}
+
+double SelectionEngine::storagePerHourGB(const CameraSpec &camera, double fps)
+{
+    return bandwidthRequiredMBps(camera, fps) * 3600.0 / 1024.0;
+}
+
+double SelectionEngine::interfaceCapacityMBps(const CameraSpec &camera)
+{
+    if (camera.bandwidthMBps > 0.0)
+        return camera.bandwidthMBps;
+
+    const QString interfaceName = camera.interfaceType.trimmed().toLower();
+    if (interfaceName.contains(QStringLiteral("10gige")))
+        return 1000.0;
+    if (interfaceName.contains(QStringLiteral("5gige")))
+        return 500.0;
+    if (interfaceName.contains(QStringLiteral("gige")))
+        return 110.0;
+    if (interfaceName.contains(QStringLiteral("usb3")))
+        return 380.0;
+    if (interfaceName.contains(QStringLiteral("cameralink")))
+        return 680.0;
+    if (interfaceName.contains(QStringLiteral("coaxpress")) || interfaceName.contains(QStringLiteral("cxp")))
+        return 1250.0;
+    return 0.0;
 }
 
 double SelectionEngine::maxExposureUsForOnePixelBlur(const SelectionRequest &request)
@@ -293,6 +351,12 @@ void SelectionEngine::scoreCamera(const SelectionRequest &request,
 {
     const double fps = qMax(1.0, request.requiredFps);
     result->bandwidthRequiredMBps = bandwidthRequiredMBps(camera, fps);
+    result->framePayloadMB = framePayloadMB(camera);
+    result->storagePerHourGB = storagePerHourGB(camera, fps);
+    result->interfaceCapacityMBps = interfaceCapacityMBps(camera);
+    result->bandwidthUtilizationPercent = result->interfaceCapacityMBps > 0.0
+        ? result->bandwidthRequiredMBps / result->interfaceCapacityMBps * 100.0
+        : 0.0;
 
     if (request.preferMono && camera.isMono()) {
         result->score.score += 5.0;
@@ -310,11 +374,35 @@ void SelectionEngine::scoreCamera(const SelectionRequest &request,
         result->score.risks.append(QString::fromUtf8("\347\233\270\346\234\272\346\234\200\345\244\247\345\270\247\347\216\207\344\275\216\344\272\216\351\234\200\346\261\202\350\212\202\346\213\215"));
     }
 
-    if (result->bandwidthRequiredMBps <= camera.bandwidthMBps) {
-        result->score.score += 6.0;
+    if (result->interfaceCapacityMBps <= 0.0) {
+        result->score.score -= 6.0;
+        result->score.risks.append(QString::fromUtf8("缺少接口带宽数据，需按相机手册确认吞吐余量"));
+    } else if (result->bandwidthUtilizationPercent <= 70.0) {
+        result->score.score += 8.0;
+        result->score.reasons.append(QString::fromUtf8("接口带宽利用率约 %1%，连续采集余量充足")
+            .arg(result->bandwidthUtilizationPercent, 0, 'f', 0));
+    } else if (result->bandwidthUtilizationPercent <= 90.0) {
+        result->score.score += 3.0;
+        result->score.reasons.append(QString::fromUtf8("接口带宽利用率约 %1%，建议保留触发和协议开销余量")
+            .arg(result->bandwidthUtilizationPercent, 0, 'f', 0));
+    } else if (result->bandwidthUtilizationPercent <= 100.0) {
+        result->score.score -= 8.0;
+        result->score.risks.append(QString::fromUtf8("接口带宽利用率约 %1%，接近上限")
+            .arg(result->bandwidthUtilizationPercent, 0, 'f', 0));
     } else {
-        result->score.score -= 22.0;
-        result->score.risks.append(QString::fromUtf8("\346\214\211\345\210\206\350\276\250\347\216\207/bit depth/fps \344\274\260\347\256\227\347\232\204\346\225\260\346\215\256\345\270\246\345\256\275\350\266\205\350\277\207\346\216\245\345\217\243\344\275\231\351\207\217"));
+        result->score.score -= 24.0;
+        result->score.risks.append(QString::fromUtf8("按分辨率/bit depth/fps 估算的带宽 %1 MB/s 超过接口余量 %2 MB/s")
+            .arg(result->bandwidthRequiredMBps, 0, 'f', 1)
+            .arg(result->interfaceCapacityMBps, 0, 'f', 1));
+    }
+
+    if (result->storagePerHourGB > 300.0) {
+        result->score.score -= 8.0;
+        result->score.risks.append(QString::fromUtf8("连续原始图像存储约 %1 GB/h，需确认硬盘、缓存和压缩策略")
+            .arg(result->storagePerHourGB, 0, 'f', 0));
+    } else if (result->storagePerHourGB > 0.0) {
+        result->score.reasons.append(QString::fromUtf8("原始图像数据量约 %1 GB/h")
+            .arg(result->storagePerHourGB, 0, 'f', 0));
     }
 
     if (request.motionSpeedMmS > 20.0) {
@@ -410,11 +498,23 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
         result->score.reasons.append(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1 um").arg(um(result->distortionErrorUm)));
     }
 
-    if (lens.megapixelRating > 0.0 && lens.megapixelRating < camera.megapixels()) {
-        result->score.score -= 12.0;
-        result->score.risks.append(QString::fromUtf8("\351\225\234\345\244\264\346\240\207\347\247\260 MP \344\275\216\344\272\216\347\233\270\346\234\272\345\203\217\347\264\240\357\274\214\345\217\257\350\203\275\346\227\240\346\263\225\345\226\202\346\273\241\344\274\240\346\204\237\345\231\250"));
+    if (lens.megapixelRating > 0.0) {
+        result->lensMegapixelUtilizationPercent = camera.megapixels() / lens.megapixelRating * 100.0;
+        if (lens.megapixelRating < camera.megapixels()) {
+            result->score.score -= 12.0;
+            result->score.risks.append(QString::fromUtf8("\351\225\234\345\244\264\346\240\207\347\247\260 MP \344\275\216\344\272\216\347\233\270\346\234\272\345\203\217\347\264\240\357\274\214\345\217\257\350\203\275\346\227\240\346\263\225\345\226\202\346\273\241\344\274\240\346\204\237\345\231\250"));
+        } else if (result->lensMegapixelUtilizationPercent > 85.0) {
+            result->score.score -= 3.0;
+            result->score.risks.append(QString::fromUtf8("镜头 MP 余量较小，利用率约 %1%")
+                .arg(result->lensMegapixelUtilizationPercent, 0, 'f', 0));
+        } else {
+            result->score.score += 5.0;
+            result->score.reasons.append(QString::fromUtf8("镜头标称 MP 覆盖相机，利用率约 %1%")
+                .arg(result->lensMegapixelUtilizationPercent, 0, 'f', 0));
+        }
     } else {
-        result->score.score += 4.0;
+        result->score.score -= 4.0;
+        result->score.risks.append(QString::fromUtf8("镜头缺少标称 MP 数据，需按厂家 MTF 曲线确认分辨率余量"));
     }
 
     if (lens.recommendedMinPixelUm > 0.0 && lens.recommendedMinPixelUm > camera.pixelSizeUm) {
@@ -499,8 +599,21 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
         result->score.risks.append(QString::fromUtf8("\350\277\234\345\277\203\351\225\234\345\244\264\351\200\232\345\270\270\345\217\252\345\234\250\346\240\207\347\247\260 WD \351\231\204\350\277\221\345\267\245\344\275\234\357\274\214\345\275\223\345\211\215 WD \345\201\217\345\267\256\350\276\203\345\244\247"));
     }
 
+    if (lens.megapixelRating > 0.0) {
+        result->lensMegapixelUtilizationPercent = camera.megapixels() / lens.megapixelRating * 100.0;
+        if (lens.megapixelRating < camera.megapixels()) {
+            result->score.score -= 12.0;
+            result->score.risks.append(QString::fromUtf8("镜头标称 MP 低于相机像素，需确认远心镜头分辨率/MTF"));
+        } else {
+            result->score.score += 5.0;
+            result->score.reasons.append(QString::fromUtf8("镜头标称 MP 覆盖相机，利用率约 %1%")
+                .arg(result->lensMegapixelUtilizationPercent, 0, 'f', 0));
+        }
+    }
+
     if (lens.recommendedMinPixelUm > 0.0 && lens.recommendedMinPixelUm <= camera.pixelSizeUm) {
         result->score.score += 6.0;
+        result->score.reasons.append(QString::fromUtf8("相机像元不小于镜头建议最小像元"));
     } else if (lens.recommendedMinPixelUm > camera.pixelSizeUm) {
         result->score.score -= 12.0;
         result->score.risks.append(QString::fromUtf8("\347\233\270\346\234\272\345\203\217\345\205\203\345\260\217\344\272\216\351\225\234\345\244\264\346\216\250\350\215\220\346\234\200\345\260\217\345\203\217\345\205\203\357\274\214\351\234\200\347\241\256\350\256\244\351\225\234\345\244\264\345\210\206\350\276\250\347\216\207/MTF"));

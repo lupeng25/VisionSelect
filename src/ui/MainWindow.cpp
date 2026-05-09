@@ -12,6 +12,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QFrame>
@@ -33,6 +34,7 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTextEdit>
+#include <QTextStream>
 #include <QVBoxLayout>
 
 namespace {
@@ -162,6 +164,66 @@ QString productLabel(const QString &manufacturer, const QString &model)
     if (manufacturer.trimmed().isEmpty())
         return model;
     return manufacturer.trimmed() + QLatin1Char(' ') + model;
+}
+
+QString riskSummary(const SelectionResult &result)
+{
+    return result.score.risks.isEmpty()
+        ? QString::fromUtf8("无主要风险")
+        : result.score.risks.join(QString::fromUtf8("；"));
+}
+
+QString exposureText(double exposureUs)
+{
+    return exposureUs > 0.0
+        ? QStringLiteral("%1 us").arg(exposureUs, 0, 'f', 1)
+        : QString::fromUtf8("无运动约束");
+}
+
+QString bomSpecForCamera(const CameraSpec &camera, const SelectionResult &result)
+{
+    return QStringLiteral("%1 x %2, %3, %4, %5 fps, %6 MB/s")
+        .arg(camera.resolutionX)
+        .arg(camera.resolutionY)
+        .arg(camera.pixelSizeUm, 0, 'f', 2)
+        .arg(camera.interfaceType)
+        .arg(camera.maxFps, 0, 'f', 1)
+        .arg(result.interfaceCapacityMBps, 0, 'f', 1);
+}
+
+QString bomSpecForLens(const LensSpec &lens, const SelectionResult &result)
+{
+    if (lens.isTelecentric()) {
+        return QStringLiteral("%1, PMAG %2x, WD %3 mm, DOF %4 mm, image %5 mm")
+            .arg(lens.typeLabel())
+            .arg(result.magnification, 0, 'f', 3)
+            .arg(lens.nominalWorkingDistanceMm, 0, 'f', 1)
+            .arg(result.estimatedDofMm, 0, 'f', 2)
+            .arg(lens.imageCircleMm, 0, 'f', 1);
+    }
+    return QStringLiteral("%1, f %2 mm, min WD %3 mm, DOF %4 mm, image %5 mm")
+        .arg(lens.typeLabel())
+        .arg(lens.focalLengthMm, 0, 'f', 1)
+        .arg(lens.minWorkingDistanceMm, 0, 'f', 1)
+        .arg(result.estimatedDofMm, 0, 'f', 2)
+        .arg(lens.imageCircleMm, 0, 'f', 1);
+}
+
+QString bomSpecForLight(const LightSpec &light, const SelectionResult &result)
+{
+    return QStringLiteral("%1, %2, %3, %4 x %5 mm, margin %6%")
+        .arg(light.typeLabel())
+        .arg(light.color)
+        .arg(light.mode)
+        .arg(light.activeWidthMm, 0, 'f', 0)
+        .arg(light.activeHeightMm, 0, 'f', 0)
+        .arg(result.lightCoverageMarginPercent, 0, 'f', 0);
+}
+
+QString csvCell(QString value)
+{
+    value.replace(QLatin1Char('"'), QStringLiteral("\"\""));
+    return QLatin1Char('"') + value + QLatin1Char('"');
 }
 
 void setupTable(QTableWidget *table)
@@ -515,6 +577,7 @@ void MainWindow::buildUi()
     m_pages->addWidget(createInputPage());
     m_pages->addWidget(createCalculationPage());
     m_pages->addWidget(createResultsPage());
+    m_pages->addWidget(createComparisonPage());
     m_pages->addWidget(createCatalogPage());
     m_pages->addWidget(createReportPage());
     rootLayout->addWidget(m_pages, 1);
@@ -559,6 +622,7 @@ QWidget *MainWindow::createSidebar()
         QString::fromUtf8("\351\234\200\346\261\202\350\276\223\345\205\245"),
         QString::fromUtf8("\350\256\241\347\256\227\345\212\251\346\211\213"),
         QString::fromUtf8("\346\216\250\350\215\220\347\273\223\346\236\234"),
+        QString::fromUtf8("方案对比"),
         QString::fromUtf8("\345\217\202\346\225\260\345\272\223"),
         QString::fromUtf8("PDF \346\212\245\345\221\212")
     };
@@ -566,6 +630,7 @@ QWidget *MainWindow::createSidebar()
         QStyle::SP_FileDialogContentsView,
         QStyle::SP_FileDialogDetailedView,
         QStyle::SP_DialogApplyButton,
+        QStyle::SP_ArrowRight,
         QStyle::SP_DirIcon,
         QStyle::SP_FileIcon
     };
@@ -774,6 +839,14 @@ QWidget *MainWindow::createResultsPage()
     m_resultSummaryLabel->setObjectName(QStringLiteral("SectionTitle"));
     layout->addWidget(m_resultSummaryLabel);
 
+    QHBoxLayout *resultActions = new QHBoxLayout;
+    QPushButton *compareButton = new QPushButton(QString::fromUtf8("查看方案对比"));
+    compareButton->setObjectName(QStringLiteral("SecondaryButton"));
+    connect(compareButton, &QPushButton::clicked, this, [this]() { setActivePage(3); });
+    resultActions->addWidget(compareButton);
+    resultActions->addStretch();
+    layout->addLayout(resultActions);
+
     m_resultTable = new QTableWidget;
     setupTable(m_resultTable);
     m_resultTable->setColumnCount(10);
@@ -798,6 +871,54 @@ QWidget *MainWindow::createResultsPage()
 
     layout->addWidget(m_resultTable, 1);
     layout->addWidget(m_resultDetails);
+    return page;
+}
+
+QWidget *MainWindow::createComparisonPage()
+{
+    QWidget *page = new QWidget;
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(28, 24, 28, 24);
+    layout->setSpacing(14);
+
+    layout->addWidget(pageTitle(QString::fromUtf8("方案对比")));
+
+    QHBoxLayout *actions = new QHBoxLayout;
+    QPushButton *recalculateButton = new QPushButton(QString::fromUtf8("重新计算"));
+    QPushButton *exportBomButton = new QPushButton(QString::fromUtf8("导出 BOM CSV"));
+    exportBomButton->setObjectName(QStringLiteral("SecondaryButton"));
+    connect(recalculateButton, &QPushButton::clicked, this, &MainWindow::calculate);
+    connect(exportBomButton, &QPushButton::clicked, this, &MainWindow::exportBomCsv);
+    actions->addWidget(recalculateButton);
+    actions->addWidget(exportBomButton);
+    actions->addStretch();
+    layout->addLayout(actions);
+
+    m_compareTable = new QTableWidget;
+    setupTable(m_compareTable);
+    m_compareTable->setColumnCount(12);
+    m_compareTable->setHorizontalHeaderLabels({
+        QString::fromUtf8("方案"), QString::fromUtf8("得分"), QString::fromUtf8("相机"),
+        QString::fromUtf8("镜头"), QString::fromUtf8("光源"), QStringLiteral("FOV"),
+        QString::fromUtf8("物方像素"), QString::fromUtf8("曝光上限"), QString::fromUtf8("带宽/存储"),
+        QStringLiteral("DOF/畸变"), QString::fromUtf8("光源余量"), QString::fromUtf8("主要风险")
+    });
+    m_compareTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    const int compareWidths[] = {58, 44, 112, 112, 110, 75, 70, 75, 90, 88, 60};
+    for (int column = 0; column < 11; ++column)
+        m_compareTable->setColumnWidth(column, compareWidths[column]);
+    m_compareTable->horizontalHeader()->setSectionResizeMode(11, QHeaderView::Stretch);
+    connect(m_compareTable, &QTableWidget::cellClicked, this, [this](int row, int) {
+        const int sourceRow = rowSourceIndex(m_compareTable, row);
+        refreshComparisonDetails(sourceRow >= 0 ? sourceRow : row);
+    });
+
+    m_compareDetails = new QTextEdit;
+    m_compareDetails->setReadOnly(true);
+    m_compareDetails->setMinimumHeight(150);
+
+    layout->addWidget(m_compareTable, 1);
+    layout->addWidget(m_compareDetails);
     return page;
 }
 
@@ -1003,11 +1124,15 @@ QWidget *MainWindow::createReportPage()
 
     QHBoxLayout *buttons = new QHBoxLayout;
     QPushButton *exportButton = new QPushButton(QString::fromUtf8("\345\257\274\345\207\272 PDF"));
+    QPushButton *exportBomButton = new QPushButton(QString::fromUtf8("导出 BOM CSV"));
     QPushButton *recalculateButton = new QPushButton(QString::fromUtf8("\351\207\215\346\226\260\350\256\241\347\256\227"));
+    exportBomButton->setObjectName(QStringLiteral("SecondaryButton"));
     recalculateButton->setObjectName(QStringLiteral("SecondaryButton"));
     connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportPdf);
+    connect(exportBomButton, &QPushButton::clicked, this, &MainWindow::exportBomCsv);
     connect(recalculateButton, &QPushButton::clicked, this, &MainWindow::calculate);
     buttons->addWidget(exportButton);
+    buttons->addWidget(exportBomButton);
     buttons->addWidget(recalculateButton);
     buttons->addStretch();
     layout->addLayout(buttons);
@@ -1048,6 +1173,7 @@ void MainWindow::calculate()
     m_results = engine.select(m_request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 20);
     refreshCalculationAssistant();
     refreshResultTable();
+    refreshComparisonPage();
     refreshCatalogTables();
     refreshReportPreview();
     if (m_summaryLabel)
@@ -1278,6 +1404,12 @@ void MainWindow::refreshResultDetails(int row)
         .arg(r.effectiveFovHeightMm, 0, 'f', 2)
         .arg(r.objectPixelSizeUm, 0, 'f', 2)
         .arg(r.bandwidthRequiredMBps, 0, 'f', 1);
+    text += QString::fromUtf8("<p><b>接口/存储：</b>单帧 %1 MB；接口余量 %2 MB/s；带宽利用率 %3%；原始存储约 %4 GB/h；镜头 MP 利用率 %5%。</p>")
+        .arg(r.framePayloadMB, 0, 'f', 2)
+        .arg(r.interfaceCapacityMBps, 0, 'f', 1)
+        .arg(r.bandwidthUtilizationPercent, 0, 'f', 0)
+        .arg(r.storagePerHourGB, 0, 'f', 0)
+        .arg(r.lensMegapixelUtilizationPercent, 0, 'f', 0);
     if (r.maxExposureUsForOnePixelBlur > 0.0) {
         text += QString::fromUtf8("<p><b>运动模糊：</b>建议曝光不高于 %1 us 才能控制在约 1 个目标物方像素内。</p>")
             .arg(r.maxExposureUsForOnePixelBlur, 0, 'f', 1);
@@ -1300,6 +1432,82 @@ void MainWindow::refreshResultDetails(int row)
         ? QString::fromUtf8("\346\227\240\344\270\273\350\246\201\351\243\216\351\231\251\357\274\214\344\273\215\345\273\272\350\256\256\347\273\223\345\220\210\345\216\202\345\256\266 MTF/DOF \344\270\216\347\216\260\345\234\272\345\205\211\346\272\220\345\256\236\346\265\213\347\241\256\350\256\244\343\200\202")
         : r.score.risks.join(QString::fromUtf8("\357\274\233")));
     m_resultDetails->setHtml(text);
+}
+
+void MainWindow::refreshComparisonPage()
+{
+    if (!m_compareTable)
+        return;
+
+    const int count = qMin(5, m_results.size());
+    m_compareTable->setSortingEnabled(false);
+    m_compareTable->setRowCount(count);
+    for (int row = 0; row < count; ++row) {
+        const SelectionResult &r = m_results.at(row);
+        m_compareTable->setItem(row, 0, indexedItem(QStringLiteral("#%1 %2")
+            .arg(row + 1)
+            .arg(r.isTelecentric() ? QString::fromUtf8("远心") : QString::fromUtf8("普通")), row));
+        m_compareTable->setItem(row, 1, item(number(r.score.score, 1)));
+        m_compareTable->setItem(row, 2, item(productLabel(r.camera.manufacturer, r.camera.model)));
+        m_compareTable->setItem(row, 3, item(productLabel(r.lens.manufacturer, r.lens.model)));
+        m_compareTable->setItem(row, 4, item(productLabel(r.light.manufacturer, r.light.model)));
+        m_compareTable->setItem(row, 5, item(QStringLiteral("%1 x %2")
+            .arg(r.effectiveFovWidthMm, 0, 'f', 1)
+            .arg(r.effectiveFovHeightMm, 0, 'f', 1)));
+        m_compareTable->setItem(row, 6, item(QStringLiteral("%1 um").arg(r.objectPixelSizeUm, 0, 'f', 2)));
+        m_compareTable->setItem(row, 7, item(exposureText(r.maxExposureUsForOnePixelBlur)));
+        m_compareTable->setItem(row, 8, item(QStringLiteral("%1% / %2 GB/h")
+            .arg(r.bandwidthUtilizationPercent, 0, 'f', 0)
+            .arg(r.storagePerHourGB, 0, 'f', 0)));
+        m_compareTable->setItem(row, 9, item(QStringLiteral("%1 mm / %2 um")
+            .arg(r.estimatedDofMm, 0, 'f', 2)
+            .arg(r.distortionErrorUm, 0, 'f', 1)));
+        m_compareTable->setItem(row, 10, item(QStringLiteral("%1%")
+            .arg(r.lightCoverageMarginPercent, 0, 'f', 0)));
+        m_compareTable->setItem(row, 11, item(riskSummary(r)));
+    }
+    m_compareTable->setSortingEnabled(true);
+
+    if (count > 0) {
+        selectRowBySourceIndex(m_compareTable, 0);
+        refreshComparisonDetails(0);
+    } else if (m_compareDetails) {
+        m_compareDetails->setPlainText(QString::fromUtf8("暂无方案，请先计算推荐结果。"));
+    }
+}
+
+void MainWindow::refreshComparisonDetails(int row)
+{
+    if (!m_compareDetails || row < 0 || row >= m_results.size())
+        return;
+
+    const SelectionResult &r = m_results.at(row);
+    QString text;
+    text += QStringLiteral("<h3>") + QString::fromUtf8("方案 #") + QString::number(row + 1)
+        + QStringLiteral(" - ") + r.schemeTitle + QStringLiteral("</h3>");
+    text += QString::fromUtf8("<p><b>BOM：</b>相机 %1；镜头 %2；光源 %3。</p>")
+        .arg(productLabel(r.camera.manufacturer, r.camera.model),
+             productLabel(r.lens.manufacturer, r.lens.model),
+             productLabel(r.light.manufacturer, r.light.model));
+    text += QString::fromUtf8("<p><b>计算结果：</b>FOV %1 x %2 mm；物方像素 %3 um/px；曝光上限 %4；DOF %5 mm；畸变误差 %6 um。</p>")
+        .arg(r.effectiveFovWidthMm, 0, 'f', 2)
+        .arg(r.effectiveFovHeightMm, 0, 'f', 2)
+        .arg(r.objectPixelSizeUm, 0, 'f', 2)
+        .arg(exposureText(r.maxExposureUsForOnePixelBlur))
+        .arg(r.estimatedDofMm, 0, 'f', 2)
+        .arg(r.distortionErrorUm, 0, 'f', 2);
+    text += QString::fromUtf8("<p><b>接口与存储：</b>单帧原始数据 %1 MB；吞吐 %2 MB/s；接口余量 %3 MB/s；带宽利用率 %4%；原始存储约 %5 GB/h。</p>")
+        .arg(r.framePayloadMB, 0, 'f', 2)
+        .arg(r.bandwidthRequiredMBps, 0, 'f', 1)
+        .arg(r.interfaceCapacityMBps, 0, 'f', 1)
+        .arg(r.bandwidthUtilizationPercent, 0, 'f', 0)
+        .arg(r.storagePerHourGB, 0, 'f', 0);
+    text += QString::fromUtf8("<p><b>镜头/光源余量：</b>镜头 MP 利用率 %1%；光源覆盖余量 %2%。</p>")
+        .arg(r.lensMegapixelUtilizationPercent, 0, 'f', 0)
+        .arg(r.lightCoverageMarginPercent, 0, 'f', 0);
+    text += QString::fromUtf8("<p><b>推荐理由：</b>%1</p>").arg(r.score.reasons.join(QString::fromUtf8("；")));
+    text += QString::fromUtf8("<p><b>风险：</b>%1</p>").arg(riskSummary(r));
+    m_compareDetails->setHtml(text);
 }
 
 void MainWindow::refreshCatalogTables()
@@ -1495,7 +1703,7 @@ void MainWindow::refreshReportPreview()
     text += QString::fromUtf8("PDF \345\260\206\345\214\205\345\220\253\357\274\232\n");
     text += QString::fromUtf8("- \351\234\200\346\261\202\350\276\223\345\205\245\343\200\201\347\233\256\346\240\207 FOV\343\200\201\347\233\256\346\240\207\347\211\251\346\226\271\345\203\217\347\264\240\n");
     text += QString::fromUtf8("- \346\231\256\351\200\232\351\225\234\345\244\264\344\270\216\350\277\234\345\277\203\351\225\234\345\244\264\347\232\204\345\205\263\351\224\256\345\205\254\345\274\217\n");
-    text += QString::fromUtf8("- Top \346\216\250\350\215\220\346\226\271\346\241\210\343\200\201\351\243\216\351\231\251\346\217\220\347\244\272\343\200\201\350\265\204\346\226\231\344\276\235\346\215\256\n\n");
+    text += QString::fromUtf8("- Top 推荐方案、方案对比、BOM、带宽/存储/曝光/DOF/畸变风险\n\n");
     if (!m_results.isEmpty()) {
         const SelectionResult &top = m_results.first();
         text += QString::fromUtf8("\345\275\223\345\211\215\351\246\226\351\200\211\357\274\232") + top.schemeTitle
@@ -1503,6 +1711,10 @@ void MainWindow::refreshReportPreview()
             + QString::fromUtf8("\n\351\225\234\345\244\264\357\274\232") + productLabel(top.lens.manufacturer, top.lens.model)
             + QString::fromUtf8("\n\345\205\211\346\272\220\357\274\232") + productLabel(top.light.manufacturer, top.light.model)
             + QString::fromUtf8("\n\345\276\227\345\210\206\357\274\232") + QString::number(top.score.score, 'f', 1)
+            + QString::fromUtf8("\n带宽/存储：") + QStringLiteral("%1 MB/s, %2 GB/h")
+                .arg(top.bandwidthRequiredMBps, 0, 'f', 1)
+                .arg(top.storagePerHourGB, 0, 'f', 0)
+            + QString::fromUtf8("\nBOM：相机、镜头、光源 3 项")
             + QStringLiteral("\n");
     }
     m_reportPreview->setPlainText(text);
@@ -1933,6 +2145,65 @@ QVector<int> MainWindow::visibleLightCatalogIndexes() const
             indexes.append(index);
     }
     return indexes;
+}
+
+void MainWindow::exportBomCsv()
+{
+    if (m_results.isEmpty())
+        calculate();
+    if (m_results.isEmpty()) {
+        showError(QString::fromUtf8("暂无推荐方案，无法导出 BOM。"));
+        return;
+    }
+
+    const QString defaultName = QStringLiteral("VisionSelect_BOM_%1.csv")
+        .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")));
+    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出 BOM CSV"), defaultName, QStringLiteral("CSV (*.csv)"));
+    if (path.isEmpty())
+        return;
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        showError(QString::fromUtf8("无法写入 BOM CSV：%1").arg(path));
+        return;
+    }
+
+    QTextStream out(&file);
+    out.setCodec("UTF-8");
+    out << "scheme,rank,category,manufacturer,model,key_specs,notes\n";
+    const int count = qMin(5, m_results.size());
+    for (int i = 0; i < count; ++i) {
+        const SelectionResult &r = m_results.at(i);
+        const QString scheme = QStringLiteral("#%1 %2").arg(i + 1).arg(r.schemeTitle);
+        out << csvCell(scheme) << "," << (i + 1) << ","
+            << csvCell(QString::fromUtf8("相机")) << ","
+            << csvCell(r.camera.manufacturer) << ","
+            << csvCell(r.camera.model) << ","
+            << csvCell(bomSpecForCamera(r.camera, r)) << ","
+            << csvCell(QStringLiteral("FOV %1 x %2 mm; object pixel %3 um")
+                .arg(r.effectiveFovWidthMm, 0, 'f', 2)
+                .arg(r.effectiveFovHeightMm, 0, 'f', 2)
+                .arg(r.objectPixelSizeUm, 0, 'f', 2))
+            << "\n";
+        out << csvCell(scheme) << "," << (i + 1) << ","
+            << csvCell(QString::fromUtf8("镜头")) << ","
+            << csvCell(r.lens.manufacturer) << ","
+            << csvCell(r.lens.model) << ","
+            << csvCell(bomSpecForLens(r.lens, r)) << ","
+            << csvCell(QStringLiteral("distortion %1 um; lens MP utilization %2%")
+                .arg(r.distortionErrorUm, 0, 'f', 2)
+                .arg(r.lensMegapixelUtilizationPercent, 0, 'f', 0))
+            << "\n";
+        out << csvCell(scheme) << "," << (i + 1) << ","
+            << csvCell(QString::fromUtf8("光源")) << ","
+            << csvCell(r.light.manufacturer) << ","
+            << csvCell(r.light.model) << ","
+            << csvCell(bomSpecForLight(r.light, r)) << ","
+            << csvCell(riskSummary(r))
+            << "\n";
+    }
+    file.close();
+    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
 }
 
 void MainWindow::exportPdf()

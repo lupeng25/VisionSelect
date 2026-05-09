@@ -16,6 +16,9 @@ public:
     static double requiredFovHeight(const SelectionRequest &request);
     static double targetObjectPixelUm(const SelectionRequest &request);
     static double bandwidthRequiredMBps(const CameraSpec &camera, double fps);
+    static double framePayloadMB(const CameraSpec &camera);
+    static double storagePerHourGB(const CameraSpec &camera, double fps);
+    static double interfaceCapacityMBps(const CameraSpec &camera);
     static double maxExposureUsForOnePixelBlur(const SelectionRequest &request);
     static double estimatedFixedLensDofMm(const CameraSpec &camera,
                                           const LensSpec &lens,

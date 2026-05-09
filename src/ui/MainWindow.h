@@ -41,6 +41,8 @@ private:
     QTextEdit *m_assistantDetails = nullptr;
     QTableWidget *m_resultTable = nullptr;
     QTextEdit *m_resultDetails = nullptr;
+    QTableWidget *m_compareTable = nullptr;
+    QTextEdit *m_compareDetails = nullptr;
     QTableWidget *m_cameraTable = nullptr;
     QTableWidget *m_lensTable = nullptr;
     QTableWidget *m_lightTable = nullptr;
@@ -85,6 +87,7 @@ private:
     QWidget *createInputPage();
     QWidget *createCalculationPage();
     QWidget *createResultsPage();
+    QWidget *createComparisonPage();
     QWidget *createCatalogPage();
     QWidget *createReportPage();
     QDoubleSpinBox *makeSpin(double min, double max, double value, const QString &suffix, int decimals = 2);
@@ -96,6 +99,8 @@ private:
     void refreshAssistantLensTable();
     void refreshResultTable();
     void refreshResultDetails(int row);
+    void refreshComparisonPage();
+    void refreshComparisonDetails(int row);
     void refreshCatalogTables();
     void refreshCatalogFilterOptions();
     void refreshCameraTable();
@@ -111,6 +116,7 @@ private:
     void exportFilteredCameras();
     void exportFilteredLenses();
     void exportFilteredLights();
+    void exportBomCsv();
     void addCamera();
     void editCamera();
     void removeCamera();

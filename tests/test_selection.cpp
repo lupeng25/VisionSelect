@@ -20,6 +20,7 @@ private slots:
     void lensAssistantEstimatesLenses();
     void catalogPersistenceRoundTrip();
     void motionExposureAndStrobePreference();
+    void dataThroughputAndInterfaceRisk();
     void fixedLensDofAndDistortionRisk();
     void lightCoverageAffectsScore();
     void telecentricMeasurementWins();
@@ -261,6 +262,72 @@ void SelectionEngineTest::motionExposureAndStrobePreference()
     QVERIFY(!results.isEmpty());
     QCOMPARE(results.first().light.model, QStringLiteral("STROBE"));
     QVERIFY(results.first().maxExposureUsForOnePixelBlur > 0.0);
+}
+
+void SelectionEngineTest::dataThroughputAndInterfaceRisk()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 40.0;
+    request.objectHeightMm = 30.0;
+    request.placementMarginMm = 2.0;
+    request.minFeatureUm = 100.0;
+    request.measurementToleranceUm = 50.0;
+    request.workingDistanceMm = 120.0;
+    request.requiredFps = 200.0;
+    request.detectionType = DetectionType::Positioning;
+
+    CameraSpec camera;
+    camera.model = QStringLiteral("HIGH-DATA-CAM");
+    camera.manufacturer = QStringLiteral("Test");
+    camera.resolutionX = 4096;
+    camera.resolutionY = 4096;
+    camera.pixelSizeUm = 3.45;
+    camera.colorMode = QStringLiteral("Mono");
+    camera.shutterType = QStringLiteral("Global");
+    camera.maxFps = 250.0;
+    camera.interfaceType = QStringLiteral("GigE");
+    camera.bandwidthMBps = 120.0;
+    camera.bitDepth = 12.0;
+    camera.lensMount = QStringLiteral("C");
+
+    LensSpec lens;
+    lens.model = QStringLiteral("LOW-MP-LENS");
+    lens.manufacturer = QStringLiteral("Test");
+    lens.lensType = LensType::FixedFocal;
+    lens.lensMount = QStringLiteral("C");
+    lens.focalLengthMm = 16.0;
+    lens.minWorkingDistanceMm = 50.0;
+    lens.imageCircleMm = 20.0;
+    lens.megapixelRating = 5.0;
+    lens.recommendedMinPixelUm = 3.45;
+    lens.fNumber = 4.0;
+
+    LightSpec light;
+    light.model = QStringLiteral("LIGHT");
+    light.manufacturer = QStringLiteral("Test");
+    light.lightType = LightType::Ring;
+    light.mode = QStringLiteral("Strobe");
+    light.activeWidthMm = 100.0;
+    light.activeHeightMm = 100.0;
+
+    QCOMPARE(SelectionEngine::framePayloadMB(camera) > 20.0, true);
+    QCOMPARE(SelectionEngine::interfaceCapacityMBps(camera), 120.0);
+
+    CameraSpec fallback = camera;
+    fallback.bandwidthMBps = 0.0;
+    fallback.interfaceType = QStringLiteral("USB3");
+    QCOMPARE(SelectionEngine::interfaceCapacityMBps(fallback), 380.0);
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, {camera}, {lens}, {light}, 1);
+    QVERIFY(!results.isEmpty());
+    QVERIFY(results.first().bandwidthRequiredMBps > results.first().interfaceCapacityMBps);
+    QVERIFY(results.first().bandwidthUtilizationPercent > 100.0);
+    QVERIFY(results.first().storagePerHourGB > 1000.0);
+    QVERIFY(results.first().lensMegapixelUtilizationPercent > 100.0);
+    const QString risks = results.first().score.risks.join(QStringLiteral(";"));
+    QVERIFY2(risks.contains(QString::fromUtf8("带宽")), qPrintable(risks));
+    QVERIFY2(risks.contains(QStringLiteral("MP")), qPrintable(risks));
 }
 
 void SelectionEngineTest::fixedLensDofAndDistortionRisk()
