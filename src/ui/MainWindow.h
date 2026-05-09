@@ -3,6 +3,7 @@
 
 #include "catalog/CatalogRepository.h"
 #include "core/SelectionTypes.h"
+#include "selection/CalculationAssistant.h"
 
 #include <QMainWindow>
 #include <QVector>
@@ -11,6 +12,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QLineEdit;
 class QPushButton;
 class QStackedWidget;
 class QTableWidget;
@@ -32,7 +34,11 @@ private:
     QVector<QPushButton *> m_navButtons;
 
     QLabel *m_summaryLabel = nullptr;
+    QLabel *m_assistantSummaryLabel = nullptr;
     QLabel *m_resultSummaryLabel = nullptr;
+    QTableWidget *m_assistantCameraTable = nullptr;
+    QTableWidget *m_assistantLensTable = nullptr;
+    QTextEdit *m_assistantDetails = nullptr;
     QTableWidget *m_resultTable = nullptr;
     QTextEdit *m_resultDetails = nullptr;
     QTableWidget *m_cameraTable = nullptr;
@@ -55,9 +61,24 @@ private:
     QCheckBox *m_monoCheck = nullptr;
     QCheckBox *m_allowTelecentricCheck = nullptr;
 
+    QVector<CameraCalculationEstimate> m_assistantCameraEstimates;
+    QVector<LensCalculationEstimate> m_assistantLensEstimates;
+    int m_assistantSelectedCameraRow = -1;
+
+    QLineEdit *m_cameraSearchEdit = nullptr;
+    QComboBox *m_cameraManufacturerFilter = nullptr;
+    QComboBox *m_cameraInterfaceFilter = nullptr;
+    QLineEdit *m_lensSearchEdit = nullptr;
+    QComboBox *m_lensManufacturerFilter = nullptr;
+    QComboBox *m_lensTypeFilter = nullptr;
+    QComboBox *m_lensMountFilter = nullptr;
+    QVector<int> m_cameraRowMap;
+    QVector<int> m_lensRowMap;
+
     void buildUi();
     QWidget *createSidebar();
     QWidget *createInputPage();
+    QWidget *createCalculationPage();
     QWidget *createResultsPage();
     QWidget *createCatalogPage();
     QWidget *createReportPage();
@@ -66,13 +87,33 @@ private:
     void setActivePage(int index);
     void calculate();
     SelectionRequest readRequest() const;
+    void refreshCalculationAssistant();
+    void refreshAssistantLensTable();
     void refreshResultTable();
     void refreshResultDetails(int row);
     void refreshCatalogTables();
+    void refreshCatalogFilterOptions();
+    void refreshCameraTable();
+    void refreshLensTable();
+    void refreshLightTable();
     void refreshReportPreview();
     void importCameras();
     void importLenses();
     void importLights();
+    void exportCameras();
+    void exportLenses();
+    void addCamera();
+    void editCamera();
+    void removeCamera();
+    void addLens();
+    void editLens();
+    void removeLens();
+    void resetCameras();
+    void resetLenses();
+    void clearCameraFilters();
+    void clearLensFilters();
+    int selectedCameraCatalogIndex() const;
+    int selectedLensCatalogIndex() const;
     void exportPdf();
     void showError(const QString &message);
 };

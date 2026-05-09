@@ -1,7 +1,7 @@
-﻿model,light_type,color,wavelength_nm,mode,active_width_mm,active_height_mm,best_for
-BL-200-W,Backlight,White,0,Strobe,220,220,轮廓尺寸和通孔边缘
-TBL-80-R,TelecentricBacklight,Red,630,Strobe,80,80,高精度轮廓测量和远心镜头
-COAX-60-W,Coaxial,White,0,Continuous,60,60,反光金属表面和PCB标记
-DOME-120-W,Dome,White,0,Continuous,120,120,曲面反光件和玻璃塑料
-RING-90-W,Ring,White,0,Continuous,90,90,一般定位和存在检测
-BAR-150-B,Bar,Blue,470,Strobe,150,30,低角度暗场划痕和边缘缺陷
+"model","manufacturer","light_type","color","wavelength_nm","mode","active_width_mm","active_height_mm","best_for"
+"BL-200-W","VisionSelect Sample","Backlight","White","0","Strobe","220","220","轮廓尺寸和通孔边缘"
+"TBL-80-R","VisionSelect Sample","TelecentricBacklight","Red","630","Strobe","80","80","高精度轮廓测量和远心镜头"
+"COAX-60-W","VisionSelect Sample","Coaxial","White","0","Continuous","60","60","反光金属表面和PCB标记"
+"DOME-120-W","VisionSelect Sample","Dome","White","0","Continuous","120","120","曲面反光件和玻璃塑料"
+"RING-90-W","VisionSelect Sample","Ring","White","0","Continuous","90","90","一般定位和存在检测"
+"BAR-150-B","VisionSelect Sample","Bar","Blue","470","Strobe","150","30","低角度暗场划痕和边缘缺陷"

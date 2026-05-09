@@ -11,12 +11,12 @@ $lensPath = Join-Path $Root "resources\data\lenses.csv"
 $coolensRawPath = Join-Path $Root "resources\data\coolens_lenses_raw.csv"
 
 $cameraHeaders = @(
-    "model", "resolution_x", "resolution_y", "pixel_size_um", "sensor_format",
+    "model", "manufacturer", "resolution_x", "resolution_y", "pixel_size_um", "sensor_format",
     "color_mode", "shutter_type", "max_fps", "interface", "bandwidth_mbps",
     "bit_depth", "dynamic_range_db", "lens_mount"
 )
 $lensHeaders = @(
-    "model", "lens_type", "lens_mount", "focal_length_mm", "min_wd_mm",
+    "model", "manufacturer", "lens_type", "lens_mount", "focal_length_mm", "min_wd_mm",
     "distortion_percent", "image_circle_mm", "megapixel_rating",
     "recommended_min_pixel_um", "pmag", "nominal_wd_mm", "wd_tolerance_mm",
     "max_sensor_diagonal_mm", "telecentricity_deg", "dof_mm",
@@ -168,11 +168,13 @@ function Param-Map($groups) {
 
 function Add-Camera([hashtable]$map, [string]$model, [int]$rx, [int]$ry, [double]$pixel,
                     [string]$sensor, [string]$color, [string]$shutter, [double]$fps,
-                    [string]$iface, [double]$bitDepth, [double]$dynamicRange, [string]$mount) {
+                    [string]$iface, [double]$bitDepth, [double]$dynamicRange, [string]$mount,
+                    [string]$manufacturer = "") {
     if ($rx -le 0 -or $ry -le 0 -or $pixel -le 0) { return }
     $ifaceNorm = Normalize-Interface $iface
     Add-ToMap $map (New-Row $cameraHeaders @{
         model = $model
+        manufacturer = $manufacturer
         resolution_x = $rx
         resolution_y = $ry
         pixel_size_um = $pixel
@@ -198,19 +200,21 @@ function Add-CstCameraVariants([hashtable]$map, [string]$modelPattern, [string]$
         if ($color -match 'GM$') { $color = $color -replace 'GM$', 'GC' }
         elseif ($color -match 'UM$') { $color = $color -replace 'UM$', 'UC' }
         elseif ($color -match 'CM$') { $color = $color -replace 'CM$', 'CC' }
-        Add-Camera $map $mono $r[0] $r[1] $pixel $sensor "Mono" $shutter $fps $iface 12 0 "C"
-        Add-Camera $map $color $r[0] $r[1] $pixel $sensor "Color" $shutter $fps $iface 12 0 "C"
+        Add-Camera $map $mono $r[0] $r[1] $pixel $sensor "Mono" $shutter $fps $iface 12 0 "C" "CST"
+        Add-Camera $map $color $r[0] $r[1] $pixel $sensor "Color" $shutter $fps $iface 12 0 "C" "CST"
     } else {
         $model = $modelPattern -replace '/C$', ''
-        Add-Camera $map $model $r[0] $r[1] $pixel $sensor "Mono" $shutter $fps $iface 12 0 "C"
+        Add-Camera $map $model $r[0] $r[1] $pixel $sensor "Mono" $shutter $fps $iface 12 0 "C" "CST"
     }
 }
 
 function Add-FixedLens([hashtable]$map, [string]$model, [double]$focal, [double]$fno,
                        [double]$imageCircle, [double]$mp, [double]$minWdMm,
-                       [double]$distortion, [string]$mount, [string]$notes) {
+                       [double]$distortion, [string]$mount, [string]$notes,
+                       [string]$manufacturer = "") {
     Add-ToMap $map (New-Row $lensHeaders @{
         model = $model
+        manufacturer = $manufacturer
         lens_type = "FixedFocal"
         lens_mount = (Normalize-Mount $mount)
         focal_length_mm = $focal
@@ -235,9 +239,11 @@ function Add-FixedLens([hashtable]$map, [string]$model, [double]$focal, [double]
 function Add-TeleLens([hashtable]$map, [string]$model, [string]$type, [double]$pmag,
                       [double]$imageCircle, [double]$fno, [double]$resolutionUm,
                       [double]$wd, [double]$dof, [double]$distortion,
-                      [double]$teleDeg, [string]$notes) {
+                      [double]$teleDeg, [string]$notes,
+                      [string]$manufacturer = "") {
     Add-ToMap $map (New-Row $lensHeaders @{
         model = $model
+        manufacturer = $manufacturer
         lens_type = $type
         lens_mount = "C"
         focal_length_mm = 0
@@ -271,6 +277,7 @@ function Add-CoolensTeleLens([hashtable]$map, $row, [string]$type, [string]$seri
     $wdPair = Parse-WdPair $wd
     Add-ToMap $map (New-Row $lensHeaders @{
         model = $model
+        manufacturer = "COOLENS"
         lens_type = $type
         lens_mount = (Infer-Mount $model $mount)
         focal_length_mm = 0
@@ -301,7 +308,7 @@ function Add-CoolensFixedLens([hashtable]$map, $row, [string]$series) {
     if ($minWd -gt 0 -and $minWd -lt 20) { $minWd = $minWd * 1000 }
     if ([string]::IsNullOrWhiteSpace($model) -or $focal -le 0 -or $imageCircle -le 0) { return }
 
-    Add-FixedLens $map $model $focal (First-Number $row.text1 0) $imageCircle 0 $minWd (First-Number $row.text3 0) $row.text5 "COOLENS $series official product list"
+    Add-FixedLens $map $model $focal (First-Number $row.text1 0) $imageCircle 0 $minWd (First-Number $row.text3 0) $row.text5 "COOLENS $series official product list" "COOLENS"
 }
 
 $cameraMap = @{}
@@ -357,7 +364,7 @@ $cstObjectTele = @(
     @("CST-TL6560D",6.0,11,26.8,3,65,0.07,0.03,0.15), @("CST-TL6560",6.0,11,26.8,3,65,0.07,0.03,0.15)
 )
 foreach ($l in $cstObjectTele) {
-    Add-TeleLens $lensMap $l[0] "ObjectTelecentric" $l[1] $l[2] $l[3] $l[4] $l[5] $l[6] $l[7] $l[8] "CST standard object-side telecentric lens"
+    Add-TeleLens $lensMap $l[0] "ObjectTelecentric" $l[1] $l[2] $l[3] $l[4] $l[5] $l[6] $l[7] $l[8] "CST standard object-side telecentric lens" "CST"
 }
 $cstBiTele = @(
     @("CST-TL6505DH",0.5,11,6,8,65,2.54,0.001,0.25), @("CST-TL6505H",0.5,11,6,8,65,2.54,0.001,0.25),
@@ -366,11 +373,11 @@ $cstBiTele = @(
     @("CST-TL184036H",0.367,22,5.9,18,184.4,6.2,0.010,0.08)
 )
 foreach ($l in $cstBiTele) {
-    Add-TeleLens $lensMap $l[0] "BiTelecentric" $l[1] $l[2] $l[3] $l[4] $l[5] $l[6] $l[7] $l[8] "CST high-resolution bi-telecentric lens"
+    Add-TeleLens $lensMap $l[0] "BiTelecentric" $l[1] $l[2] $l[3] $l[4] $l[5] $l[6] $l[7] $l[8] "CST high-resolution bi-telecentric lens" "CST"
 }
-Add-FixedLens $lensMap "CST-A7528-5M" 75 2.8 9 5 500 0.05 "C" "CST 1/1.8 5MP FA lens"
-Add-FixedLens $lensMap "CST-YB1220-12M" 12 2.0 11 12 150 0.12 "C" "CST 2/3 12MP YB FA lens"
-Add-FixedLens $lensMap "CST-YB2520-12M" 25 2.0 11 12 200 0.12 "C" "CST 2/3 12MP YB FA lens"
+Add-FixedLens $lensMap "CST-A7528-5M" 75 2.8 9 5 500 0.05 "C" "CST 1/1.8 5MP FA lens" "CST"
+Add-FixedLens $lensMap "CST-YB1220-12M" 12 2.0 11 12 150 0.12 "C" "CST 2/3 12MP YB FA lens" "CST"
+Add-FixedLens $lensMap "CST-YB2520-12M" 25 2.0 11 12 200 0.12 "C" "CST 2/3 12MP YB FA lens" "CST"
 
 if (!$SkipNetwork) {
     Write-Host "Fetching Hikrobot area scan cameras..."
@@ -405,7 +412,7 @@ if (!$SkipNetwork) {
             if (!$color) { $color = $p["Mono/Color"] }
             $iface = $p["Data interface"]
             if (!$iface) { $iface = $p["Port"] }
-            Add-Camera $cameraMap $p["Product Model"] $r[0] $r[1] $pixel $sensor $color $shutter $fps $iface (First-Number $p["Bit depth"] 12) (First-Number $p["Dynamic range"] 0) $p["Lens mount"]
+            Add-Camera $cameraMap $p["Product Model"] $r[0] $r[1] $pixel $sensor $color $shutter $fps $iface (First-Number $p["Bit depth"] 12) (First-Number $p["Dynamic range"] 0) $p["Lens mount"] "Hikrobot"
         } catch {
             Write-Warning "Skipped Hikrobot camera id=$($rec.id): $($_.Exception.Message)"
         }
@@ -420,7 +427,7 @@ if (!$SkipNetwork) {
             foreach ($item in $cfg.data) { $p[$item.name] = [string]$item.value }
             $minWd = First-Number $p["Minimum object distance"] 0
             if ($p["Minimum object distance"] -match '\bm\b' -and $minWd -lt 20) { $minWd = $minWd * 1000 }
-            Add-FixedLens $lensMap $p["Product Model"] (First-Number $p["Focal length"] 0) (First-Number $p["F-number"] 0) (First-Number $p["Image size"] 0) (First-Number $p["Type"] 0) $minWd (First-Number $p["Distortion"] 0) $p["Mount"] "Hikrobot FA lens from official product API"
+            Add-FixedLens $lensMap $p["Product Model"] (First-Number $p["Focal length"] 0) (First-Number $p["F-number"] 0) (First-Number $p["Image size"] 0) (First-Number $p["Type"] 0) $minWd (First-Number $p["Distortion"] 0) $p["Mount"] "Hikrobot FA lens from official product API" "Hikrobot"
         } catch {
             Write-Warning "Skipped Hikrobot lens id=$($rec.id): $($_.Exception.Message)"
         }
@@ -445,7 +452,7 @@ if (!$SkipNetwork) {
             $pixel = First-Number $p["Pixel Size"] 0
             $fps = First-Number $p["Frame Rate"] 0
             $sensor = $p["Image Sensor"]
-            Add-Camera $cameraMap $detail.data.model $r[0] $r[1] $pixel $sensor $p["Mono/Color"] $p["Shutter"] $fps $p["Port"] (First-Number $p["Bit Depth"] 12) (First-Number $p["Dynamic Range"] 0) $p["Lens Mount"]
+            Add-Camera $cameraMap $detail.data.model $r[0] $r[1] $pixel $sensor $p["Mono/Color"] $p["Shutter"] $fps $p["Port"] (First-Number $p["Bit Depth"] 12) (First-Number $p["Dynamic Range"] 0) $p["Lens Mount"] "iRAYPLE"
         } catch {
             Write-Warning "Skipped iRAYPLE camera id=$($rec.id): $($_.Exception.Message)"
         }

@@ -27,5 +27,6 @@ qrc_*.cpp
 moc_predefs.h
 
 # Local test/report outputs
+.deps/
 test_results.txt
 *.log

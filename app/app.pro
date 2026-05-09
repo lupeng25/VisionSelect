@@ -14,6 +14,7 @@ SOURCES += \
     ../src/catalog/CatalogRepository.cpp \
     ../src/core/SelectionTypes.cpp \
     ../src/report/PdfReportWriter.cpp \
+    ../src/selection/CalculationAssistant.cpp \
     ../src/selection/SelectionEngine.cpp \
     ../src/ui/MainWindow.cpp
 
@@ -21,6 +22,7 @@ HEADERS += \
     ../src/catalog/CatalogRepository.h \
     ../src/core/SelectionTypes.h \
     ../src/report/PdfReportWriter.h \
+    ../src/selection/CalculationAssistant.h \
     ../src/selection/SelectionEngine.h \
     ../src/ui/MainWindow.h
 

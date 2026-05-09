@@ -1,22 +1,36 @@
 #include "catalog/CatalogRepository.h"
 
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QIODevice>
+#include <QStandardPaths>
 #include <QTextStream>
+
+void CatalogRepository::setStorageDirectory(const QString &directory)
+{
+    m_storageDirectory = directory;
+}
+
+QString CatalogRepository::storageDirectory() const
+{
+    return effectiveStorageDirectory();
+}
 
 bool CatalogRepository::loadDefaults(QString *errorMessage)
 {
+    if (!ensureLocalCatalogs(errorMessage))
+        return false;
+
     QVector<Row> cameraRows;
     QVector<Row> lensRows;
     QVector<Row> lightRows;
 
-    QFile cameras(QStringLiteral(":/data/cameras.csv"));
-    QFile lenses(QStringLiteral(":/data/lenses.csv"));
     QFile lights(QStringLiteral(":/data/lights.csv"));
 
-    if (!readCsvRowsFromDevice(&cameras, QStringLiteral(":/data/cameras.csv"), &cameraRows, errorMessage))
+    if (!readCsvRows(cameraStoragePath(), &cameraRows, errorMessage))
         return false;
-    if (!readCsvRowsFromDevice(&lenses, QStringLiteral(":/data/lenses.csv"), &lensRows, errorMessage))
+    if (!readCsvRows(lensStoragePath(), &lensRows, errorMessage))
         return false;
     if (!readCsvRowsFromDevice(&lights, QStringLiteral(":/data/lights.csv"), &lightRows, errorMessage))
         return false;
@@ -26,18 +40,102 @@ bool CatalogRepository::loadDefaults(QString *errorMessage)
         && loadLightRows(lightRows, QString::fromUtf8("\345\206\205\347\275\256\345\205\211\346\272\220\345\272\223"), errorMessage);
 }
 
+QString CatalogRepository::effectiveStorageDirectory() const
+{
+    if (!m_storageDirectory.trimmed().isEmpty())
+        return m_storageDirectory;
+    QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (path.isEmpty())
+        path = QDir::homePath() + QStringLiteral("/VisionSelect");
+    return path;
+}
+
+QString CatalogRepository::cameraStoragePath() const
+{
+    return QDir(effectiveStorageDirectory()).filePath(QStringLiteral("cameras.csv"));
+}
+
+QString CatalogRepository::lensStoragePath() const
+{
+    return QDir(effectiveStorageDirectory()).filePath(QStringLiteral("lenses.csv"));
+}
+
+bool CatalogRepository::ensureLocalCatalogs(QString *errorMessage)
+{
+    QDir dir(effectiveStorageDirectory());
+    if (!dir.exists() && !QDir().mkpath(dir.absolutePath())) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\210\233\345\273\272\344\272\247\345\223\201\345\272\223\346\225\260\346\215\256\347\233\256\345\275\225\357\274\232%1").arg(dir.absolutePath());
+        return false;
+    }
+    if (!QFileInfo::exists(cameraStoragePath())
+        && !copyResourceToFile(QStringLiteral(":/data/cameras.csv"), cameraStoragePath(), false, errorMessage)) {
+        return false;
+    }
+    if (!QFileInfo::exists(lensStoragePath())
+        && !copyResourceToFile(QStringLiteral(":/data/lenses.csv"), lensStoragePath(), false, errorMessage)) {
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::copyResourceToFile(const QString &resourcePath, const QString &filePath, bool overwrite, QString *errorMessage) const
+{
+    QFileInfo targetInfo(filePath);
+    if (!QDir().mkpath(targetInfo.absolutePath())) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\210\233\345\273\272\347\233\256\345\275\225\357\274\232%1").arg(targetInfo.absolutePath());
+        return false;
+    }
+    if (overwrite && QFileInfo::exists(filePath) && !QFile::remove(filePath)) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\350\246\206\347\233\226\346\226\207\344\273\266\357\274\232%1").arg(filePath);
+        return false;
+    }
+    if (!overwrite && QFileInfo::exists(filePath))
+        return true;
+    if (!QFile::copy(resourcePath, filePath)) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\210\235\345\247\213\345\214\226\344\272\247\345\223\201\345\272\223\346\226\207\344\273\266\357\274\232%1").arg(filePath);
+        return false;
+    }
+    QFile::setPermissions(filePath,
+                          QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                              | QFileDevice::ReadUser | QFileDevice::WriteUser
+                              | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+    return true;
+}
+
 bool CatalogRepository::loadCameraCsv(const QString &filePath, QString *errorMessage)
 {
     QVector<Row> rows;
-    return readCsvRows(filePath, &rows, errorMessage)
-        && loadCameraRows(rows, filePath, errorMessage);
+    QVector<CameraSpec> previous = m_cameras;
+    if (!readCsvRows(filePath, &rows, errorMessage)
+        || !loadCameraRows(rows, filePath, errorMessage)) {
+        m_cameras = previous;
+        return false;
+    }
+    if (!saveCameras(errorMessage)) {
+        m_cameras = previous;
+        return false;
+    }
+    return true;
 }
 
 bool CatalogRepository::loadLensCsv(const QString &filePath, QString *errorMessage)
 {
     QVector<Row> rows;
-    return readCsvRows(filePath, &rows, errorMessage)
-        && loadLensRows(rows, filePath, errorMessage);
+    QVector<LensSpec> previous = m_lenses;
+    if (!readCsvRows(filePath, &rows, errorMessage)
+        || !loadLensRows(rows, filePath, errorMessage)) {
+        m_lenses = previous;
+        return false;
+    }
+    if (!saveLenses(errorMessage)) {
+        m_lenses = previous;
+        return false;
+    }
+    return true;
 }
 
 bool CatalogRepository::loadLightCsv(const QString &filePath, QString *errorMessage)
@@ -47,12 +145,271 @@ bool CatalogRepository::loadLightCsv(const QString &filePath, QString *errorMess
         && loadLightRows(rows, filePath, errorMessage);
 }
 
+bool CatalogRepository::exportCameraCsv(const QString &filePath, QString *errorMessage) const
+{
+    return writeCameraCsv(filePath, m_cameras, errorMessage);
+}
+
+bool CatalogRepository::exportLensCsv(const QString &filePath, QString *errorMessage) const
+{
+    return writeLensCsv(filePath, m_lenses, errorMessage);
+}
+
+bool CatalogRepository::resetCamerasToBuiltIn(QString *errorMessage)
+{
+    if (!copyResourceToFile(QStringLiteral(":/data/cameras.csv"), cameraStoragePath(), true, errorMessage))
+        return false;
+    QVector<Row> rows;
+    return readCsvRows(cameraStoragePath(), &rows, errorMessage)
+        && loadCameraRows(rows, QString::fromUtf8("\345\206\205\347\275\256\347\233\270\346\234\272\345\272\223"), errorMessage);
+}
+
+bool CatalogRepository::resetLensesToBuiltIn(QString *errorMessage)
+{
+    if (!copyResourceToFile(QStringLiteral(":/data/lenses.csv"), lensStoragePath(), true, errorMessage))
+        return false;
+    QVector<Row> rows;
+    return readCsvRows(lensStoragePath(), &rows, errorMessage)
+        && loadLensRows(rows, QString::fromUtf8("\345\206\205\347\275\256\351\225\234\345\244\264\345\272\223"), errorMessage);
+}
+
+bool CatalogRepository::addCamera(const CameraSpec &camera, QString *errorMessage)
+{
+    if (!validateCamera(camera, QString::fromUtf8("\346\226\260\345\242\236\347\233\270\346\234\272"), errorMessage))
+        return false;
+    m_cameras.append(camera);
+    if (!saveCameras(errorMessage)) {
+        m_cameras.removeLast();
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::updateCamera(int index, const CameraSpec &camera, QString *errorMessage)
+{
+    if (index < 0 || index >= m_cameras.size()) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\347\233\270\346\234\272\350\241\214\345\217\267\346\227\240\346\225\210");
+        return false;
+    }
+    if (!validateCamera(camera, camera.model, errorMessage))
+        return false;
+    const CameraSpec previous = m_cameras.at(index);
+    m_cameras[index] = camera;
+    if (!saveCameras(errorMessage)) {
+        m_cameras[index] = previous;
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::removeCamera(int index, QString *errorMessage)
+{
+    if (index < 0 || index >= m_cameras.size()) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\347\233\270\346\234\272\350\241\214\345\217\267\346\227\240\346\225\210");
+        return false;
+    }
+    const CameraSpec removed = m_cameras.takeAt(index);
+    if (!saveCameras(errorMessage)) {
+        m_cameras.insert(index, removed);
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::addLens(const LensSpec &lens, QString *errorMessage)
+{
+    if (!validateLens(lens, QString::fromUtf8("\346\226\260\345\242\236\351\225\234\345\244\264"), errorMessage))
+        return false;
+    m_lenses.append(lens);
+    if (!saveLenses(errorMessage)) {
+        m_lenses.removeLast();
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::updateLens(int index, const LensSpec &lens, QString *errorMessage)
+{
+    if (index < 0 || index >= m_lenses.size()) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\351\225\234\345\244\264\350\241\214\345\217\267\346\227\240\346\225\210");
+        return false;
+    }
+    if (!validateLens(lens, lens.model, errorMessage))
+        return false;
+    const LensSpec previous = m_lenses.at(index);
+    m_lenses[index] = lens;
+    if (!saveLenses(errorMessage)) {
+        m_lenses[index] = previous;
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::removeLens(int index, QString *errorMessage)
+{
+    if (index < 0 || index >= m_lenses.size()) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\351\225\234\345\244\264\350\241\214\345\217\267\346\227\240\346\225\210");
+        return false;
+    }
+    const LensSpec removed = m_lenses.takeAt(index);
+    if (!saveLenses(errorMessage)) {
+        m_lenses.insert(index, removed);
+        return false;
+    }
+    return true;
+}
+
 QString CatalogRepository::summary() const
 {
     return QString::fromUtf8("\347\233\270\346\234\272 %1 \346\254\276\357\274\214\351\225\234\345\244\264 %2 \346\254\276\357\274\214\345\205\211\346\272\220 %3 \346\254\276")
         .arg(m_cameras.size())
         .arg(m_lenses.size())
         .arg(m_lights.size());
+}
+
+bool CatalogRepository::saveCameras(QString *errorMessage) const
+{
+    return writeCameraCsv(cameraStoragePath(), m_cameras, errorMessage);
+}
+
+bool CatalogRepository::saveLenses(QString *errorMessage) const
+{
+    return writeLensCsv(lensStoragePath(), m_lenses, errorMessage);
+}
+
+bool CatalogRepository::writeCameraCsv(const QString &filePath, const QVector<CameraSpec> &cameras, QString *errorMessage) const
+{
+    QFileInfo info(filePath);
+    if (!QDir().mkpath(info.absolutePath())) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\210\233\345\273\272\347\233\256\345\275\225\357\274\232%1").arg(info.absolutePath());
+        return false;
+    }
+    if (info.exists()) {
+        QFile::setPermissions(filePath,
+                              QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                  | QFileDevice::ReadUser | QFileDevice::WriteUser
+                                  | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+    }
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\206\231\345\205\245 CSV\357\274\232%1").arg(filePath);
+        return false;
+    }
+    QTextStream out(&file);
+    out.setCodec("UTF-8");
+    const QStringList headers = {
+        QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("resolution_x"), QStringLiteral("resolution_y"),
+        QStringLiteral("pixel_size_um"), QStringLiteral("sensor_format"), QStringLiteral("color_mode"), QStringLiteral("shutter_type"),
+        QStringLiteral("max_fps"), QStringLiteral("interface"), QStringLiteral("bandwidth_mbps"), QStringLiteral("bit_depth"),
+        QStringLiteral("dynamic_range_db"), QStringLiteral("lens_mount")
+    };
+    out << headers.join(QLatin1Char(',')) << "\n";
+    for (const CameraSpec &c : cameras) {
+        QStringList row;
+        row << c.model << c.manufacturer << QString::number(c.resolutionX) << QString::number(c.resolutionY)
+            << QString::number(c.pixelSizeUm, 'g', 12) << c.sensorFormat << c.colorMode << c.shutterType
+            << QString::number(c.maxFps, 'g', 12) << c.interfaceType << QString::number(c.bandwidthMBps, 'g', 12)
+            << QString::number(c.bitDepth, 'g', 12) << QString::number(c.dynamicRangeDb, 'g', 12) << c.lensMount;
+        for (QString &value : row)
+            value = csvField(value);
+        out << row.join(QLatin1Char(',')) << "\n";
+    }
+    return true;
+}
+
+bool CatalogRepository::writeLensCsv(const QString &filePath, const QVector<LensSpec> &lenses, QString *errorMessage) const
+{
+    QFileInfo info(filePath);
+    if (!QDir().mkpath(info.absolutePath())) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\210\233\345\273\272\347\233\256\345\275\225\357\274\232%1").arg(info.absolutePath());
+        return false;
+    }
+    if (info.exists()) {
+        QFile::setPermissions(filePath,
+                              QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                  | QFileDevice::ReadUser | QFileDevice::WriteUser
+                                  | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+    }
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\206\231\345\205\245 CSV\357\274\232%1").arg(filePath);
+        return false;
+    }
+    QTextStream out(&file);
+    out.setCodec("UTF-8");
+    const QStringList headers = {
+        QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("lens_type"), QStringLiteral("lens_mount"),
+        QStringLiteral("focal_length_mm"), QStringLiteral("min_wd_mm"), QStringLiteral("distortion_percent"),
+        QStringLiteral("image_circle_mm"), QStringLiteral("megapixel_rating"), QStringLiteral("recommended_min_pixel_um"),
+        QStringLiteral("pmag"), QStringLiteral("nominal_wd_mm"), QStringLiteral("wd_tolerance_mm"),
+        QStringLiteral("max_sensor_diagonal_mm"), QStringLiteral("telecentricity_deg"), QStringLiteral("dof_mm"),
+        QStringLiteral("numerical_aperture"), QStringLiteral("f_number"), QStringLiteral("coaxial_illumination"), QStringLiteral("notes")
+    };
+    out << headers.join(QLatin1Char(',')) << "\n";
+    for (const LensSpec &l : lenses) {
+        QStringList row;
+        row << l.model << l.manufacturer
+            << (l.lensType == LensType::FixedFocal ? QStringLiteral("FixedFocal")
+                : l.lensType == LensType::ObjectTelecentric ? QStringLiteral("ObjectTelecentric") : QStringLiteral("BiTelecentric"))
+            << l.lensMount << QString::number(l.focalLengthMm, 'g', 12)
+            << QString::number(l.minWorkingDistanceMm, 'g', 12) << QString::number(l.distortionPercent, 'g', 12)
+            << QString::number(l.imageCircleMm, 'g', 12) << QString::number(l.megapixelRating, 'g', 12)
+            << QString::number(l.recommendedMinPixelUm, 'g', 12) << QString::number(l.pmag, 'g', 12)
+            << QString::number(l.nominalWorkingDistanceMm, 'g', 12) << QString::number(l.workingDistanceToleranceMm, 'g', 12)
+            << QString::number(l.maxSensorDiagonalMm, 'g', 12) << QString::number(l.telecentricityDeg, 'g', 12)
+            << QString::number(l.dofMm, 'g', 12) << QString::number(l.numericalAperture, 'g', 12)
+            << QString::number(l.fNumber, 'g', 12) << (l.coaxialIllumination ? QStringLiteral("true") : QStringLiteral("false"))
+            << l.notes;
+        for (QString &value : row)
+            value = csvField(value);
+        out << row.join(QLatin1Char(',')) << "\n";
+    }
+    return true;
+}
+
+QString CatalogRepository::csvField(const QString &value)
+{
+    QString escaped = value;
+    escaped.replace(QLatin1Char('"'), QStringLiteral("\"\""));
+    return QLatin1Char('"') + escaped + QLatin1Char('"');
+}
+
+bool CatalogRepository::validateCamera(const CameraSpec &camera, const QString &sourceName, QString *errorMessage)
+{
+    if (camera.model.trimmed().isEmpty() || camera.resolutionX <= 0 || camera.resolutionY <= 0 || camera.pixelSizeUm <= 0.0) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("%1 \347\233\270\346\234\272\346\225\260\346\215\256\346\227\240\346\225\210\357\274\232\345\236\213\345\217\267\343\200\201\345\210\206\350\276\250\347\216\207\343\200\201\345\203\217\345\205\203\345\260\272\345\257\270\345\277\205\351\241\273\346\234\211\346\225\210").arg(sourceName);
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::validateLens(const LensSpec &lens, const QString &sourceName, QString *errorMessage)
+{
+    if (lens.model.trimmed().isEmpty() || lens.imageCircleMm <= 0.0) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("%1 \351\225\234\345\244\264\346\225\260\346\215\256\346\227\240\346\225\210\357\274\232\345\236\213\345\217\267\345\222\214\345\203\217\345\234\206\345\277\205\351\241\273\346\234\211\346\225\210").arg(sourceName);
+        return false;
+    }
+    if (lens.isTelecentric() && lens.pmag <= 0.0) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("%1 \350\277\234\345\277\203\351\225\234\345\244\264\347\274\272\345\260\221 PMAG \346\224\276\345\244\247\345\200\215\347\216\207").arg(sourceName);
+        return false;
+    }
+    if (!lens.isTelecentric() && lens.focalLengthMm <= 0.0) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("%1 \346\231\256\351\200\232\351\225\234\345\244\264\347\274\272\345\260\221\347\204\246\350\267\235").arg(sourceName);
+        return false;
+    }
+    return true;
 }
 
 bool CatalogRepository::readCsvRows(const QString &filePath, QVector<Row> *rows, QString *errorMessage)
@@ -178,6 +535,16 @@ QString CatalogRepository::text(const Row &row, const QString &key)
     return row.value(key).trimmed();
 }
 
+QString CatalogRepository::firstText(const Row &row, const QStringList &keys)
+{
+    for (const QString &key : keys) {
+        const QString value = text(row, key);
+        if (!value.isEmpty())
+            return value;
+    }
+    return QString();
+}
+
 bool CatalogRepository::loadCameraRows(const QVector<Row> &rows, const QString &sourceName, QString *errorMessage)
 {
     const QStringList required = {
@@ -200,6 +567,9 @@ bool CatalogRepository::loadCameraRows(const QVector<Row> &rows, const QString &
     for (const Row &row : rows) {
         CameraSpec spec;
         spec.model = text(row, QStringLiteral("model"));
+        spec.manufacturer = firstText(row, {QStringLiteral("manufacturer"), QStringLiteral("vendor"), QStringLiteral("brand"), QStringLiteral("maker"),
+                                            QString::fromUtf8("\345\216\202\345\256\266"), QString::fromUtf8("\345\216\202\345\225\206"),
+                                            QString::fromUtf8("\345\210\266\351\200\240\345\225\206")});
         spec.resolutionX = integer(row, QStringLiteral("resolution_x"));
         spec.resolutionY = integer(row, QStringLiteral("resolution_y"));
         spec.pixelSizeUm = number(row, QStringLiteral("pixel_size_um"));
@@ -241,6 +611,9 @@ bool CatalogRepository::loadLensRows(const QVector<Row> &rows, const QString &so
     for (const Row &row : rows) {
         LensSpec spec;
         spec.model = text(row, QStringLiteral("model"));
+        spec.manufacturer = firstText(row, {QStringLiteral("manufacturer"), QStringLiteral("vendor"), QStringLiteral("brand"), QStringLiteral("maker"),
+                                            QString::fromUtf8("\345\216\202\345\256\266"), QString::fromUtf8("\345\216\202\345\225\206"),
+                                            QString::fromUtf8("\345\210\266\351\200\240\345\225\206")});
         spec.lensType = lensTypeFromString(text(row, QStringLiteral("lens_type")));
         spec.lensMount = text(row, QStringLiteral("lens_mount"));
         spec.focalLengthMm = number(row, QStringLiteral("focal_length_mm"));
@@ -297,6 +670,9 @@ bool CatalogRepository::loadLightRows(const QVector<Row> &rows, const QString &s
     for (const Row &row : rows) {
         LightSpec spec;
         spec.model = text(row, QStringLiteral("model"));
+        spec.manufacturer = firstText(row, {QStringLiteral("manufacturer"), QStringLiteral("vendor"), QStringLiteral("brand"), QStringLiteral("maker"),
+                                            QString::fromUtf8("\345\216\202\345\256\266"), QString::fromUtf8("\345\216\202\345\225\206"),
+                                            QString::fromUtf8("\345\210\266\351\200\240\345\225\206")});
         spec.lightType = lightTypeFromString(text(row, QStringLiteral("light_type")));
         spec.color = text(row, QStringLiteral("color"));
         spec.wavelengthNm = integer(row, QStringLiteral("wavelength_nm"));

@@ -1,0 +1,325 @@
+#include "selection/CalculationAssistant.h"
+
+#include "selection/SelectionEngine.h"
+
+#include <algorithm>
+#include <QtMath>
+
+namespace {
+int ceilToInt(double value)
+{
+    return qMax(1, static_cast<int>(qCeil(value)));
+}
+
+double objectPixelUm(const SelectionRequest &request, const CameraSpec &camera)
+{
+    const double fovW = SelectionEngine::requiredFovWidth(request);
+    const double fovH = SelectionEngine::requiredFovHeight(request);
+    return qMax(fovW * 1000.0 / qMax(1, camera.resolutionX),
+                fovH * 1000.0 / qMax(1, camera.resolutionY));
+}
+
+double clamp(double value, double low, double high)
+{
+    return qMax(low, qMin(high, value));
+}
+
+double percentDifference(double actual, double target)
+{
+    if (target <= 0.0)
+        return 1.0;
+    return qAbs(actual - target) / target;
+}
+
+QString mm(double value, int decimals = 1)
+{
+    return QStringLiteral("%1 mm").arg(value, 0, 'f', decimals);
+}
+
+QString um(double value, int decimals = 2)
+{
+    return QStringLiteral("%1 um").arg(value, 0, 'f', decimals);
+}
+
+double cameraScore(const SelectionRequest &request,
+                   const RequirementEstimate &requirement,
+                   const CameraCalculationEstimate &estimate)
+{
+    double score = 0.0;
+    const double pixelRatio = estimate.objectPixelSizeUm / qMax(0.001, requirement.targetObjectPixelUm);
+    score += estimate.meetsSampling ? 100.0 : -50.0 * pixelRatio;
+    score += estimate.meetsFps ? 25.0 : -35.0;
+    score += estimate.telecentricFeasible ? 10.0 : -4.0;
+
+    if (request.preferMono)
+        score += estimate.camera.isMono() ? 8.0 : -8.0;
+    if (request.motionSpeedMmS > 20.0)
+        score += estimate.camera.isGlobalShutter() ? 14.0 : -20.0;
+
+    const double mpExcess = estimate.camera.megapixels() - requirement.requiredMegapixels;
+    if (mpExcess > 0.0)
+        score -= qMin(18.0, mpExcess * 0.6);
+
+    return score;
+}
+
+void appendCommonLensJudgement(const SelectionRequest &request,
+                               const RequirementEstimate &requirement,
+                               const CameraSpec &camera,
+                               LensCalculationEstimate *estimate)
+{
+    estimate->fovOk = estimate->effectiveFovWidthMm >= requirement.requiredFovWidthMm
+        && estimate->effectiveFovHeightMm >= requirement.requiredFovHeightMm;
+    estimate->samplingOk = estimate->objectPixelSizeUm <= requirement.targetObjectPixelUm;
+    const double allowedDiagonal = estimate->lens.maxSensorDiagonalMm > 0.0
+        ? estimate->lens.maxSensorDiagonalMm
+        : estimate->lens.imageCircleMm;
+    estimate->imageCircleOk = allowedDiagonal >= camera.sensorDiagonalMm()
+        && estimate->lens.imageCircleMm >= camera.sensorDiagonalMm();
+    estimate->mountOk = mountsCompatible(camera.lensMount, estimate->lens.lensMount);
+
+    if (estimate->fovOk) {
+        estimate->score += 18.0;
+        estimate->reasons.append(QString::fromUtf8("\350\247\206\351\207\216\350\246\206\347\233\226\345\275\223\345\211\215\351\234\200\346\261\202"));
+    } else {
+        estimate->score -= 35.0;
+        estimate->risks.append(QString::fromUtf8("\350\247\206\351\207\216\344\270\215\350\266\263\357\274\214\351\234\200\346\233\264\347\237\255\347\204\246\350\267\235/\346\233\264\344\275\216\345\200\215\347\216\207\346\210\226\346\233\264\345\244\247\351\235\266\351\235\242"));
+    }
+
+    if (estimate->samplingOk) {
+        estimate->score += 18.0;
+        estimate->reasons.append(QString::fromUtf8("\347\211\251\346\226\271\345\203\217\347\264\240 %1 \346\273\241\350\266\263\347\233\256\346\240\207 %2")
+            .arg(um(estimate->objectPixelSizeUm), um(requirement.targetObjectPixelUm)));
+    } else {
+        const double ratio = estimate->objectPixelSizeUm / qMax(0.001, requirement.targetObjectPixelUm);
+        estimate->score -= clamp((ratio - 1.0) * 18.0, 10.0, 40.0);
+        estimate->risks.append(QString::fromUtf8("\347\211\251\346\226\271\345\203\217\347\264\240 %1 \347\262\227\344\272\216\347\233\256\346\240\207 %2")
+            .arg(um(estimate->objectPixelSizeUm), um(requirement.targetObjectPixelUm)));
+    }
+
+    if (estimate->imageCircleOk) {
+        estimate->score += 12.0;
+    } else {
+        estimate->score -= 30.0;
+        estimate->risks.append(QString::fromUtf8("\351\225\234\345\244\264\345\203\217\345\234\206/\346\234\200\345\244\247\351\235\266\351\235\242\344\270\215\350\266\263\344\273\245\350\246\206\347\233\226\347\233\270\346\234\272\344\274\240\346\204\237\345\231\250"));
+    }
+
+    if (estimate->mountOk) {
+        estimate->score += 8.0;
+    } else {
+        estimate->score -= 25.0;
+        estimate->risks.append(QString::fromUtf8("\347\233\270\346\234\272\346\216\245\345\217\243 %1 \344\270\216\351\225\234\345\244\264\346\216\245\345\217\243 %2 \344\270\215\345\214\271\351\205\215")
+            .arg(camera.lensMount, estimate->lens.lensMount));
+    }
+
+    if (request.detectionType == DetectionType::Measurement && estimate->lens.distortionPercent > 0.1) {
+        estimate->score -= 6.0;
+        estimate->risks.append(QString::fromUtf8("\346\265\213\351\207\217\344\273\273\345\212\241\351\234\200\346\263\250\346\204\217\351\225\234\345\244\264\347\225\270\345\217\230\346\240\241\346\255\243"));
+    }
+}
+}
+
+RequirementEstimate CalculationAssistant::estimateRequirement(const SelectionRequest &request)
+{
+    RequirementEstimate estimate;
+    estimate.requiredFovWidthMm = SelectionEngine::requiredFovWidth(request);
+    estimate.requiredFovHeightMm = SelectionEngine::requiredFovHeight(request);
+    estimate.targetObjectPixelUm = SelectionEngine::targetObjectPixelUm(request);
+    estimate.requiredResolutionX = ceilToInt(estimate.requiredFovWidthMm * 1000.0 / estimate.targetObjectPixelUm);
+    estimate.requiredResolutionY = ceilToInt(estimate.requiredFovHeightMm * 1000.0 / estimate.targetObjectPixelUm);
+    estimate.requiredMegapixels = estimate.requiredResolutionX * estimate.requiredResolutionY / 1000000.0;
+    estimate.requiredBandwidthMBps12Bit = estimate.requiredResolutionX * estimate.requiredResolutionY
+        * 12.0 * qMax(1.0, request.requiredFps) / 8.0 / 1000000.0;
+    estimate.hasMotionConstraint = request.motionSpeedMmS > 0.0;
+    if (estimate.hasMotionConstraint) {
+        const double targetPixelMm = estimate.targetObjectPixelUm / 1000.0;
+        estimate.maxExposureUsForOnePixelBlur = targetPixelMm / request.motionSpeedMmS * 1000000.0;
+    }
+    estimate.telecentricPreferred = telecentricPreferred(request);
+    return estimate;
+}
+
+QVector<CameraCalculationEstimate> CalculationAssistant::estimateCameras(const SelectionRequest &request,
+                                                                         const QVector<CameraSpec> &cameras,
+                                                                         int limit)
+{
+    const RequirementEstimate requirement = estimateRequirement(request);
+    QVector<CameraCalculationEstimate> estimates;
+    estimates.reserve(cameras.size());
+
+    const double fovW = requirement.requiredFovWidthMm;
+    const double fovH = requirement.requiredFovHeightMm;
+    for (const CameraSpec &camera : cameras) {
+        if (camera.resolutionX <= 0 || camera.resolutionY <= 0 || camera.pixelSizeUm <= 0.0)
+            continue;
+
+        CameraCalculationEstimate estimate;
+        estimate.camera = camera;
+        estimate.objectPixelSizeUm = objectPixelUm(request, camera);
+        estimate.meetsSampling = estimate.objectPixelSizeUm <= requirement.targetObjectPixelUm;
+        estimate.meetsFps = camera.maxFps >= request.requiredFps;
+        estimate.globalShutterRecommended = request.motionSpeedMmS > 20.0 && !camera.isGlobalShutter();
+        estimate.fixedFocalLengthMm = estimatedFixedFocalLengthMm(request, camera);
+        estimate.sensorDiagonalMm = camera.sensorDiagonalMm();
+        estimate.telecentricPmagMin = camera.pixelSizeUm / qMax(0.001, requirement.targetObjectPixelUm);
+        estimate.telecentricPmagMax = qMin(camera.sensorWidthMm() / qMax(0.001, fovW),
+                                           camera.sensorHeightMm() / qMax(0.001, fovH));
+        estimate.telecentricFeasible = estimate.telecentricPmagMax > 0.0
+            && estimate.telecentricPmagMin <= estimate.telecentricPmagMax;
+        estimate.bandwidthRequiredMBps = SelectionEngine::bandwidthRequiredMBps(camera, qMax(1.0, request.requiredFps));
+        estimate.score = cameraScore(request, requirement, estimate);
+        estimates.append(estimate);
+    }
+
+    std::sort(estimates.begin(), estimates.end(), [](const CameraCalculationEstimate &a, const CameraCalculationEstimate &b) {
+        return a.score > b.score;
+    });
+    if (limit > 0 && estimates.size() > limit)
+        estimates.resize(limit);
+    return estimates;
+}
+
+QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const SelectionRequest &request,
+                                                                      const CameraSpec &camera,
+                                                                      const QVector<LensSpec> &lenses,
+                                                                      int limit)
+{
+    const RequirementEstimate requirement = estimateRequirement(request);
+    QVector<LensCalculationEstimate> estimates;
+    estimates.reserve(lenses.size());
+
+    const double sensorW = camera.sensorWidthMm();
+    const double sensorH = camera.sensorHeightMm();
+    const double targetFocal = estimatedFixedFocalLengthMm(request, camera);
+    for (const LensSpec &lens : lenses) {
+        if (!request.allowTelecentric && lens.isTelecentric())
+            continue;
+        if (sensorW <= 0.0 || sensorH <= 0.0 || camera.resolutionX <= 0 || camera.resolutionY <= 0)
+            continue;
+
+        LensCalculationEstimate estimate;
+        estimate.lens = lens;
+        estimate.score = 50.0;
+        estimate.estimatedFocalLengthMm = targetFocal;
+
+        if (lens.isTelecentric()) {
+            if (lens.pmag <= 0.0)
+                continue;
+            estimate.effectiveFovWidthMm = sensorW / lens.pmag;
+            estimate.effectiveFovHeightMm = sensorH / lens.pmag;
+            estimate.objectPixelSizeUm = camera.pixelSizeUm / lens.pmag;
+            estimate.magnification = lens.pmag;
+            estimate.formulaSummary = QString::fromUtf8("FOV = SensorSize / PMAG\357\274\214ObjectPixel = PixelSize / PMAG");
+            const double tolerance = lens.workingDistanceToleranceMm > 0.0 ? lens.workingDistanceToleranceMm : 5.0;
+            estimate.workingDistanceOk = lens.nominalWorkingDistanceMm <= 0.0
+                || qAbs(request.workingDistanceMm - lens.nominalWorkingDistanceMm) <= tolerance;
+            estimate.dofOk = request.heightVariationMm <= 0.0
+                || lens.dofMm <= 0.0
+                || lens.dofMm >= request.heightVariationMm * 1.5;
+            estimate.residualTelecentricErrorUm = request.heightVariationMm
+                * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
+
+            if (telecentricPreferred(request)) {
+                estimate.score += 18.0;
+                estimate.reasons.append(QString::fromUtf8("\345\275\223\345\211\215\347\262\276\345\272\246/\351\253\230\345\272\246\346\263\242\345\212\250\351\234\200\346\261\202\344\274\230\345\205\210\350\277\234\345\277\203\351\225\234\345\244\264"));
+            }
+
+            if (estimate.workingDistanceOk) {
+                estimate.score += 10.0;
+            } else {
+                estimate.score -= 22.0;
+                estimate.risks.append(QString::fromUtf8("\346\240\207\347\247\260 WD %1 \344\270\216\345\275\223\345\211\215\345\267\245\344\275\234\350\267\235\347\246\273\345\201\217\345\267\256\350\276\203\345\244\247")
+                    .arg(mm(lens.nominalWorkingDistanceMm)));
+            }
+
+            if (estimate.dofOk) {
+                estimate.score += 8.0;
+            } else {
+                estimate.score -= 14.0;
+                estimate.risks.append(QString::fromUtf8("DOF \345\217\257\350\203\275\344\270\215\350\266\263\344\273\245\350\246\206\347\233\226\351\253\230\345\272\246\346\263\242\345\212\250"));
+            }
+
+            if (request.measurementToleranceUm > 0.0
+                && estimate.residualTelecentricErrorUm > request.measurementToleranceUm) {
+                estimate.score -= 10.0;
+                estimate.risks.append(QString::fromUtf8("\350\277\234\345\277\203\345\272\246\346\256\213\344\275\231\350\247\206\345\267\256\347\272\246 %1\357\274\214\350\266\205\350\277\207\345\205\201\350\256\270\350\257\257\345\267\256")
+                    .arg(um(estimate.residualTelecentricErrorUm)));
+            }
+        } else {
+            if (lens.focalLengthMm <= 0.0)
+                continue;
+            estimate.effectiveFovWidthMm = sensorW * qMax(1.0, request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
+            estimate.effectiveFovHeightMm = sensorH * qMax(1.0, request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
+            estimate.objectPixelSizeUm = qMax(estimate.effectiveFovWidthMm * 1000.0 / camera.resolutionX,
+                                             estimate.effectiveFovHeightMm * 1000.0 / camera.resolutionY);
+            estimate.magnification = sensorW / qMax(0.001, estimate.effectiveFovWidthMm);
+            estimate.formulaSummary = QString::fromUtf8("M = SensorSize / FOV\357\274\214f \342\211\210 WD x SensorSize / (FOV + SensorSize)");
+            estimate.workingDistanceOk = request.workingDistanceMm >= lens.minWorkingDistanceMm;
+            estimate.dofOk = true;
+
+            if (estimate.workingDistanceOk) {
+                estimate.score += 8.0;
+            } else {
+                estimate.score -= 20.0;
+                estimate.risks.append(QString::fromUtf8("\345\275\223\345\211\215 WD \344\275\216\344\272\216\351\225\234\345\244\264\346\234\200\345\260\217\345\267\245\344\275\234\350\267\235\347\246\273"));
+            }
+
+            const double focalMismatch = percentDifference(lens.focalLengthMm, targetFocal);
+            estimate.score += clamp(14.0 - focalMismatch * 28.0, -18.0, 14.0);
+            if (focalMismatch <= 0.25) {
+                estimate.reasons.append(QString::fromUtf8("\347\204\246\350\267\235 %1 \346\216\245\350\277\221\347\262\227\347\256\227\347\233\256\346\240\207 %2")
+                    .arg(mm(lens.focalLengthMm), mm(targetFocal)));
+            } else {
+                estimate.risks.append(QString::fromUtf8("\347\204\246\350\267\235 %1 \344\270\216\347\262\227\347\256\227\347\233\256\346\240\207 %2 \345\267\256\345\274\202\350\276\203\345\244\247")
+                    .arg(mm(lens.focalLengthMm), mm(targetFocal)));
+            }
+
+            if (telecentricPreferred(request)) {
+                estimate.score -= 10.0;
+                estimate.risks.append(QString::fromUtf8("\351\253\230\347\262\276\345\272\246/\351\253\230\345\272\246\346\263\242\345\212\250\345\234\272\346\231\257\346\231\256\351\200\232\351\225\234\345\244\264\345\255\230\345\234\250\351\200\217\350\247\206\350\257\257\345\267\256"));
+            }
+        }
+
+        appendCommonLensJudgement(request, requirement, camera, &estimate);
+
+        if (lens.megapixelRating > 0.0 && lens.megapixelRating < camera.megapixels()) {
+            estimate.score -= 10.0;
+            estimate.risks.append(QString::fromUtf8("\351\225\234\345\244\264 MP \346\240\207\347\247\260\344\275\216\344\272\216\347\233\270\346\234\272\345\203\217\347\264\240\357\274\214\351\234\200\347\241\256\350\256\244 MTF"));
+        }
+        if (lens.recommendedMinPixelUm > 0.0 && lens.recommendedMinPixelUm > camera.pixelSizeUm) {
+            estimate.score -= 8.0;
+            estimate.risks.append(QString::fromUtf8("\351\225\234\345\244\264\346\216\250\350\215\220\346\234\200\345\260\217\345\203\217\345\205\203\345\244\247\344\272\216\347\233\270\346\234\272\345\203\217\345\205\203"));
+        }
+
+        estimates.append(estimate);
+    }
+
+    std::sort(estimates.begin(), estimates.end(), [](const LensCalculationEstimate &a, const LensCalculationEstimate &b) {
+        return a.score > b.score;
+    });
+    if (limit > 0 && estimates.size() > limit)
+        estimates.resize(limit);
+    return estimates;
+}
+
+double CalculationAssistant::estimatedFixedFocalLengthMm(const SelectionRequest &request, const CameraSpec &camera)
+{
+    const double fovW = SelectionEngine::requiredFovWidth(request);
+    const double fovH = SelectionEngine::requiredFovHeight(request);
+    const double sensorW = camera.sensorWidthMm();
+    const double sensorH = camera.sensorHeightMm();
+    if (fovW <= 0.0 || fovH <= 0.0 || sensorW <= 0.0 || sensorH <= 0.0)
+        return 0.0;
+
+    const bool widthLimited = (fovW / fovH) >= (sensorW / sensorH);
+    const double fov = widthLimited ? fovW : fovH;
+    const double sensor = widthLimited ? sensorW : sensorH;
+    return request.workingDistanceMm * sensor / (fov + sensor);
+}
+
+bool CalculationAssistant::telecentricPreferred(const SelectionRequest &request)
+{
+    return request.detectionType == DetectionType::Measurement
+        || request.measurementToleranceUm <= 20.0
+        || request.heightVariationMm >= 1.0;
+}

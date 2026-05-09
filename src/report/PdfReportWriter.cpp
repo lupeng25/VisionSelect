@@ -124,6 +124,13 @@ QString value(double number, const QString &unit)
 {
     return QStringLiteral("%1 %2").arg(QString::number(number, 'f', 2), unit);
 }
+
+QString productLabel(const QString &manufacturer, const QString &model)
+{
+    if (manufacturer.trimmed().isEmpty())
+        return model;
+    return manufacturer.trimmed() + QLatin1Char(' ') + model;
+}
 }
 
 bool PdfReportWriter::write(const QString &filePath,
@@ -187,9 +194,9 @@ bool PdfReportWriter::write(const QString &filePath,
         page.tableRow({
             r.isTelecentric() ? QString::fromUtf8("\350\277\234\345\277\203") : QString::fromUtf8("\346\231\256\351\200\232"),
             QString::number(r.score.score, 'f', 1),
-            r.camera.model,
-            r.lens.model,
-            r.light.model,
+            productLabel(r.camera.manufacturer, r.camera.model),
+            productLabel(r.lens.manufacturer, r.lens.model),
+            productLabel(r.light.manufacturer, r.light.model),
             QStringLiteral("%1x%2").arg(r.effectiveFovWidthMm, 0, 'f', 1).arg(r.effectiveFovHeightMm, 0, 'f', 1),
             QStringLiteral("%1um").arg(r.objectPixelSizeUm, 0, 'f', 1),
             r.score.risks.isEmpty() ? QString::fromUtf8("\346\227\240\344\270\273\350\246\201\351\243\216\351\231\251") : r.score.risks.join(QString::fromUtf8("\357\274\233")).left(42)
@@ -200,9 +207,9 @@ bool PdfReportWriter::write(const QString &filePath,
         const SelectionResult &top = results.first();
         page.section(QString::fromUtf8("\351\246\226\351\200\211\346\226\271\346\241\210\350\257\264\346\230\216"));
         page.keyValue(QString::fromUtf8("\346\226\271\346\241\210"), top.schemeTitle + QString::fromUtf8("\357\274\232")
-                      + top.camera.model + QStringLiteral(" + ")
-                      + top.lens.model + QStringLiteral(" + ")
-                      + top.light.model);
+                      + productLabel(top.camera.manufacturer, top.camera.model) + QStringLiteral(" + ")
+                      + productLabel(top.lens.manufacturer, top.lens.model) + QStringLiteral(" + ")
+                      + productLabel(top.light.manufacturer, top.light.model));
         page.keyValue(QString::fromUtf8("\350\256\241\347\256\227\350\247\206\351\207\216"), QStringLiteral("%1 x %2 mm")
                       .arg(top.effectiveFovWidthMm, 0, 'f', 2)
                       .arg(top.effectiveFovHeightMm, 0, 'f', 2));

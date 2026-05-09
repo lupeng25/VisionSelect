@@ -57,6 +57,7 @@ struct SelectionRequest {
 
 struct CameraSpec {
     QString model;
+    QString manufacturer;
     int resolutionX = 0;
     int resolutionY = 0;
     double pixelSizeUm = 0.0;
@@ -80,6 +81,7 @@ struct CameraSpec {
 
 struct LensSpec {
     QString model;
+    QString manufacturer;
     LensType lensType = LensType::FixedFocal;
     QString lensMount;
     double focalLengthMm = 0.0;
@@ -106,6 +108,7 @@ struct LensSpec {
 
 struct LightSpec {
     QString model;
+    QString manufacturer;
     LightType lightType = LightType::Ring;
     QString color;
     int wavelengthNm = 0;
