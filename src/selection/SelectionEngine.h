@@ -1,0 +1,53 @@
+#ifndef SELECTIONENGINE_H
+#define SELECTIONENGINE_H
+
+#include "core/SelectionTypes.h"
+
+class SelectionEngine
+{
+public:
+    QVector<SelectionResult> select(const SelectionRequest &request,
+                                    const QVector<CameraSpec> &cameras,
+                                    const QVector<LensSpec> &lenses,
+                                    const QVector<LightSpec> &lights,
+                                    int limit = 12) const;
+
+    static double requiredFovWidth(const SelectionRequest &request);
+    static double requiredFovHeight(const SelectionRequest &request);
+    static double targetObjectPixelUm(const SelectionRequest &request);
+    static double bandwidthRequiredMBps(const CameraSpec &camera, double fps);
+
+private:
+    SelectionResult evaluatePair(const SelectionRequest &request,
+                                 const CameraSpec &camera,
+                                 const LensSpec &lens,
+                                 const LightSpec &light) const;
+
+    LightSpec chooseLight(const SelectionRequest &request,
+                          const LensSpec &lens,
+                          const QVector<LightSpec> &lights,
+                          QStringList *reasons) const;
+
+    double scoreLight(const SelectionRequest &request,
+                      const LensSpec &lens,
+                      const LightSpec &light,
+                      QStringList *reasons) const;
+
+    void scoreCamera(const SelectionRequest &request,
+                     const CameraSpec &camera,
+                     SelectionResult *result) const;
+
+    void scoreFixedFocalLens(const SelectionRequest &request,
+                             const CameraSpec &camera,
+                             const LensSpec &lens,
+                             SelectionResult *result) const;
+
+    void scoreTelecentricLens(const SelectionRequest &request,
+                              const CameraSpec &camera,
+                              const LensSpec &lens,
+                              SelectionResult *result) const;
+
+    static bool measurementNeedsTelecentric(const SelectionRequest &request);
+};
+
+#endif

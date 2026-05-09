@@ -1,0 +1,31 @@
+# Qt/qmake generated files
+.qmake.stash
+Makefile
+Makefile.*
+*.pro.user
+*.qmake.cache
+
+# Build outputs
+bin/
+debug/
+release/
+app/debug/
+app/release/
+tests/debug/
+tests/release/
+
+# C++/MSVC artifacts
+*.obj
+*.ilk
+*.idb
+*.pdb
+*.pch
+*.res
+*.moc
+moc_*.cpp
+qrc_*.cpp
+moc_predefs.h
+
+# Local test/report outputs
+test_results.txt
+*.log
