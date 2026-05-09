@@ -1,0 +1,47 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run VisionSelect",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}\\bin\\VisionSelect.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [
+        {
+          "name": "PATH",
+          "value": "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2015_64\\bin;${env:PATH}"
+        },
+        {
+          "name": "QT_PLUGIN_PATH",
+          "value": "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2015_64\\plugins"
+        }
+      ],
+      "preLaunchTask": "Build VisionSelect",
+      "console": "externalTerminal"
+    },
+    {
+      "name": "Run VisionSelectTests",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}\\bin\\VisionSelectTests.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [
+        {
+          "name": "PATH",
+          "value": "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2015_64\\bin;${env:PATH}"
+        },
+        {
+          "name": "QT_PLUGIN_PATH",
+          "value": "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2015_64\\plugins"
+        }
+      ],
+      "preLaunchTask": "Build VisionSelect",
+      "console": "integratedTerminal"
+    }
+  ]
+}

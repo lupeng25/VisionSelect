@@ -1,0 +1,58 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build VisionSelect",
+      "type": "shell",
+      "command": "${workspaceFolder}\\build_msvc2015.bat",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "cmd.exe",
+          "args": ["/d", "/c"]
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile",
+      "detail": "Build Qt 5.12.9 + MSVC2015 app and tests through qmake/jom."
+    },
+    {
+      "label": "Run VisionSelect",
+      "type": "shell",
+      "command": "${workspaceFolder}\\bin\\VisionSelect.exe",
+      "dependsOn": "Build VisionSelect",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2015_64\\bin;${env:PATH}",
+          "QT_PLUGIN_PATH": "C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2015_64\\plugins"
+        },
+        "shell": {
+          "executable": "cmd.exe",
+          "args": ["/d", "/c"]
+        }
+      },
+      "problemMatcher": [],
+      "detail": "Build and launch the Qt Widgets application."
+    },
+    {
+      "label": "Test VisionSelect",
+      "type": "shell",
+      "command": "set PATH=C:\\Qt\\Qt5.12.9\\5.12.9\\msvc2015_64\\bin;%PATH%&& bin\\VisionSelectTests.exe",
+      "dependsOn": "Build VisionSelect",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "cmd.exe",
+          "args": ["/d", "/c"]
+        }
+      },
+      "group": "test",
+      "problemMatcher": "$msCompile",
+      "detail": "Build and run the QtTest suite."
+    }
+  ]
+}
