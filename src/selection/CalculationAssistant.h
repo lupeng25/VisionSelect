@@ -55,10 +55,46 @@ struct LensCalculationEstimate {
     QStringList risks;
 };
 
+struct PureCalculationInput {
+    SelectionRequest request;
+    CameraSpec camera;
+    LensSpec lens;
+    LightSpec light;
+    bool telecentricMode = false;
+};
+
+struct PureCalculationResult {
+    RequirementEstimate requirement;
+    double sensorWidthMm = 0.0;
+    double sensorHeightMm = 0.0;
+    double sensorDiagonalMm = 0.0;
+    double cameraObjectPixelSizeUm = 0.0;
+    double framePayloadMB = 0.0;
+    double bandwidthRequiredMBps = 0.0;
+    double interfaceCapacityMBps = 0.0;
+    double bandwidthUtilizationPercent = 0.0;
+    double storagePerHourGB = 0.0;
+    double targetFixedFocalLengthMm = 0.0;
+    double effectiveFovWidthMm = 0.0;
+    double effectiveFovHeightMm = 0.0;
+    double lensObjectPixelSizeUm = 0.0;
+    double magnification = 0.0;
+    double estimatedDofMm = 0.0;
+    double distortionErrorUm = 0.0;
+    double residualTelecentricErrorUm = 0.0;
+    double suggestedLightWidthMm = 0.0;
+    double suggestedLightHeightMm = 0.0;
+    double lightCoverageMarginPercent = 0.0;
+    QString lensFormulaSummary;
+    QStringList reasons;
+    QStringList risks;
+};
+
 class CalculationAssistant
 {
 public:
     static RequirementEstimate estimateRequirement(const SelectionRequest &request);
+    static PureCalculationResult estimatePure(const PureCalculationInput &input);
     static QVector<CameraCalculationEstimate> estimateCameras(const SelectionRequest &request,
                                                               const QVector<CameraSpec> &cameras,
                                                               int limit = 12);
