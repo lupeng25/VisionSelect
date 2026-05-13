@@ -143,6 +143,210 @@ RequirementEstimate CalculationAssistant::estimateRequirement(const SelectionReq
     return estimate;
 }
 
+PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationInput &input)
+{
+    PureCalculationResult result;
+    result.requirement = estimateRequirement(input.request);
+
+    CameraSpec camera = input.camera;
+    LensSpec lens = input.lens;
+    LightSpec light = input.light;
+    if (input.telecentricMode)
+        lens.lensType = LensType::ObjectTelecentric;
+    else
+        lens.lensType = LensType::FixedFocal;
+
+    result.sensorWidthMm = camera.sensorWidthMm();
+    result.sensorHeightMm = camera.sensorHeightMm();
+    result.sensorDiagonalMm = camera.sensorDiagonalMm();
+    result.framePayloadMB = SelectionEngine::framePayloadMB(camera);
+    result.bandwidthRequiredMBps = SelectionEngine::bandwidthRequiredMBps(camera, qMax(1.0, input.request.requiredFps));
+    result.interfaceCapacityMBps = SelectionEngine::interfaceCapacityMBps(camera);
+    result.bandwidthUtilizationPercent = result.interfaceCapacityMBps > 0.0
+        ? result.bandwidthRequiredMBps / result.interfaceCapacityMBps * 100.0
+        : 0.0;
+    result.storagePerHourGB = SelectionEngine::storagePerHourGB(camera, qMax(1.0, input.request.requiredFps));
+
+    if (camera.resolutionX > 0 && camera.resolutionY > 0) {
+        result.cameraObjectPixelSizeUm = qMax(result.requirement.requiredFovWidthMm * 1000.0 / camera.resolutionX,
+                                              result.requirement.requiredFovHeightMm * 1000.0 / camera.resolutionY);
+    }
+
+    if (result.sensorWidthMm <= 0.0 || result.sensorHeightMm <= 0.0) {
+        result.risks.append(QString::fromUtf8("相机分辨率或像元无效，无法计算传感器尺寸和镜头参数"));
+    } else if (camera.resolutionX <= 0 || camera.resolutionY <= 0) {
+        result.risks.append(QString::fromUtf8("相机分辨率无效，无法计算物方像素"));
+    } else if (result.cameraObjectPixelSizeUm <= result.requirement.targetObjectPixelUm) {
+        result.reasons.append(QString::fromUtf8("按需求 FOV 估算，相机采样满足目标物方像素"));
+    } else {
+        result.risks.append(QString::fromUtf8("按需求 FOV 估算，物方像素 %1 um 粗于目标 %2 um")
+            .arg(result.cameraObjectPixelSizeUm, 0, 'f', 2)
+            .arg(result.requirement.targetObjectPixelUm, 0, 'f', 2));
+    }
+
+    if (result.interfaceCapacityMBps <= 0.0) {
+        result.risks.append(QString::fromUtf8("接口带宽未填写，无法判断吞吐余量"));
+    } else if (result.bandwidthUtilizationPercent > 100.0) {
+        result.risks.append(QString::fromUtf8("带宽利用率约 %1%，超过接口容量")
+            .arg(result.bandwidthUtilizationPercent, 0, 'f', 0));
+    } else if (result.bandwidthUtilizationPercent > 90.0) {
+        result.risks.append(QString::fromUtf8("带宽利用率约 %1%，接近接口上限")
+            .arg(result.bandwidthUtilizationPercent, 0, 'f', 0));
+    } else {
+        result.reasons.append(QString::fromUtf8("接口带宽利用率约 %1%")
+            .arg(result.bandwidthUtilizationPercent, 0, 'f', 0));
+    }
+
+    if (input.request.motionSpeedMmS > 20.0 && !camera.isGlobalShutter()) {
+        result.risks.append(QString::fromUtf8("高速运动建议使用全局快门相机"));
+    } else if (input.request.motionSpeedMmS > 20.0) {
+        result.reasons.append(QString::fromUtf8("高速运动场景已选择全局快门"));
+    }
+
+    result.targetFixedFocalLengthMm = estimatedFixedFocalLengthMm(input.request, camera);
+    if (input.telecentricMode) {
+        if (lens.pmag <= 0.0) {
+            result.risks.append(QString::fromUtf8("远心倍率 PMAG 必须大于 0"));
+        } else {
+            result.effectiveFovWidthMm = result.sensorWidthMm / lens.pmag;
+            result.effectiveFovHeightMm = result.sensorHeightMm / lens.pmag;
+            result.lensObjectPixelSizeUm = camera.pixelSizeUm / lens.pmag;
+            result.magnification = lens.pmag;
+            result.estimatedDofMm = lens.dofMm;
+            result.distortionErrorUm = SelectionEngine::distortionErrorUm(lens, result.effectiveFovWidthMm, result.effectiveFovHeightMm);
+            result.residualTelecentricErrorUm = input.request.heightVariationMm
+                * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
+            result.lensFormulaSummary = QString::fromUtf8("远心：FOV = SensorSize / PMAG，ObjectPixel = PixelSize / PMAG");
+
+            if (result.effectiveFovWidthMm >= result.requirement.requiredFovWidthMm
+                && result.effectiveFovHeightMm >= result.requirement.requiredFovHeightMm) {
+                result.reasons.append(QString::fromUtf8("远心 FOV 覆盖需求"));
+            } else {
+                result.risks.append(QString::fromUtf8("远心 FOV 不足，需要更低倍率或更大靶面"));
+            }
+
+            if (result.lensObjectPixelSizeUm <= result.requirement.targetObjectPixelUm) {
+                result.reasons.append(QString::fromUtf8("远心物方像素满足目标"));
+            } else {
+                result.risks.append(QString::fromUtf8("远心物方像素 %1 um 粗于目标 %2 um")
+                    .arg(result.lensObjectPixelSizeUm, 0, 'f', 2)
+                    .arg(result.requirement.targetObjectPixelUm, 0, 'f', 2));
+            }
+
+            const double tolerance = lens.workingDistanceToleranceMm > 0.0 ? lens.workingDistanceToleranceMm : 5.0;
+            if (lens.nominalWorkingDistanceMm > 0.0
+                && qAbs(input.request.workingDistanceMm - lens.nominalWorkingDistanceMm) > tolerance) {
+                result.risks.append(QString::fromUtf8("当前 WD 偏离远心镜头标称 WD，需确认安装距离"));
+            }
+
+            if (input.request.heightVariationMm > 0.0) {
+                if (lens.dofMm > 0.0 && lens.dofMm >= input.request.heightVariationMm * 1.5) {
+                    result.reasons.append(QString::fromUtf8("远心 DOF 覆盖高度波动"));
+                } else {
+                    result.risks.append(QString::fromUtf8("远心 DOF 可能不足以覆盖高度波动"));
+                }
+            }
+
+            if (input.request.measurementToleranceUm > 0.0
+                && result.residualTelecentricErrorUm > input.request.measurementToleranceUm) {
+                result.risks.append(QString::fromUtf8("残余远心误差约 %1 um，高于允许误差")
+                    .arg(result.residualTelecentricErrorUm, 0, 'f', 2));
+            }
+        }
+    } else {
+        if (lens.focalLengthMm <= 0.0) {
+            result.risks.append(QString::fromUtf8("普通镜头焦距必须大于 0"));
+        } else {
+            result.effectiveFovWidthMm = result.sensorWidthMm
+                * qMax(1.0, input.request.workingDistanceMm - lens.focalLengthMm)
+                / lens.focalLengthMm;
+            result.effectiveFovHeightMm = result.sensorHeightMm
+                * qMax(1.0, input.request.workingDistanceMm - lens.focalLengthMm)
+                / lens.focalLengthMm;
+            result.lensObjectPixelSizeUm = qMax(result.effectiveFovWidthMm * 1000.0 / qMax(1, camera.resolutionX),
+                                                result.effectiveFovHeightMm * 1000.0 / qMax(1, camera.resolutionY));
+            result.magnification = result.sensorWidthMm / qMax(0.001, result.effectiveFovWidthMm);
+            result.estimatedDofMm = SelectionEngine::estimatedFixedLensDofMm(camera, lens, result.magnification);
+            result.distortionErrorUm = SelectionEngine::distortionErrorUm(lens, result.effectiveFovWidthMm, result.effectiveFovHeightMm);
+            result.lensFormulaSummary = QString::fromUtf8("普通镜头：M = SensorSize / FOV，f ≈ WD x SensorSize / (FOV + SensorSize)");
+
+            if (result.effectiveFovWidthMm >= result.requirement.requiredFovWidthMm
+                && result.effectiveFovHeightMm >= result.requirement.requiredFovHeightMm) {
+                result.reasons.append(QString::fromUtf8("普通镜头 FOV 覆盖需求"));
+            } else {
+                result.risks.append(QString::fromUtf8("普通镜头在当前 WD 下 FOV 不足"));
+            }
+
+            if (input.request.workingDistanceMm < lens.minWorkingDistanceMm) {
+                result.risks.append(QString::fromUtf8("当前 WD 小于普通镜头最小工作距离"));
+            }
+
+            if (input.request.heightVariationMm > 0.0) {
+                if (result.estimatedDofMm > 0.0 && result.estimatedDofMm >= input.request.heightVariationMm * 1.5) {
+                    result.reasons.append(QString::fromUtf8("估算 DOF 覆盖高度波动"));
+                } else if (result.estimatedDofMm > 0.0) {
+                    result.risks.append(QString::fromUtf8("估算 DOF %1 mm 可能不足")
+                        .arg(result.estimatedDofMm, 0, 'f', 2));
+                } else {
+                    result.risks.append(QString::fromUtf8("缺少 F/# 或倍率数据，无法估算 DOF"));
+                }
+            }
+        }
+    }
+
+    if (lens.imageCircleMm > 0.0 && result.sensorDiagonalMm > lens.imageCircleMm) {
+        result.risks.append(QString::fromUtf8("镜头像面小于传感器对角线，存在暗角风险"));
+    }
+    if (lens.megapixelRating > 0.0 && camera.megapixels() > lens.megapixelRating) {
+        result.risks.append(QString::fromUtf8("镜头标称 MP 低于相机像素，需确认 MTF"));
+    }
+    if (input.request.detectionType == DetectionType::Measurement
+        && input.request.measurementToleranceUm > 0.0
+        && result.distortionErrorUm > input.request.measurementToleranceUm) {
+        result.risks.append(QString::fromUtf8("畸变边缘误差约 %1 um，高于允许误差")
+            .arg(result.distortionErrorUm, 0, 'f', 2));
+    }
+
+    result.suggestedLightWidthMm = result.requirement.requiredFovWidthMm * 1.1;
+    result.suggestedLightHeightMm = result.requirement.requiredFovHeightMm * 1.1;
+    result.lightCoverageMarginPercent = SelectionEngine::lightCoverageMarginPercent(input.request, light);
+    result.reasons.append(QString::fromUtf8("建议有效照明面积不小于 %1 x %2 mm")
+        .arg(result.suggestedLightWidthMm, 0, 'f', 1)
+        .arg(result.suggestedLightHeightMm, 0, 'f', 1));
+    if (light.activeWidthMm > 0.0 && light.activeHeightMm > 0.0) {
+        if (result.lightCoverageMarginPercent < 0.0) {
+            result.risks.append(QString::fromUtf8("当前光源有效面积小于需求 FOV"));
+        } else if (result.lightCoverageMarginPercent < 10.0) {
+            result.risks.append(QString::fromUtf8("当前光源覆盖余量低于 10%"));
+        } else {
+            result.reasons.append(QString::fromUtf8("当前光源覆盖余量约 %1%")
+                .arg(result.lightCoverageMarginPercent, 0, 'f', 0));
+        }
+    }
+
+    const QString mode = light.mode.toLower();
+    const bool strobe = mode.contains(QStringLiteral("strobe"))
+        || mode.contains(QStringLiteral("pulse"))
+        || mode.contains(QStringLiteral("trigger"))
+        || mode.contains(QString::fromUtf8("频闪"))
+        || mode.contains(QString::fromUtf8("触发"));
+    if (input.request.motionSpeedMmS > 20.0 && !strobe)
+        result.risks.append(QString::fromUtf8("高速运动建议使用频闪/触发光源以压低曝光时间"));
+    else if (input.request.motionSpeedMmS > 20.0)
+        result.reasons.append(QString::fromUtf8("高速运动已选择频闪/触发光源"));
+
+    const bool reflective = input.request.reflective
+        || input.request.surfaceType == SurfaceType::ReflectiveMetal
+        || input.request.surfaceType == SurfaceType::GlassTransparent;
+    if (reflective && light.lightType != LightType::Coaxial && light.lightType != LightType::Dome)
+        result.risks.append(QString::fromUtf8("反光/玻璃表面建议优先同轴光或穹顶光"));
+    if (input.telecentricMode && input.request.detectionType == DetectionType::Measurement
+        && light.lightType != LightType::TelecentricBacklight)
+        result.risks.append(QString::fromUtf8("远心测量建议优先远心平行背光"));
+
+    return result;
+}
+
 QVector<CameraCalculationEstimate> CalculationAssistant::estimateCameras(const SelectionRequest &request,
                                                                          const QVector<CameraSpec> &cameras,
                                                                          int limit)
