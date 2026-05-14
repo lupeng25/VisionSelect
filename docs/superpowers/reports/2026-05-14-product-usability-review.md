@@ -36,7 +36,7 @@ MainWindow 通过 `QStackedWidget` 注册 7 个工作台页面，侧边栏按钮
 
 ### 计算助手
 
-- 用户可做：按当前需求重新计算，返回需求输入页，或点击相机估算表中的一行来刷新对应镜头候选。
+- 用户可做：刷新计算助手估算（需求摘要、相机估算、镜头候选），返回需求输入页，或点击相机估算表中的一行来刷新对应镜头候选。
 - 应用反馈：页面显示需求摘要、相机估算表、镜头候选表和详情文本；相机表给出分辨率、像元、传感器、物方像素、普通焦距、PMAG、带宽和判断；镜头表给出类型、厂家、型号、接口、焦距或 PMAG、FOV、物方像素、WD/DOF、像圈和判断；详情说明最低分辨率、12 bit 带宽、镜头类型倾向、运动曝光上限、当前相机和首选镜头的理由与风险。
 - 支持决策：帮助工程师先选相机，再看该相机下普通镜头或远心镜头的可行性，判断采样、接口、WD、DOF、像圈和风险是否可接受。
 - 证据：`src/ui/pages/CalculationPage.cpp:37`、`src/ui/pages/CalculationPage.cpp:39`、`src/ui/pages/CalculationPage.cpp:55`、`src/ui/pages/CalculationPage.cpp:78`、`src/ui/pages/CalculationPage.cpp:108`、`src/ui/pages/CalculationPage.cpp:152`、`src/ui/MainWindow.cpp:270`、`src/ui/MainWindow.cpp:291`。
@@ -45,7 +45,7 @@ MainWindow 通过 `QStackedWidget` 注册 7 个工作台页面，侧边栏按钮
 
 - 用户可做：查看自动推荐方案列表，点击行查看详细解释，或点击“查看方案对比”进入对比页。
 - 应用反馈：摘要显示需求 FOV、目标物方像素和候选方案数量；表格展示方案类型、得分、相机、镜头、光源、FOV、物方像素、倍率或焦距、WD/DOF 和风险；详情展示公式、有效 FOV、接口带宽、单帧数据、存储、曝光上限、DOF、畸变、光源余量、推荐理由和风险提示。
-- 支持决策：把自动筛选后的方案按得分和风险排序，支持用户从完整候选集中挑出可进入对比或采购评估的方案。
+- 支持决策：查看按得分排序的 Top 候选及其理由/风险；该页不是完整候选全集，也不是按风险排序的列表。
 - 证据：`src/ui/pages/ResultsPage.cpp:37`、`src/ui/pages/ResultsPage.cpp:42`、`src/ui/pages/ResultsPage.cpp:50`、`src/ui/pages/ResultsPage.cpp:83`、`src/ui/pages/ResultsPage.cpp:124`、`src/ui/MainWindow.cpp:121`、`src/ui/MainWindow.cpp:256`。
 
 ### 候选对比
