@@ -85,15 +85,40 @@ MainWindow 通过 `QStackedWidget` 注册 7 个工作台页面，侧边栏按钮
 
 ## 可用性优势
 
+- `预选型闭环完整`：工程师可以从推荐结果进入方案对比，再到报告预览和 BOM 导出，支持从技术判断到内部评审/采购流转的连续工作。证据：`src/ui/pages/ResultsPage.cpp` 的推荐结果页、`src/ui/pages/ComparisonPage.cpp` 的对比与 BOM 逻辑、`src/ui/pages/ReportPage.cpp` 的报告预览逻辑。
+- `推荐理由和风险可追溯`：选型结果不仅给分数，还把采样、FOV、带宽、镜头和光源判断写入 reasons/risks，便于研发用户复核为什么推荐或为什么有风险。证据：`src/selection/SelectionEngine.cpp` 中 `scoreCamera`、`scoreFixedFocalLens`、`scoreTelecentricLens` 与 `scoreLight` 的评分和风险逻辑。
+- `关键工程量直接量化`：结果页和对比页显示有效 FOV、物方像素、带宽、存储、曝光上限、DOF、畸变误差和光源余量，减少工程师手工换算。证据：`src/ui/pages/ResultsPage.cpp` 的详情文本，`src/ui/pages/ComparisonPage.cpp` 的对比表和详情文本。
+- `镜头适配判断覆盖面较宽`：普通镜头和远心镜头分别检查 FOV、物方像素、像圈、接口、WD、DOF、畸变、MP/MTF 余量和远心残余误差，符合机器视觉预选型的核心复核点。证据：`src/selection/SelectionEngine.cpp` 中 `scoreFixedFocalLens` 和 `scoreTelecentricLens`。
+- `光源没有被当作附属字段`：光源评分考虑测量/缺陷/定位场景、反光表面、远心背光、覆盖余量和高速运动频闪需求，帮助用户提前发现照明风险。证据：`src/selection/SelectionEngine.cpp` 中 `chooseLight` 与 `scoreLight`，以及 `src/selection/CalculationAssistant.cpp` 中光源覆盖和频闪风险判断。
+- `计算助手支持假设验证`：用户可先看相机估算，再选择相机刷新镜头候选，适合内部研发在没有最终型号前快速验证 WD、焦距、PMAG、带宽和景深假设。证据：`src/selection/CalculationAssistant.cpp` 的相机/镜头估算排序逻辑，`src/ui/pages/CalculationPage.cpp` 的相机表、镜头表和详情文本。
+- `对比页面向评审而不是单点计算`：候选对比把 BOM、计算结果、接口存储、镜头/光源余量、推荐理由和风险放在同一详情区，适合工程评审讨论。证据：`src/ui/pages/ComparisonPage.cpp` 中 `refreshDetails` 的详情拼装逻辑。
+
 ## 问题清单
+
+- `P0`：阻止目标用户完成基本预选型。
+- `P1`：可能导致错误工程判断或显著降低信任。
+- `P2`：影响效率、复核或长期维护，但不阻断使用。
+- `P3`：细节可用性或文案改进。
 
 ### P0 阻塞问题
 
+未发现 P0。现有代码证据显示，需求输入、推荐结果、候选对比和报告预览路径都存在，用户可以完成基本预选型闭环。
+
 ### P1 高优先级问题
+
+- **P1-1 单一得分混合硬约束和软偏好。** 问题：`score.score` 同时承载 FOV、采样、接口带宽、像圈、WD、DOF、畸变、光源和偏好加减分，结果页主要显示“得分”和风险文本，但没有“硬约束通过/失败/需实测确认”的独立状态。用户影响：工程师可能把最高分误读为“工程上已满足”，而不是“在当前权重下排序靠前且仍需看风险”。证据：`src/selection/SelectionEngine.cpp` 中 `evaluate` 初始化并累加分数，`scoreCamera`、`scoreFixedFocalLens`、`scoreTelecentricLens`、`scoreLight` 均向同一分数加减；`src/ui/pages/ResultsPage.cpp` 和 `src/ui/pages/ComparisonPage.cpp` 只以“得分”列和风险文本呈现。建议：新增硬约束状态和可信度标签，例如“硬约束满足”“带风险可评估”“需实测确认”“不建议”，并在排序旁解释主要扣分项。
+- **P1-2 型号库数据缺失只沉入风险文本。** 问题：缺少接口带宽、镜头 MP、F/# 或 DOF 等数据时，算法会追加风险或扣分，但结果页/报告页没有单独的数据完整性标识。用户影响：内部用户维护型号库时难以快速区分“方案本身有风险”和“catalog 数据不足导致无法判断”，长期会削弱推荐可信度。证据：`src/selection/SelectionEngine.cpp` 对缺少接口带宽、镜头 MP、F/#/DOF 的风险处理；`src/selection/CalculationAssistant.cpp` 也在带宽、MTF、DOF 缺失时追加风险。建议：在结果、对比和型号库中增加数据质量标记，把缺失字段列为报告假设，并允许按“数据不完整”筛选或降低可信度。
 
 ### P2 中优先级问题
 
+- **P2-1 候选对比固定只看前 5 个。** 问题：对比页用 `qMin(5, m_results.size())` 限制候选数量，SelectionEngine 也按得分保留 limit 内候选，用户看不到被排除方案的原因。用户影响：评审时只能比较少量 Top 方案，难以解释为什么某个备选品牌、镜头类型或低风险但低分方案没有进入对比。证据：`src/ui/pages/ComparisonPage.cpp` 的 `setResults` 只渲染前 5 个；`src/selection/SelectionEngine.cpp` 的候选保留和排序逻辑按分数截断。建议：提供“显示更多/全部候选”、可配置对比数量和按风险类型筛选，并在摘要中说明当前只展示 Top N。
+- **P2-2 报告预览缺少首选方案的理由和风险。** 问题：报告页预览说明 PDF 会包含 Top 推荐和风险，但实际预览只列当前首选、相机、镜头、光源、得分、带宽/存储和 BOM 项，没有展示推荐理由、风险或验证下一步。用户影响：导出前的复核效率低，用户需要回到结果页或对比页确认风险，报告可信度表达也不够强。证据：`src/ui/pages/ReportPage.cpp` 的 `setResults` 文本拼装只取 `results.first()` 的基础信息和 BOM 摘要。建议：在预览和导出报告中同步展示首选方案的 reasons/risks、关键假设和现场验证清单。
+- **P2-3 风险信息密集但缺少结构化复核入口。** 问题：结果页和对比页把多条风险用分号连接到一个表格单元或详情段落，缺少按风险类别、严重性或“需现场确认”过滤。用户影响：候选多或风险多时，工程师复核速度会下降，也不利于把风险分派给光学、机构、电控或采购角色。证据：`src/ui/pages/ResultsPage.cpp` 将 `r.score.risks.join("；")` 放入风险列和详情；`src/ui/pages/ComparisonPage.cpp` 通过 `riskSummary(r)` 显示主要风险。建议：把风险拆成标签或分组，例如“采样”“带宽”“镜头”“光源”“数据缺失”“现场验证”，并提供筛选/排序。
+
 ### P3 低优先级问题
+
+- **P3-1 “无主要风险”文案容易显得过度确定。** 问题：`riskSummary` 在风险为空时返回“无主要风险”，结果页表格也直接显示该文案；只有详情里补充仍建议结合厂家 MTF/DOF 与现场光源实测确认。用户影响：快速扫表时可能忽略预选型仍需要实测验证的边界。证据：`src/ui/UiHelpers.cpp` 的 `riskSummary`，`src/ui/pages/ResultsPage.cpp` 的风险列和详情文案。建议：改成“未触发主要风险，仍需实测确认”或在表格中显示“需验证”标签。
+- **P3-2 分数含义缺少轻量说明。** 问题：页面显示“得分”，但没有解释分数是相对排序、不是合格证书，也没有展示权重来源或主要加减分构成。用户影响：新加入的内部研发或应用工程师需要读详情甚至代码才能理解分数边界。证据：`src/ui/pages/ResultsPage.cpp` 和 `src/ui/pages/ComparisonPage.cpp` 都展示“得分”列；`src/selection/SelectionEngine.cpp` 中分数由多类工程因素累加。建议：在表头 tooltip 或详情首段增加一句“得分用于候选排序，最终判断以硬约束、风险和实测验证为准”。
 
 ## 缺失工作流
 
