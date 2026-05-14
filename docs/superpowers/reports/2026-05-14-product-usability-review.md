@@ -15,23 +15,11 @@
 - UI 页面代码：`src/ui/pages/InputPage.cpp`、`PureCalculationPage.cpp`、`CalculationPage.cpp`、`ResultsPage.cpp`、`ComparisonPage.cpp`、`ReportPage.cpp`、`CatalogPage.cpp`。
 - 选型相关代码：`src/selection/SelectionEngine.cpp`、`src/selection/CalculationAssistant.cpp`。
 - 外部参考：OpenPnP、Caliscope、Kalibr、Harvester、Lensfun、Optiland，以及公开 FOV/镜头计算器。
-- 本地 UI 走查：访问所有侧边栏页面，记录主要操作、布局密度和明显溢出问题。截图与 UIA 汇总保存于 `.deps/product-usability-review/`，视口为 1280 x 820，`walkthrough-summary.json` 记录未发现横向溢出。
+- 本地 UI 走查：应用可启动；访问全部 7 个侧边栏页面；视口为 1280 x 820；未观察到横向溢出。走查摘要与溢出检查结果保存于 `.deps/product-usability-review/walkthrough-summary.json`。
 
 ## 当前工作流拆解
 
-MainWindow 通过 `QStackedWidget` 注册 7 个工作台页面，侧边栏按钮按索引切换，默认进入“需求输入”；页面间还提供“查看结果”“查看方案对比”“返回需求输入”等快捷跳转。证据：`src/ui/MainWindow.cpp:103`、`src/ui/MainWindow.cpp:121`、`src/ui/MainWindow.cpp:195`、`src/ui/MainWindow.cpp:244`。
-
-本地 UI 走查确认侧边栏实际页面为“需求输入、纯计算、产品计算助手、推荐结果、方案对比、参数库、PDF 报告”（任务中的“输入参数、计算助手、候选对比、报告”为对应别名）。各页均有可见主操作；表单、表格或预览区可理解；未发现明显横向溢出。结果页和对比页信息密度较高，长风险文本主要依赖详情区复核；PDF 报告页预览仍未展示首选方案推荐理由/风险，与 P2-2 问题一致。截图：`.deps/product-usability-review/01-需求输入.png` 至 `.deps/product-usability-review/07-PDF 报告.png`。
-
-| 页面 | 可见主操作 | 表格/预览内容 | 明显横向溢出 |
-| --- | --- | --- | --- |
-| 需求输入 | 计算推荐、查看结果 | 工件与工艺表单分组清晰 | 未发现 |
-| 纯计算 | 计算、恢复默认 | 左侧参数、右侧计算结果可读 | 未发现 |
-| 产品计算助手 | 根据当前需求计算、返回需求输入 | 相机估算、镜头候选和详情区可读 | 未发现 |
-| 推荐结果 | 查看方案对比 | 推荐表和详情区可读，但风险列信息密集 | 未发现 |
-| 方案对比 | 重新计算、导出 BOM CSV | 对比表和方案详情可读，但长风险文本需要详情区复核 | 未发现 |
-| 参数库 | 新增、编辑、删除、导入/导出、重置内置 | 相机表、筛选器和维护按钮可读 | 未发现 |
-| PDF 报告 | 导出 PDF、导出 BOM CSV、重新计算 | 预览区可读，但未包含首选方案 reasons/risks | 未发现 |
+MainWindow 通过 `QStackedWidget` 注册 7 个工作台页面，侧边栏按钮按索引切换，默认进入“需求输入”；页面间还提供“查看结果”“查看方案对比”“返回需求输入”等快捷跳转。证据：`src/ui/MainWindow.cpp:103`、`src/ui/MainWindow.cpp:121`、`src/ui/MainWindow.cpp:195`、`src/ui/MainWindow.cpp:244`。本地走查补充确认：应用可启动，7 个侧边栏页面均已访问，视口为 1280 x 820，未观察到横向溢出。
 
 ### 需求输入
 

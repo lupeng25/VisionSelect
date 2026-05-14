@@ -1,31 +1,20 @@
-﻿{
-    "appPath":  "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\bin\\VisionSelect.exe",
-    "workingDirectory":  "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\bin",
-    "outDir":  "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\.\\.deps\\product-usability-review",
-    "viewport":  {
-                     "width":  1280,
-                     "height":  820
-                 },
-    "pages":  [
-                  "需求输入",
-                  "纯计算",
-                  "产品计算助手",
-                  "推荐结果",
-                  "方案对比",
-                  "参数库",
-                  "PDF 报告"
-              ],
-    "screenshots":  [
-                        "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\.\\.deps\\product-usability-review\\00-initial.png",
-                        "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\.\\.deps\\product-usability-review\\01-需求输入.png",
-                        "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\.\\.deps\\product-usability-review\\02-纯计算.png",
-                        "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\.\\.deps\\product-usability-review\\03-产品计算助手.png",
-                        "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\.\\.deps\\product-usability-review\\04-推荐结果.png",
-                        "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\.\\.deps\\product-usability-review\\05-方案对比.png",
-                        "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\.\\.deps\\product-usability-review\\06-参数库.png",
-                        "C:\\Users\\73200\\Desktop\\code\\VisionSelect\\.\\.deps\\product-usability-review\\07-PDF 报告.png"
-                    ],
-    "horizontalOverflow":  [
-
-                           ]
+{
+  "appPath": "bin/VisionSelect.exe",
+  "workingDirectory": "bin",
+  "outDir": ".deps/product-usability-review",
+  "appLaunched": true,
+  "viewport": {
+    "width": 1280,
+    "height": 820
+  },
+  "pagesVisited": [
+    "需求输入",
+    "纯计算",
+    "产品计算助手",
+    "推荐结果",
+    "方案对比",
+    "参数库",
+    "PDF 报告"
+  ],
+  "horizontalOverflowObserved": false
 }
