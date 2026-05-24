@@ -1,0 +1,20 @@
+{
+  "appPath": "bin/VisionSelect.exe",
+  "workingDirectory": "bin",
+  "outDir": ".deps/product-usability-review",
+  "appLaunched": true,
+  "viewport": {
+    "width": 1280,
+    "height": 820
+  },
+  "pagesVisited": [
+    "需求输入",
+    "纯计算",
+    "产品计算助手",
+    "推荐结果",
+    "方案对比",
+    "参数库",
+    "PDF 报告"
+  ],
+  "horizontalOverflowObserved": false
+}

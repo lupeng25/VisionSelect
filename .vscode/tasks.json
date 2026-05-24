@@ -53,6 +53,20 @@
       "group": "test",
       "problemMatcher": "$msCompile",
       "detail": "Build and run the QtTest suite."
+    },
+    {
+      "label": "Check Text Encoding",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File tools\\check_text_encoding.ps1",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "cmd.exe",
+          "args": ["/d", "/c"]
+        }
+      },
+      "problemMatcher": [],
+      "detail": "Validate tracked project text files as UTF-8 to prevent garbled Chinese text."
     }
   ]
 }
