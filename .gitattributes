@@ -1,10 +1,20 @@
+# Keep tracked project text normalized. Character encoding is UTF-8; see
+# .editorconfig and tools/check_text_encoding.ps1 for editor and validation
+# rules.
 * text=auto
+.editorconfig text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
 *.csv text eol=lf
 *.qss text eol=lf
 *.pro text eol=lf
+*.pri text eol=lf
 *.cpp text eol=lf
 *.h text eol=lf
 *.json text eol=lf
 *.md text eol=lf
 *.ps1 text eol=lf
+*.qrc text eol=lf
+*.txt text eol=lf
+*.ui text eol=lf
 *.bat text eol=crlf

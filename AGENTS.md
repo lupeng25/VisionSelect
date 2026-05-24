@@ -20,6 +20,7 @@
 ## Working Rules
 - Preserve user edits. Inspect `git status --short` before making changes, and do not revert unrelated work.
 - Do not edit generated `Makefile` files unless explicitly asked.
+- Keep project text files as UTF-8. Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_text_encoding.ps1` after editing Chinese UI text, CSV data, or documentation.
 - Prefer tests in `tests/test_selection.cpp` for selection logic and calculation behavior.
 - UI changes need manual verification notes in the final response, especially navigation, layout, and text-fit checks.
 - Keep changes scoped to the requested module and follow the existing Qt/qmake style.
