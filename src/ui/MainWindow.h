@@ -18,6 +18,7 @@ class QPushButton;
 class ReportPage;
 class ResultsPage;
 class QStackedWidget;
+class ThreeDCameraPage;
 
 class MainWindow : public QMainWindow
 {
@@ -43,6 +44,7 @@ private:
     InputPage *m_inputPage = nullptr;
     PureCalculationPage *m_pureCalculationPage = nullptr;
     ReportPage *m_reportPage = nullptr;
+    ThreeDCameraPage *m_threeDCameraPage = nullptr;
 
     QVector<CameraCalculationEstimate> m_assistantCameraEstimates;
     QVector<LensCalculationEstimate> m_assistantLensEstimates;

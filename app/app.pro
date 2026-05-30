@@ -8,6 +8,7 @@ DESTDIR = ../bin
 INCLUDEPATH += ../src
 
 win32-msvc*: QMAKE_CXXFLAGS += /utf-8 /wd4819
+win32: RC_FILE = ../resources/windows/VisionSelect.rc
 
 SOURCES += \
     ../src/main.cpp \
@@ -16,6 +17,9 @@ SOURCES += \
     ../src/report/PdfReportWriter.cpp \
     ../src/selection/CalculationAssistant.cpp \
     ../src/selection/SelectionEngine.cpp \
+    ../src/three_d/ThreeDCameraMatcher.cpp \
+    ../src/three_d/ThreeDCameraRepository.cpp \
+    ../src/three_d/ThreeDCameraTypes.cpp \
     ../src/ui/CatalogDialogs.cpp \
     ../src/ui/UiHelpers.cpp \
     ../src/ui/MainWindow.cpp \
@@ -25,7 +29,8 @@ SOURCES += \
     ../src/ui/pages/InputPage.cpp \
     ../src/ui/pages/PureCalculationPage.cpp \
     ../src/ui/pages/ReportPage.cpp \
-    ../src/ui/pages/ResultsPage.cpp
+    ../src/ui/pages/ResultsPage.cpp \
+    ../src/ui/pages/ThreeDCameraPage.cpp
 
 HEADERS += \
     ../src/catalog/CatalogRepository.h \
@@ -33,6 +38,9 @@ HEADERS += \
     ../src/report/PdfReportWriter.h \
     ../src/selection/CalculationAssistant.h \
     ../src/selection/SelectionEngine.h \
+    ../src/three_d/ThreeDCameraMatcher.h \
+    ../src/three_d/ThreeDCameraRepository.h \
+    ../src/three_d/ThreeDCameraTypes.h \
     ../src/ui/CatalogDialogs.h \
     ../src/ui/UiHelpers.h \
     ../src/ui/MainWindow.h \
@@ -42,6 +50,7 @@ HEADERS += \
     ../src/ui/pages/InputPage.h \
     ../src/ui/pages/PureCalculationPage.h \
     ../src/ui/pages/ReportPage.h \
-    ../src/ui/pages/ResultsPage.h
+    ../src/ui/pages/ResultsPage.h \
+    ../src/ui/pages/ThreeDCameraPage.h
 
 RESOURCES += ../resources/resources.qrc

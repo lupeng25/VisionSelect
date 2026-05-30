@@ -2,9 +2,12 @@
 #include "report/PdfReportWriter.h"
 #include "selection/CalculationAssistant.h"
 #include "selection/SelectionEngine.h"
+#include "three_d/ThreeDCameraMatcher.h"
+#include "three_d/ThreeDCameraRepository.h"
 
 #include <QDir>
 #include <QFileInfo>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QtTest/QtTest>
@@ -30,6 +33,9 @@ private slots:
     void motionPrefersGlobalShutter();
     void reflectiveSurfaceGetsCoaxialOrDome();
     void chineseTextIsUnicode();
+    void threeDCameraCatalogLoadsFromResource();
+    void threeDCameraMatcherClassifiesRequirements();
+    void threeDCameraDataDoesNotAffect2DSelection();
     void invalidTelecentricCsvFails();
     void invalidLightCsvFails();
     void pdfReportWrites();
@@ -642,6 +648,110 @@ void SelectionEngineTest::chineseTextIsUnicode()
         decodedLightUseCases.append(light.model + QStringLiteral("=") + codepoints.join(QLatin1Char(' ')));
     }
     QVERIFY2(hasDecodedTelecentricUseCase, qPrintable(decodedLightUseCases.join(QStringLiteral(" | "))));
+}
+
+void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
+{
+    ThreeDCameraRepository repository;
+    QString error;
+    QVERIFY2(repository.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
+    QVERIFY(repository.cameras().size() >= 40);
+
+    QSet<QString> brands;
+    for (const ThreeDCameraSpec &camera : repository.cameras()) {
+        QVERIFY2(!camera.manufacturer.trimmed().isEmpty(), qPrintable(camera.model));
+        QVERIFY2(!camera.series.trimmed().isEmpty(), qPrintable(camera.model));
+        QVERIFY2(!camera.model.trimmed().isEmpty(), qPrintable(camera.series));
+        QVERIFY2(!camera.technologyLabel.trimmed().isEmpty(), qPrintable(camera.model));
+        QVERIFY2(!camera.status.trimmed().isEmpty(), qPrintable(camera.model));
+        QVERIFY2(!camera.sourceUrl.trimmed().isEmpty(), qPrintable(camera.model));
+        QVERIFY2(!camera.sourceDate.trimmed().isEmpty(), qPrintable(camera.model));
+        QVERIFY2(!camera.rawSpecs.isEmpty(), qPrintable(camera.model));
+        brands.insert(camera.manufacturer);
+    }
+
+    QVERIFY(brands.contains(QStringLiteral("LMI")));
+    QVERIFY(brands.contains(QString::fromUtf8("深视智能")));
+    QVERIFY(brands.contains(QString::fromUtf8("基恩士")));
+    QVERIFY(brands.contains(QString::fromUtf8("海康机器人")));
+}
+
+void SelectionEngineTest::threeDCameraMatcherClassifiesRequirements()
+{
+    ThreeDCameraRepository repository;
+    QString error;
+    QVERIFY2(repository.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
+
+    ThreeDCameraMatcher matcher;
+    ThreeDCameraRequirement matchRequest;
+    matchRequest.manufacturer = QStringLiteral("LMI");
+    matchRequest.technologyLabel = threeDTechnologyLabel(ThreeDTechnology::LineLaserProfile);
+    matchRequest.targetXCoverageMm = 100.0;
+    matchRequest.zMeasurementRangeMm = 100.0;
+    matchRequest.maxZRepeatabilityUm = 5.0;
+    matchRequest.minSpeedHz = 5000.0;
+    matchRequest.requireEncoder = true;
+    matchRequest.interfaceText = QStringLiteral("Ethernet");
+    const QVector<ThreeDCameraMatch> matching = matcher.match(matchRequest, repository.cameras());
+    QVERIFY(!matching.isEmpty());
+    bool hasMatch = false;
+    for (const ThreeDCameraMatch &candidate : matching)
+        hasMatch = hasMatch || candidate.status == ThreeDMatchStatus::Match;
+    QVERIFY(hasMatch);
+
+    ThreeDCameraRequirement missingRequest;
+    missingRequest.manufacturer = QStringLiteral("LMI");
+    missingRequest.technologyLabel = threeDTechnologyLabel(ThreeDTechnology::LineLaserProfile);
+    missingRequest.targetYCoverageMm = 20.0;
+    const QVector<ThreeDCameraMatch> missing = matcher.match(missingRequest, repository.cameras());
+    bool hasMissing = false;
+    for (const ThreeDCameraMatch &candidate : missing)
+        hasMissing = hasMissing || candidate.status == ThreeDMatchStatus::MissingData;
+    QVERIFY(hasMissing);
+
+    ThreeDCameraRequirement impossibleRequest;
+    impossibleRequest.targetXCoverageMm = 3000.0;
+    impossibleRequest.zMeasurementRangeMm = 3000.0;
+    const QVector<ThreeDCameraMatch> rejected = matcher.match(impossibleRequest, repository.cameras());
+    QVERIFY(!rejected.isEmpty());
+    bool hasNoMatch = false;
+    bool hasImpossibleMatch = false;
+    for (const ThreeDCameraMatch &candidate : rejected) {
+        hasNoMatch = hasNoMatch || candidate.status == ThreeDMatchStatus::NoMatch;
+        hasImpossibleMatch = hasImpossibleMatch || candidate.status == ThreeDMatchStatus::Match;
+    }
+    QVERIFY(hasNoMatch);
+    QVERIFY(!hasImpossibleMatch);
+
+    const QVector<ThreeDCameraMatch> empty = matcher.match(ThreeDCameraRequirement(), repository.cameras());
+    QVERIFY(!empty.isEmpty());
+    QCOMPARE(empty.first().status, ThreeDMatchStatus::Match);
+}
+
+void SelectionEngineTest::threeDCameraDataDoesNotAffect2DSelection()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 40.0;
+    request.objectHeightMm = 30.0;
+    request.placementMarginMm = 2.0;
+    request.minFeatureUm = 100.0;
+    request.measurementToleranceUm = 50.0;
+    request.workingDistanceMm = 120.0;
+    request.requiredFps = 30.0;
+    request.detectionType = DetectionType::Positioning;
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> before = engine.select(request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 5);
+    ThreeDCameraRepository repository;
+    QString error;
+    QVERIFY2(repository.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
+    const QVector<SelectionResult> after = engine.select(request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 5);
+    QCOMPARE(after.size(), before.size());
+    if (!before.isEmpty() && !after.isEmpty()) {
+        QCOMPARE(after.first().camera.model, before.first().camera.model);
+        QCOMPARE(after.first().lens.model, before.first().lens.model);
+        QCOMPARE(after.first().light.model, before.first().light.model);
+    }
 }
 
 void SelectionEngineTest::invalidTelecentricCsvFails()

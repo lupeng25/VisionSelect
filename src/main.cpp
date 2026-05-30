@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QFile>
 #include <QFont>
+#include <QIcon>
 #include <QTextStream>
 
 int main(int argc, char *argv[])
@@ -11,6 +12,7 @@ int main(int argc, char *argv[])
     app.setApplicationName(QStringLiteral("VisionSelect"));
     app.setOrganizationName(QStringLiteral("VisionSelect"));
     app.setFont(QFont(QStringLiteral("Microsoft YaHei UI"), 9));
+    app.setWindowIcon(QIcon(QStringLiteral(":/icons/visionselect_icon_256.png")));
 
     QFile styleFile(QStringLiteral(":/style.qss"));
     if (styleFile.open(QIODevice::ReadOnly | QIODevice::Text)) {

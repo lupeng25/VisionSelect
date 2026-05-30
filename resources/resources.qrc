@@ -4,5 +4,7 @@
         <file>data/cameras.csv</file>
         <file>data/lenses.csv</file>
         <file>data/lights.csv</file>
+        <file>data/three_d_cameras.json</file>
+        <file>icons/visionselect_icon_256.png</file>
     </qresource>
 </RCC>

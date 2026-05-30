@@ -12,6 +12,7 @@
 #include "ui/pages/PureCalculationPage.h"
 #include "ui/pages/ReportPage.h"
 #include "ui/pages/ResultsPage.h"
+#include "ui/pages/ThreeDCameraPage.h"
 
 #include <QDateTime>
 #include <QDialog>
@@ -103,7 +104,7 @@ void MainWindow::buildUi()
     m_pages = new QStackedWidget(root);
     m_inputPage = new InputPage;
     connect(m_inputPage, &InputPage::calculateRequested, this, &MainWindow::calculate);
-    connect(m_inputPage, &InputPage::resultsRequested, this, [this]() { setActivePage(3); });
+    connect(m_inputPage, &InputPage::resultsRequested, this, [this]() { setActivePage(4); });
     m_pages->addWidget(m_inputPage);
     m_pureCalculationPage = new PureCalculationPage;
     m_pages->addWidget(m_pureCalculationPage);
@@ -118,8 +119,10 @@ void MainWindow::buildUi()
         refreshAssistantLensTable();
     });
     m_pages->addWidget(m_calculationPage);
+    m_threeDCameraPage = new ThreeDCameraPage;
+    m_pages->addWidget(m_threeDCameraPage);
     m_resultsPage = new ResultsPage;
-    connect(m_resultsPage, &ResultsPage::comparisonRequested, this, [this]() { setActivePage(4); });
+    connect(m_resultsPage, &ResultsPage::comparisonRequested, this, [this]() { setActivePage(5); });
     m_pages->addWidget(m_resultsPage);
     m_comparisonPage = new ComparisonPage;
     connect(m_comparisonPage, &ComparisonPage::recalculateRequested, this, &MainWindow::calculate);
@@ -210,12 +213,16 @@ QWidget *MainWindow::createSidebar()
         QStyle::SP_DirIcon,
         QStyle::SP_FileIcon
     };
-    for (int i = 0; i < pages.size(); ++i) {
-        QPushButton *button = new QPushButton(pages.at(i));
+    QStringList navPages = pages;
+    navPages.insert(3, QString::fromUtf8("3D 相机助手"));
+    QVector<QStyle::StandardPixmap> navIcons = icons;
+    navIcons.insert(3, QStyle::SP_ComputerIcon);
+    for (int i = 0; i < navPages.size(); ++i) {
+        QPushButton *button = new QPushButton(navPages.at(i));
         button->setObjectName(QStringLiteral("NavButton"));
         button->setCursor(Qt::PointingHandCursor);
         button->setMinimumHeight(44);
-        button->setIcon(style()->standardIcon(icons.value(i, QStyle::SP_FileIcon)));
+        button->setIcon(style()->standardIcon(navIcons.value(i, QStyle::SP_FileIcon)));
         button->setIconSize(QSize(16, 16));
         button->setFocusPolicy(Qt::NoFocus);
         connect(button, &QPushButton::clicked, this, [this, i]() { setActivePage(i); });
