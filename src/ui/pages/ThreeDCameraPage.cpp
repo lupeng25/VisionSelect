@@ -15,6 +15,7 @@
 #include <QLabel>
 #include <QList>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QStringList>
 #include <QTableWidget>
@@ -205,6 +206,11 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     QSplitter *splitter = new QSplitter(Qt::Vertical);
     m_table = new QTableWidget;
     setupTable(m_table);
+    m_table->setSortingEnabled(false);
+    m_table->setWordWrap(false);
+    m_table->setTextElideMode(Qt::ElideRight);
+    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     m_table->setColumnCount(9);
     m_table->setHorizontalHeaderLabels({
         QString::fromUtf8("匹配状态"),
@@ -217,9 +223,18 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
         QString::fromUtf8("速度采样"),
         QString::fromUtf8("集成接口")
     });
-    m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    m_table->setColumnWidth(0, 96);
+    m_table->setColumnWidth(1, 88);
+    m_table->setColumnWidth(2, 120);
+    m_table->setColumnWidth(3, 120);
+    m_table->setColumnWidth(4, 140);
+    m_table->setColumnWidth(6, 180);
+    m_table->setColumnWidth(7, 150);
+    m_table->setColumnWidth(8, 180);
     m_table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
     connect(m_table, &QTableWidget::cellClicked, this, [this](int row, int) { showDetailsForRow(row); });
+    connect(m_table, &QTableWidget::cellActivated, this, [this](int row, int) { showDetailsForRow(row); });
     splitter->addWidget(m_table);
 
     m_details = new QTextBrowser;
@@ -230,14 +245,14 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     splitter->setStretchFactor(1, 1);
     layout->addWidget(splitter, 1);
 
-    QString error;
-    if (!m_repository.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error)) {
-        m_summaryLabel->setText(error);
-        return;
-    }
-
     populateFilterOptions();
-    refresh();
+    m_summaryLabel->setText(QString::fromUtf8("3D 型号库将在首次进入页面或应用筛选时加载。该页面只做 3D 查询过滤，不参与 2D 评分、推荐、BOM 或 PDF 报告。"));
+}
+
+void ThreeDCameraPage::activate()
+{
+    if (!m_resultsInitialized)
+        refresh();
 }
 
 void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
@@ -310,6 +325,22 @@ void ThreeDCameraPage::populateFilterOptions()
     addComboValues(m_materialCombo, m_repository.materialScenarios());
 }
 
+bool ThreeDCameraPage::ensureLoaded()
+{
+    if (m_loaded)
+        return true;
+
+    QString error;
+    if (!m_repository.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error)) {
+        m_summaryLabel->setText(error);
+        return false;
+    }
+
+    m_loaded = true;
+    populateFilterOptions();
+    return true;
+}
+
 ThreeDCameraRequirement ThreeDCameraPage::requirement() const
 {
     ThreeDCameraRequirement req;
@@ -331,8 +362,12 @@ ThreeDCameraRequirement ThreeDCameraPage::requirement() const
 
 void ThreeDCameraPage::refresh()
 {
+    if (!ensureLoaded())
+        return;
+
     ThreeDCameraMatcher matcher;
     m_matches = matcher.match(requirement(), m_repository.cameras());
+    m_resultsInitialized = true;
     fillTable();
 }
 
@@ -374,24 +409,30 @@ void ThreeDCameraPage::fillTable()
     m_summaryLabel->setText(QString::fromUtf8("3D 型号库 %1 个；满足 %2，待确认 %3，不满足 %4。该页面只做 3D 查询过滤，不参与 2D 评分、推荐、BOM 或 PDF 报告。")
         .arg(m_matches.size()).arg(matched).arg(missing).arg(rejected));
 
-    m_table->setSortingEnabled(false);
-    m_table->setRowCount(m_matches.size());
-    for (int row = 0; row < m_matches.size(); ++row) {
-        const ThreeDCameraMatch &match = m_matches.at(row);
-        const ThreeDCameraSpec &spec = match.spec;
-        QTableWidgetItem *statusItem = indexedItem(threeDMatchStatusLabel(match.status), row);
-        setStatusColor(statusItem, match.status);
-        m_table->setItem(row, 0, statusItem);
-        m_table->setItem(row, 1, item(spec.manufacturer));
-        m_table->setItem(row, 2, item(spec.series));
-        m_table->setItem(row, 3, item(spec.model));
-        m_table->setItem(row, 4, item(spec.technologyLabel));
-        m_table->setItem(row, 5, item(geometrySummary(spec)));
-        m_table->setItem(row, 6, item(qualitySummary(spec)));
-        m_table->setItem(row, 7, item(speedSummary(spec)));
-        m_table->setItem(row, 8, item(spec.interfaces.join(QStringLiteral(", "))));
+    {
+        QSignalBlocker blocker(m_table);
+        m_table->setUpdatesEnabled(false);
+        m_table->setSortingEnabled(false);
+        m_table->clearContents();
+        m_table->setRowCount(0);
+        m_table->setRowCount(m_matches.size());
+        for (int row = 0; row < m_matches.size(); ++row) {
+            const ThreeDCameraMatch &match = m_matches.at(row);
+            const ThreeDCameraSpec &spec = match.spec;
+            QTableWidgetItem *statusItem = indexedItem(threeDMatchStatusLabel(match.status), row);
+            setStatusColor(statusItem, match.status);
+            m_table->setItem(row, 0, statusItem);
+            m_table->setItem(row, 1, item(spec.manufacturer));
+            m_table->setItem(row, 2, item(spec.series));
+            m_table->setItem(row, 3, item(spec.model));
+            m_table->setItem(row, 4, item(spec.technologyLabel));
+            m_table->setItem(row, 5, item(geometrySummary(spec)));
+            m_table->setItem(row, 6, item(qualitySummary(spec)));
+            m_table->setItem(row, 7, item(speedSummary(spec)));
+            m_table->setItem(row, 8, item(spec.interfaces.join(QStringLiteral(", "))));
+        }
+        m_table->setUpdatesEnabled(true);
     }
-    m_table->setSortingEnabled(true);
     if (!m_matches.isEmpty()) {
         m_table->selectRow(0);
         showDetailsForRow(0);

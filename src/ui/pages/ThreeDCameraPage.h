@@ -21,10 +21,13 @@ class ThreeDCameraPage : public QWidget
 
 public:
     explicit ThreeDCameraPage(QWidget *parent = nullptr);
+    void activate();
 
 private:
     ThreeDCameraRepository m_repository;
     QVector<ThreeDCameraMatch> m_matches;
+    bool m_loaded = false;
+    bool m_resultsInitialized = false;
 
     QLabel *m_summaryLabel = nullptr;
     QComboBox *m_brandCombo = nullptr;
@@ -44,6 +47,7 @@ private:
     QTextBrowser *m_details = nullptr;
 
     void buildFilters(QLayout *parentLayout);
+    bool ensureLoaded();
     void populateFilterOptions();
     ThreeDCameraRequirement requirement() const;
     void refresh();

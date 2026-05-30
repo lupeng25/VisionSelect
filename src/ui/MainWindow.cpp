@@ -29,10 +29,19 @@
 #include <QStyle>
 #include <QTextStream>
 #include <QVBoxLayout>
+#include <QWidget>
 
 using namespace UiHelpers;
 
 namespace {
+const int kPureCalculationPageIndex = 1;
+const int kCalculationPageIndex = 2;
+const int kThreeDCameraPageIndex = 3;
+const int kResultsPageIndex = 4;
+const int kComparisonPageIndex = 5;
+const int kCatalogPageIndex = 6;
+const int kReportPageIndex = 7;
+
 QString bomSpecForCamera(const CameraSpec &camera, const SelectionResult &result)
 {
     return QStringLiteral("%1 x %2, %3, %4, %5 fps, %6 MB/s")
@@ -88,8 +97,6 @@ MainWindow::MainWindow(QWidget *parent)
         QMessageBox::critical(this, QString::fromUtf8("\345\217\202\346\225\260\345\272\223\345\212\240\350\275\275\345\244\261\350\264\245"), error);
 
     buildUi();
-    m_pureCalculationPage->refresh();
-    calculate();
 }
 
 void MainWindow::buildUi()
@@ -104,7 +111,10 @@ void MainWindow::buildUi()
     m_pages = new QStackedWidget(root);
     m_inputPage = new InputPage;
     connect(m_inputPage, &InputPage::calculateRequested, this, &MainWindow::calculate);
-    connect(m_inputPage, &InputPage::resultsRequested, this, [this]() { setActivePage(4); });
+    connect(m_inputPage, &InputPage::resultsRequested, this, [this]() {
+        calculate();
+        setActivePage(kResultsPageIndex);
+    });
     m_pages->addWidget(m_inputPage);
     m_pureCalculationPage = new PureCalculationPage;
     m_pages->addWidget(m_pureCalculationPage);
@@ -119,17 +129,15 @@ void MainWindow::buildUi()
         refreshAssistantLensTable();
     });
     m_pages->addWidget(m_calculationPage);
-    m_threeDCameraPage = new ThreeDCameraPage;
-    m_pages->addWidget(m_threeDCameraPage);
+    m_pages->addWidget(new QWidget);
     m_resultsPage = new ResultsPage;
-    connect(m_resultsPage, &ResultsPage::comparisonRequested, this, [this]() { setActivePage(5); });
+    connect(m_resultsPage, &ResultsPage::comparisonRequested, this, [this]() { setActivePage(kComparisonPageIndex); });
     m_pages->addWidget(m_resultsPage);
     m_comparisonPage = new ComparisonPage;
     connect(m_comparisonPage, &ComparisonPage::recalculateRequested, this, &MainWindow::calculate);
     connect(m_comparisonPage, &ComparisonPage::exportBomRequested, this, &MainWindow::exportBomCsv);
     m_pages->addWidget(m_comparisonPage);
     m_catalogPage = new CatalogPage;
-    m_catalogPage->setCatalog(&m_catalog);
     connect(m_catalogPage, &CatalogPage::cameraAddRequested, this, &MainWindow::addCamera);
     connect(m_catalogPage, &CatalogPage::cameraEditRequested, this, &MainWindow::editCamera);
     connect(m_catalogPage, &CatalogPage::cameraRemoveRequested, this, &MainWindow::removeCamera);
@@ -252,12 +260,51 @@ void MainWindow::setActivePage(int index)
 {
     if (!m_pages || index < 0 || index >= m_pages->count())
         return;
+    if (index == kPureCalculationPageIndex && m_pureCalculationPage)
+        m_pureCalculationPage->refresh();
+    if (index == kCalculationPageIndex) {
+        m_request = m_inputPage->request();
+        refreshCalculationAssistant();
+    }
+    if (index == kThreeDCameraPageIndex) {
+        ensureThreeDCameraPage();
+        if (m_threeDCameraPage)
+            m_threeDCameraPage->activate();
+    }
+    if (index == kCatalogPageIndex)
+        ensureCatalogPageInitialized();
+    if ((index == kResultsPageIndex || index == kComparisonPageIndex || index == kReportPageIndex)
+        && m_results.isEmpty()) {
+        calculate();
+    }
     m_pages->setCurrentIndex(index);
     for (int i = 0; i < m_navButtons.size(); ++i) {
         m_navButtons.at(i)->setProperty("active", i == index);
         m_navButtons.at(i)->style()->unpolish(m_navButtons.at(i));
         m_navButtons.at(i)->style()->polish(m_navButtons.at(i));
     }
+}
+
+void MainWindow::ensureThreeDCameraPage()
+{
+    if (m_threeDCameraPage || !m_pages)
+        return;
+
+    QWidget *placeholder = m_pages->widget(kThreeDCameraPageIndex);
+    m_threeDCameraPage = new ThreeDCameraPage;
+    m_pages->removeWidget(placeholder);
+    if (placeholder)
+        placeholder->deleteLater();
+    m_pages->insertWidget(kThreeDCameraPageIndex, m_threeDCameraPage);
+}
+
+void MainWindow::ensureCatalogPageInitialized()
+{
+    if (m_catalogPageInitialized || !m_catalogPage)
+        return;
+
+    m_catalogPage->setCatalog(&m_catalog);
+    m_catalogPageInitialized = true;
 }
 
 void MainWindow::calculate()
@@ -355,7 +402,7 @@ void MainWindow::refreshAssistantLensTable()
 
 void MainWindow::refreshCatalogTables()
 {
-    if (m_catalogPage)
+    if (m_catalogPageInitialized && m_catalogPage)
         m_catalogPage->setCatalog(&m_catalog);
 }
 

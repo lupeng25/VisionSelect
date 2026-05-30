@@ -36,6 +36,7 @@ private:
     QVector<QPushButton *> m_navButtons;
 
     QLabel *m_summaryLabel = nullptr;
+    bool m_catalogPageInitialized = false;
 
     CalculationPage *m_calculationPage = nullptr;
     CatalogPage *m_catalogPage = nullptr;
@@ -53,6 +54,8 @@ private:
     void buildUi();
     QWidget *createSidebar();
 
+    void ensureThreeDCameraPage();
+    void ensureCatalogPageInitialized();
     void setActivePage(int index);
     void calculate();
     void refreshCalculationAssistant();
