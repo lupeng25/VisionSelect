@@ -5,6 +5,9 @@
         <file>data/lenses.csv</file>
         <file>data/lights.csv</file>
         <file>data/three_d_cameras.json</file>
+        <file>i18n/visionselect_zh_CN.qm</file>
+        <file>i18n/visionselect_en_US.qm</file>
+        <file>license/public_key.json</file>
         <file>icons/visionselect_icon_256.png</file>
     </qresource>
 </RCC>

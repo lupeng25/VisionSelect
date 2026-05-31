@@ -1,10 +1,13 @@
 #include "report/PdfReportWriter.h"
 
+#include "ui/UiHelpers.h"
+
 #include <QDateTime>
 #include <QFont>
 #include <QPainter>
 #include <QPdfWriter>
 #include <QTextOption>
+#include <QtGlobal>
 
 namespace {
 class PdfPage
@@ -120,40 +123,14 @@ private:
     }
 };
 
+QString lt(const char *zhUtf8, const char *enUtf8)
+{
+    return UiHelpers::localizedText(zhUtf8, enUtf8);
+}
+
 QString value(double number, const QString &unit)
 {
     return QStringLiteral("%1 %2").arg(QString::number(number, 'f', 2), unit);
-}
-
-QString productLabel(const QString &manufacturer, const QString &model)
-{
-    if (manufacturer.trimmed().isEmpty())
-        return model;
-    return manufacturer.trimmed() + QLatin1Char(' ') + model;
-}
-
-QString compatibilityText(const SelectionResult &result)
-{
-    return result.hardConstraintsPassed
-        ? QString::fromUtf8("可用")
-        : QString::fromUtf8("不适配");
-}
-
-QString riskSummary(const SelectionResult &result)
-{
-    QStringList risks = result.score.risks;
-    if (!result.hardFailures.isEmpty())
-        risks.prepend(QString::fromUtf8("硬性不适配：") + result.hardFailures.join(QString::fromUtf8("；")));
-    return risks.isEmpty()
-        ? QString::fromUtf8("无主要风险")
-        : risks.join(QString::fromUtf8("；"));
-}
-
-QString exposureText(double exposureUs)
-{
-    return exposureUs > 0.0
-        ? QStringLiteral("%1 us").arg(exposureUs, 0, 'f', 1)
-        : QString::fromUtf8("无运动约束");
 }
 
 QString bomSpecForCamera(const CameraSpec &camera, const SelectionResult &result)
@@ -202,75 +179,78 @@ bool PdfReportWriter::write(const QString &filePath,
 {
     if (filePath.isEmpty()) {
         if (errorMessage)
-            *errorMessage = QString::fromUtf8("PDF \350\276\223\345\207\272\350\267\257\345\276\204\344\270\272\347\251\272");
+            *errorMessage = lt("PDF 输出路径为空", "PDF output path is empty");
         return false;
     }
 
     QPdfWriter writer(filePath);
     writer.setPageSize(QPagedPaintDevice::A4);
     writer.setResolution(96);
-    writer.setTitle(QString::fromUtf8("\345\267\245\344\270\232\346\234\272\345\231\250\350\247\206\350\247\211\351\200\211\345\236\213\346\212\245\345\221\212"));
+    writer.setTitle(lt("工业机器视觉选型报告", "Industrial Machine Vision Selection Report"));
 
     QPainter painter(&writer);
     if (!painter.isActive()) {
         if (errorMessage)
-            *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\210\233\345\273\272 PDF\357\274\232%1").arg(filePath);
+            *errorMessage = lt("无法创建 PDF：%1", "Unable to create PDF: %1").arg(filePath);
         return false;
     }
 
     PdfPage page(&writer, &painter);
-    page.title(QString::fromUtf8("\345\267\245\344\270\232\346\234\272\345\231\250\350\247\206\350\247\211\351\200\211\345\236\213\346\212\245\345\221\212"));
-    page.paragraph(QString::fromUtf8("\347\224\237\346\210\220\346\227\266\351\227\264\357\274\232")
-        + QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"))
-        + QString::fromUtf8("\343\200\202\346\234\254\346\212\245\345\221\212\347\224\250\344\272\216\346\226\271\346\241\210\345\210\235\347\255\233\357\274\214\346\234\200\347\273\210\345\236\213\345\217\267\350\257\267\347\273\223\345\220\210\345\216\202\345\256\266\346\225\260\346\215\256\350\241\250\343\200\201\345\256\211\350\243\205\347\251\272\351\227\264\343\200\201MTF/DOF \345\222\214\347\216\260\345\234\272\346\211\223\345\205\211\345\256\236\346\265\213\347\241\256\350\256\244\343\200\202"));
+    page.title(lt("工业机器视觉选型报告", "Industrial Machine Vision Selection Report"));
+    page.paragraph(lt("生成时间：%1。本报告用于方案初筛，最终型号请结合厂家数据表、安装空间、MTF/DOF 和现场打光实测确认。",
+                      "Generated at %1. This report is for preliminary selection; final models should be verified with vendor datasheets, installation space, MTF/DOF, and on-site lighting tests.")
+        .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"))));
 
-    page.section(QString::fromUtf8("\351\234\200\346\261\202\350\276\223\345\205\245"));
-    page.keyValue(QString::fromUtf8("\346\243\200\346\265\213\347\261\273\345\236\213"), detectionTypeLabel(request.detectionType));
-    page.keyValue(QString::fromUtf8("\345\267\245\344\273\266\345\260\272\345\257\270"), QStringLiteral("%1 x %2 mm")
+    page.section(lt("需求输入", "Requirements"));
+    page.keyValue(lt("检测类型", "Inspection type"), detectionTypeLabel(request.detectionType));
+    page.keyValue(lt("工件尺寸", "Part size"), QStringLiteral("%1 x %2 mm")
                   .arg(request.objectWidthMm, 0, 'f', 2)
                   .arg(request.objectHeightMm, 0, 'f', 2));
-    page.keyValue(QString::fromUtf8("\345\256\232\344\275\215\344\275\231\351\207\217"), value(request.placementMarginMm, QStringLiteral("mm")));
-    page.keyValue(QString::fromUtf8("\346\234\200\345\260\217\347\211\271\345\276\201"), value(request.minFeatureUm, QStringLiteral("um")));
-    page.keyValue(QString::fromUtf8("\345\205\201\350\256\270\350\257\257\345\267\256"), value(request.measurementToleranceUm, QStringLiteral("um")));
-    page.keyValue(QString::fromUtf8("\345\267\245\344\275\234\350\267\235\347\246\273"), value(request.workingDistanceMm, QStringLiteral("mm")));
-    page.keyValue(QString::fromUtf8("\351\253\230\345\272\246\346\263\242\345\212\250"), value(request.heightVariationMm, QStringLiteral("mm")));
-    page.keyValue(QString::fromUtf8("\350\277\220\345\212\250\351\200\237\345\272\246/\345\270\247\347\216\207"), QStringLiteral("%1 mm/s, %2 fps")
+    page.keyValue(lt("定位余量", "Placement margin"), value(request.placementMarginMm, QStringLiteral("mm")));
+    page.keyValue(lt("最小特征", "Minimum feature"), value(request.minFeatureUm, QStringLiteral("um")));
+    page.keyValue(lt("允许误差", "Allowed error"), value(request.measurementToleranceUm, QStringLiteral("um")));
+    page.keyValue(lt("工作距离", "Working distance"), value(request.workingDistanceMm, QStringLiteral("mm")));
+    page.keyValue(lt("高度波动", "Height variation"), value(request.heightVariationMm, QStringLiteral("mm")));
+    page.keyValue(lt("运动速度/帧率", "Motion speed / frame rate"), QStringLiteral("%1 mm/s, %2 fps")
                   .arg(request.motionSpeedMmS, 0, 'f', 1)
                   .arg(request.requiredFps, 0, 'f', 1));
-    page.keyValue(QString::fromUtf8("\350\241\250\351\235\242\347\211\271\346\200\247"), surfaceTypeLabel(request.surfaceType));
+    page.keyValue(lt("表面特性", "Surface"), surfaceTypeLabel(request.surfaceType));
 
-    page.section(QString::fromUtf8("\345\205\263\351\224\256\345\205\254\345\274\217\345\222\214\345\210\244\346\226\255"));
-    page.paragraph(QString::fromUtf8("\346\231\256\351\200\232\345\267\245\344\270\232\351\225\234\345\244\264\346\214\211 M = SensorSize / FOV \345\222\214 f \342\211\210 WD \303\227 SensorSize / (FOV + SensorSize) \345\210\235\347\255\233\357\274\214\345\271\266\346\240\241\351\252\214\345\203\217\345\234\206\343\200\201\346\216\245\345\217\243\343\200\201\345\267\245\344\275\234\350\267\235\347\246\273\343\200\201\347\225\270\345\217\230\345\222\214\351\225\234\345\244\264 MP/\345\203\217\345\205\203\350\203\275\345\212\233\343\200\202"));
-    page.paragraph(QString::fromUtf8("\350\277\234\345\277\203\351\225\234\345\244\264\346\214\211\345\233\272\345\256\232\345\200\215\347\216\207\346\250\241\345\236\213\350\256\241\347\256\227\357\274\232FOV = SensorSize / PMAG\357\274\214ObjectPixel = PixelSize / PMAG\357\274\233\345\220\214\346\227\266\346\240\241\351\252\214\346\240\207\347\247\260 WD\343\200\201WD \345\256\271\345\267\256\343\200\201\345\203\217\345\234\206/\346\234\200\345\244\247\351\235\266\351\235\242\343\200\201\350\277\234\345\277\203\345\272\246\343\200\201\347\225\270\345\217\230\343\200\201DOF \345\222\214\345\220\214\350\275\264/\350\277\234\345\277\203\345\205\211\346\272\220\351\200\202\351\205\215\343\200\202"));
-    page.paragraph(QString::fromUtf8("接口和存储按原始图像估算：单帧数据 = 分辨率 x bit depth / 8，吞吐 = 单帧数据 x fps，存储 = 吞吐 x 3600；带宽利用率超过 90% 时提示接口余量风险。"));
+    page.section(lt("关键公式和判断", "Key Formulas and Checks"));
+    page.paragraph(lt("普通工业镜头按 M = SensorSize / FOV 和 f ~= WD x SensorSize / (FOV + SensorSize) 初筛，并校验像圈、接口、工作距离、畸变和镜头 MP/像元能力。",
+                      "Fixed-focal lenses are estimated with M = SensorSize / FOV and f ~= WD x SensorSize / (FOV + SensorSize), then checked against image circle, mount, working distance, distortion, and lens MP/pixel capability."));
+    page.paragraph(lt("远心镜头按固定倍率模型计算：FOV = SensorSize / PMAG，ObjectPixel = PixelSize / PMAG；同时校验标称 WD、WD 容差、像圈/最大靶面、远心度、畸变、DOF 和同轴/远心光源适配。",
+                      "Telecentric lenses use fixed magnification: FOV = SensorSize / PMAG and ObjectPixel = PixelSize / PMAG; nominal WD, WD tolerance, image circle/max sensor, telecentricity, distortion, DOF, and coaxial/telecentric lighting are also checked."));
+    page.paragraph(lt("接口和存储按原始图像估算：单帧数据 = 分辨率 x bit depth / 8，吞吐 = 单帧数据 x fps，存储 = 吞吐 x 3600；带宽利用率超过 90% 时提示接口余量风险。",
+                      "Interface and storage are estimated from raw images: frame payload = resolution x bit depth / 8, throughput = frame payload x fps, storage = throughput x 3600; bandwidth utilization over 90% is flagged as interface margin risk."));
 
-    page.section(QString::fromUtf8("\346\216\250\350\215\220\346\226\271\346\241\210 Top \346\226\271\346\241\210"));
-    const QVector<int> widths = {52, 58, 105, 110, 90, 82, 72, 95};
-    page.tableHeader({QString::fromUtf8("\347\261\273\345\236\213"), QString::fromUtf8("\345\276\227\345\210\206"), QString::fromUtf8("\347\233\270\346\234\272"),
-                      QString::fromUtf8("\351\225\234\345\244\264"), QString::fromUtf8("\345\205\211\346\272\220"), QStringLiteral("FOV"),
-                      QString::fromUtf8("\345\203\217\347\264\240"), QString::fromUtf8("\351\243\216\351\231\251")},
+    page.section(lt("推荐方案 Top 方案", "Top Recommended Plans"));
+    const QVector<int> widths = {58, 58, 105, 110, 90, 82, 72, 95};
+    page.tableHeader({lt("类型", "Type"), lt("得分", "Score"), lt("相机", "Camera"),
+                      lt("镜头", "Lens"), lt("光源", "Light"), QStringLiteral("FOV"),
+                      lt("像素", "Pixel"), lt("风险", "Risk")},
                      widths);
 
     const int count = qMin(8, results.size());
     for (int i = 0; i < count; ++i) {
         const SelectionResult &r = results.at(i);
         page.tableRow({
-            r.isTelecentric() ? QString::fromUtf8("\350\277\234\345\277\203") : QString::fromUtf8("\346\231\256\351\200\232"),
+            r.isTelecentric() ? lt("远心", "Tele.") : lt("普通", "Fixed"),
             QString::number(r.score.score, 'f', 1),
-            productLabel(r.camera.manufacturer, r.camera.model),
-            productLabel(r.lens.manufacturer, r.lens.model),
-            productLabel(r.light.manufacturer, r.light.model),
+            UiHelpers::productLabel(r.camera.manufacturer, r.camera.model),
+            UiHelpers::productLabel(r.lens.manufacturer, r.lens.model),
+            UiHelpers::productLabel(r.light.manufacturer, r.light.model),
             QStringLiteral("%1x%2").arg(r.effectiveFovWidthMm, 0, 'f', 1).arg(r.effectiveFovHeightMm, 0, 'f', 1),
             QStringLiteral("%1um").arg(r.objectPixelSizeUm, 0, 'f', 1),
-            riskSummary(r).left(42)
+            UiHelpers::riskSummary(r).left(42)
         }, widths);
     }
 
-    page.section(QString::fromUtf8("方案对比"));
+    page.section(lt("方案对比", "Plan Comparison"));
     const QVector<int> compareWidths = {38, 46, 92, 100, 88, 62, 84, 165};
-    page.tableHeader({QString::fromUtf8("序号"), QString::fromUtf8("得分"), QString::fromUtf8("相机"),
-                      QString::fromUtf8("镜头"), QString::fromUtf8("光源"), QString::fromUtf8("像素"),
-                      QString::fromUtf8("带宽/存储"), QString::fromUtf8("关键风险")},
+    page.tableHeader({lt("序号", "No."), lt("得分", "Score"), lt("相机", "Camera"),
+                      lt("镜头", "Lens"), lt("光源", "Light"), lt("像素", "Pixel"),
+                      lt("带宽/存储", "BW/Storage"), lt("关键风险", "Key Risk")},
                      compareWidths);
     const int compareCount = qMin(5, results.size());
     for (int i = 0; i < compareCount; ++i) {
@@ -278,66 +258,67 @@ bool PdfReportWriter::write(const QString &filePath,
         page.tableRow({
             QStringLiteral("#%1").arg(i + 1),
             QString::number(r.score.score, 'f', 1),
-            productLabel(r.camera.manufacturer, r.camera.model).left(18),
-            productLabel(r.lens.manufacturer, r.lens.model).left(20),
-            productLabel(r.light.manufacturer, r.light.model).left(16),
+            UiHelpers::productLabel(r.camera.manufacturer, r.camera.model).left(18),
+            UiHelpers::productLabel(r.lens.manufacturer, r.lens.model).left(20),
+            UiHelpers::productLabel(r.light.manufacturer, r.light.model).left(16),
             QStringLiteral("%1um").arg(r.objectPixelSizeUm, 0, 'f', 1),
             QStringLiteral("%1%/%2GBh")
                 .arg(r.bandwidthUtilizationPercent, 0, 'f', 0)
                 .arg(r.storagePerHourGB, 0, 'f', 0),
-            riskSummary(r).left(46)
+            UiHelpers::riskSummary(r).left(46)
         }, compareWidths);
     }
 
     if (!results.isEmpty()) {
         const SelectionResult &top = results.first();
-        page.section(QString::fromUtf8("\351\246\226\351\200\211\346\226\271\346\241\210\350\257\264\346\230\216"));
-        page.keyValue(QString::fromUtf8("\346\226\271\346\241\210"), top.schemeTitle + QString::fromUtf8("\357\274\232")
-                      + productLabel(top.camera.manufacturer, top.camera.model) + QStringLiteral(" + ")
-                      + productLabel(top.lens.manufacturer, top.lens.model) + QStringLiteral(" + ")
-                      + productLabel(top.light.manufacturer, top.light.model));
-        page.keyValue(QString::fromUtf8("适配状态"), compatibilityText(top));
-        page.keyValue(QString::fromUtf8("\350\256\241\347\256\227\350\247\206\351\207\216"), QStringLiteral("%1 x %2 mm")
+        page.section(lt("首选方案说明", "Top Plan Details"));
+        page.keyValue(lt("方案", "Plan"), top.schemeTitle + lt("：", ": ")
+                      + UiHelpers::productLabel(top.camera.manufacturer, top.camera.model) + QStringLiteral(" + ")
+                      + UiHelpers::productLabel(top.lens.manufacturer, top.lens.model) + QStringLiteral(" + ")
+                      + UiHelpers::productLabel(top.light.manufacturer, top.light.model));
+        page.keyValue(lt("适配状态", "Compatibility"), UiHelpers::compatibilityText(top));
+        page.keyValue(lt("计算视野", "Calculated FOV"), QStringLiteral("%1 x %2 mm")
                       .arg(top.effectiveFovWidthMm, 0, 'f', 2)
                       .arg(top.effectiveFovHeightMm, 0, 'f', 2));
-        page.keyValue(QString::fromUtf8("\347\211\251\346\226\271\345\203\217\347\264\240"), value(top.objectPixelSizeUm, QStringLiteral("um/px")));
-        page.keyValue(QString::fromUtf8("\345\200\215\347\216\207/\347\204\246\350\267\235"), top.isTelecentric()
+        page.keyValue(lt("物方像素", "Object pixel"), value(top.objectPixelSizeUm, QStringLiteral("um/px")));
+        page.keyValue(lt("倍率/焦距", "Magnification / focal"), top.isTelecentric()
                       ? QStringLiteral("PMAG %1x").arg(top.magnification, 0, 'f', 3)
                       : value(top.lens.focalLengthMm, QStringLiteral("mm")));
-        page.keyValue(QString::fromUtf8("曝光/景深/畸变"), QStringLiteral("%1, DOF %2 mm, distortion %3 um")
-                      .arg(exposureText(top.maxExposureUsForOnePixelBlur))
+        page.keyValue(lt("曝光/景深/畸变", "Exposure / DOF / distortion"), QStringLiteral("%1, DOF %2 mm, distortion %3 um")
+                      .arg(UiHelpers::exposureText(top.maxExposureUsForOnePixelBlur))
                       .arg(top.estimatedDofMm, 0, 'f', 2)
                       .arg(top.distortionErrorUm, 0, 'f', 2));
-        page.keyValue(QString::fromUtf8("接口/存储"), QStringLiteral("%1 MB/s, %2% of %3 MB/s, %4 GB/h")
+        page.keyValue(lt("接口/存储", "Interface / storage"), QStringLiteral("%1 MB/s, %2% of %3 MB/s, %4 GB/h")
                       .arg(top.bandwidthRequiredMBps, 0, 'f', 1)
                       .arg(top.bandwidthUtilizationPercent, 0, 'f', 0)
                       .arg(top.interfaceCapacityMBps, 0, 'f', 1)
                       .arg(top.storagePerHourGB, 0, 'f', 0));
-        page.keyValue(QString::fromUtf8("镜头/光源余量"), QStringLiteral("lens MP %1%, light margin %2%")
+        page.keyValue(lt("镜头/光源余量", "Lens / light margins"), QStringLiteral("lens MP %1%, light margin %2%")
                       .arg(top.lensMegapixelUtilizationPercent, 0, 'f', 0)
                       .arg(top.lightCoverageMarginPercent, 0, 'f', 0));
-        page.paragraph(top.score.reasons.join(QString::fromUtf8("\357\274\233")));
+        page.paragraph(top.score.reasons.join(lt("；", "; ")));
         if (!top.score.risks.isEmpty() || !top.hardFailures.isEmpty())
-            page.paragraph(QString::fromUtf8("\351\243\216\351\231\251\346\217\220\347\244\272\357\274\232") + riskSummary(top));
+            page.paragraph(lt("风险提示：", "Risk notes: ") + UiHelpers::riskSummary(top));
 
         page.section(QStringLiteral("BOM"));
         const QVector<int> bomWidths = {58, 110, 130, 260, 112};
-        page.tableHeader({QString::fromUtf8("类别"), QString::fromUtf8("厂家"), QString::fromUtf8("型号"),
-                          QString::fromUtf8("关键规格"), QString::fromUtf8("备注")},
+        page.tableHeader({lt("类别", "Category"), lt("厂家", "Manufacturer"), lt("型号", "Model"),
+                          lt("关键规格", "Key Specs"), lt("备注", "Notes")},
                          bomWidths);
-        page.tableRow({QString::fromUtf8("相机"), top.camera.manufacturer, top.camera.model,
+        page.tableRow({lt("相机", "Camera"), top.camera.manufacturer, top.camera.model,
                        bomSpecForCamera(top.camera, top).left(56),
                        QStringLiteral("%1 x %2 mm").arg(top.effectiveFovWidthMm, 0, 'f', 1).arg(top.effectiveFovHeightMm, 0, 'f', 1)}, bomWidths);
-        page.tableRow({QString::fromUtf8("镜头"), top.lens.manufacturer, top.lens.model,
+        page.tableRow({lt("镜头", "Lens"), top.lens.manufacturer, top.lens.model,
                        bomSpecForLens(top.lens, top).left(56),
                        QStringLiteral("distortion %1 um").arg(top.distortionErrorUm, 0, 'f', 1)}, bomWidths);
-        page.tableRow({QString::fromUtf8("光源"), top.light.manufacturer, top.light.model,
+        page.tableRow({lt("光源", "Light"), top.light.manufacturer, top.light.model,
                        bomSpecForLight(top.light, top).left(56),
-                       riskSummary(top).left(26)}, bomWidths);
+                       UiHelpers::riskSummary(top).left(26)}, bomWidths);
     }
 
-    page.section(QString::fromUtf8("\350\265\204\346\226\231\344\276\235\346\215\256"));
-    page.paragraph(QString::fromUtf8("\350\277\234\345\277\203\351\225\234\345\244\264\345\233\272\345\256\232\345\200\215\347\216\207\344\270\216\346\227\240\350\247\206\345\267\256\346\265\213\351\207\217\345\217\202\350\200\203\357\274\232Opto Engineering\343\200\201Edmund Optics\343\200\201STEMMER Imaging\357\274\233\347\233\270\346\234\272\345\210\206\350\276\250\347\216\207\343\200\201\345\277\253\351\227\250\343\200\201\345\270\247\347\216\207\343\200\201\346\216\245\345\217\243\345\217\202\350\200\203 Basler\357\274\233\351\225\234\345\244\264\345\210\206\350\276\250\347\216\207/\345\203\217\345\205\203\345\214\271\351\205\215\345\217\202\350\200\203 Teledyne FLIR\357\274\233\345\205\211\346\272\220\347\255\226\347\225\245\345\217\202\350\200\203 Cognex\343\200\202"));
+    page.section(lt("资料依据", "Reference Basis"));
+    page.paragraph(lt("远心镜头固定倍率与无视差测量参考 Opto Engineering、Edmund Optics、STEMMER Imaging；相机分辨率、快门、帧率、接口参考 Basler；镜头分辨率/像元匹配参考 Teledyne FLIR；光源策略参考 Cognex。",
+                      "Telecentric fixed magnification and parallax-free measurement references: Opto Engineering, Edmund Optics, STEMMER Imaging. Camera resolution, shutter, frame rate, and interface references: Basler. Lens resolution / pixel matching references: Teledyne FLIR. Lighting strategy references: Cognex."));
 
     painter.end();
     return true;

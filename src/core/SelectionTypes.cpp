@@ -1,6 +1,17 @@
 #include "core/SelectionTypes.h"
 
+#include "i18n/LanguageManager.h"
+
 #include <QtMath>
+
+namespace {
+QString selectionText(const char *zhUtf8, const char *enUtf8)
+{
+    return LanguageManager::instance().currentLanguage() == QLatin1String("en_US")
+        ? QString::fromUtf8(enUtf8)
+        : QString::fromUtf8(zhUtf8);
+}
+}
 
 double CameraSpec::sensorWidthMm() const
 {
@@ -57,49 +68,49 @@ bool SelectionResult::isTelecentric() const
 QString detectionTypeLabel(DetectionType type)
 {
     switch (type) {
-    case DetectionType::Measurement: return QString::fromUtf8("\345\260\272\345\257\270\346\265\213\351\207\217");
-    case DetectionType::Positioning: return QString::fromUtf8("\345\256\232\344\275\215");
-    case DetectionType::DefectInspection: return QString::fromUtf8("\347\274\272\351\231\267\346\243\200\346\265\213");
-    case DetectionType::OcrCode: return QString::fromUtf8("OCR/\350\257\273\347\240\201");
+    case DetectionType::Measurement: return selectionText("尺寸测量", "Measurement");
+    case DetectionType::Positioning: return selectionText("定位", "Positioning");
+    case DetectionType::DefectInspection: return selectionText("缺陷检测", "Defect Inspection");
+    case DetectionType::OcrCode: return selectionText("OCR/读码", "OCR / Code Reading");
     }
-    return QString::fromUtf8("\346\234\252\347\237\245");
+    return selectionText("未知", "Unknown");
 }
 
 QString surfaceTypeLabel(SurfaceType type)
 {
     switch (type) {
-    case SurfaceType::Matte: return QString::fromUtf8("\345\223\221\345\205\211");
-    case SurfaceType::ReflectiveMetal: return QString::fromUtf8("\345\217\215\345\205\211\351\207\221\345\261\236");
-    case SurfaceType::GlassTransparent: return QString::fromUtf8("\347\216\273\347\222\203/\351\200\217\346\230\216\344\273\266");
-    case SurfaceType::PCB: return QString::fromUtf8("PCB/\347\224\265\345\255\220\344\273\266");
-    case SurfaceType::Plastic: return QString::fromUtf8("\345\241\221\346\226\231");
-    case SurfaceType::Mixed: return QString::fromUtf8("\346\267\267\345\220\210\346\235\220\350\264\250");
+    case SurfaceType::Matte: return selectionText("哑光", "Matte");
+    case SurfaceType::ReflectiveMetal: return selectionText("反光金属", "Reflective Metal");
+    case SurfaceType::GlassTransparent: return selectionText("玻璃/透明件", "Glass / Transparent");
+    case SurfaceType::PCB: return selectionText("PCB/电子件", "PCB / Electronics");
+    case SurfaceType::Plastic: return selectionText("塑料", "Plastic");
+    case SurfaceType::Mixed: return selectionText("混合材质", "Mixed Materials");
     }
-    return QString::fromUtf8("\346\234\252\347\237\245");
+    return selectionText("未知", "Unknown");
 }
 
 QString lensTypeLabel(LensType type)
 {
     switch (type) {
-    case LensType::FixedFocal: return QString::fromUtf8("\346\231\256\351\200\232\345\267\245\344\270\232\351\225\234\345\244\264");
-    case LensType::ObjectTelecentric: return QString::fromUtf8("\347\211\251\346\226\271\350\277\234\345\277\203\351\225\234\345\244\264");
-    case LensType::BiTelecentric: return QString::fromUtf8("\345\217\214\350\277\234\345\277\203\351\225\234\345\244\264");
+    case LensType::FixedFocal: return selectionText("普通工业镜头", "Fixed-focal Industrial Lens");
+    case LensType::ObjectTelecentric: return selectionText("物方远心镜头", "Object-side Telecentric Lens");
+    case LensType::BiTelecentric: return selectionText("双远心镜头", "Bi-telecentric Lens");
     }
-    return QString::fromUtf8("\346\234\252\347\237\245\351\225\234\345\244\264");
+    return selectionText("未知镜头", "Unknown Lens");
 }
 
 QString lightTypeLabel(LightType type)
 {
     switch (type) {
-    case LightType::Backlight: return QString::fromUtf8("\350\203\214\345\205\211");
-    case LightType::Ring: return QString::fromUtf8("\347\216\257\345\275\242\345\205\211");
-    case LightType::Bar: return QString::fromUtf8("\346\235\241\345\275\242\345\205\211");
-    case LightType::Coaxial: return QString::fromUtf8("\345\220\214\350\275\264\345\205\211");
-    case LightType::Dome: return QString::fromUtf8("\347\251\271\351\241\266\345\205\211");
-    case LightType::TelecentricBacklight: return QString::fromUtf8("\350\277\234\345\277\203\345\271\263\350\241\214\350\203\214\345\205\211");
-    case LightType::DarkField: return QString::fromUtf8("\346\232\227\345\234\272\345\205\211");
+    case LightType::Backlight: return selectionText("背光", "Backlight");
+    case LightType::Ring: return selectionText("环形光", "Ring Light");
+    case LightType::Bar: return selectionText("条形光", "Bar Light");
+    case LightType::Coaxial: return selectionText("同轴光", "Coaxial Light");
+    case LightType::Dome: return selectionText("穹顶光", "Dome Light");
+    case LightType::TelecentricBacklight: return selectionText("远心平行背光", "Telecentric Backlight");
+    case LightType::DarkField: return selectionText("暗场光", "Dark-field Light");
     }
-    return QString::fromUtf8("\346\234\252\347\237\245\345\205\211\346\272\220");
+    return selectionText("未知光源", "Unknown Light");
 }
 
 QString detectionTypeKey(DetectionType type)
@@ -174,7 +185,7 @@ LightType lightTypeFromString(const QString &value)
 
 QString boolLabel(bool value)
 {
-    return value ? QString::fromUtf8("\346\230\257") : QString::fromUtf8("\345\220\246");
+    return value ? selectionText("是", "Yes") : selectionText("否", "No");
 }
 
 bool parseBool(const QString &value)

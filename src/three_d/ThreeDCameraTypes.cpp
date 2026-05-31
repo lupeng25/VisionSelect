@@ -1,13 +1,18 @@
 #include "three_d/ThreeDCameraTypes.h"
 
+#include "i18n/LanguageManager.h"
+
 #include <QtGlobal>
 
-bool threeDHasValue(double value)
+namespace {
+QString text(const char *zhUtf8, const char *enUtf8)
 {
-    return value >= 0.0;
+    return LanguageManager::instance().currentLanguage() == QLatin1String("en_US")
+        ? QString::fromUtf8(enUtf8)
+        : QString::fromUtf8(zhUtf8);
 }
 
-QString threeDTechnologyLabel(ThreeDTechnology technology)
+QString canonicalTechnologyLabel(ThreeDTechnology technology)
 {
     switch (technology) {
     case ThreeDTechnology::LineLaserProfile:
@@ -28,21 +33,73 @@ QString threeDTechnologyLabel(ThreeDTechnology technology)
     return QString::fromUtf8("其它官方标注 3D 技术");
 }
 
+QString englishTechnologyLabel(ThreeDTechnology technology)
+{
+    switch (technology) {
+    case ThreeDTechnology::LineLaserProfile:
+        return QStringLiteral("Line laser profile");
+    case ThreeDTechnology::PointLaserProfile:
+        return QStringLiteral("Point laser / displacement profile");
+    case ThreeDTechnology::StructuredLightSnapshot:
+        return QStringLiteral("Structured light snapshot");
+    case ThreeDTechnology::StereoStructuredLight:
+        return QStringLiteral("Stereo structured light / RGB-D");
+    case ThreeDTechnology::LineConfocal:
+        return QStringLiteral("Line confocal");
+    case ThreeDTechnology::InterferometryWhiteLight:
+        return QStringLiteral("Interferometry / white-light measurement");
+    case ThreeDTechnology::Other:
+        return QStringLiteral("Other official 3D technology");
+    }
+    return QStringLiteral("Other official 3D technology");
+}
+}
+
+bool threeDHasValue(double value)
+{
+    return value >= 0.0;
+}
+
+QString threeDTechnologyLabel(ThreeDTechnology technology)
+{
+    switch (technology) {
+    case ThreeDTechnology::LineLaserProfile:
+        return text("线激光轮廓", "Line laser profile");
+    case ThreeDTechnology::PointLaserProfile:
+        return text("点激光/位移轮廓", "Point laser / displacement profile");
+    case ThreeDTechnology::StructuredLightSnapshot:
+        return text("结构光快照", "Structured light snapshot");
+    case ThreeDTechnology::StereoStructuredLight:
+        return text("双目结构光/RGB-D", "Stereo structured light / RGB-D");
+    case ThreeDTechnology::LineConfocal:
+        return text("线共焦", "Line confocal");
+    case ThreeDTechnology::InterferometryWhiteLight:
+        return text("干涉/白光类测量", "Interferometry / white-light measurement");
+    case ThreeDTechnology::Other:
+        return text("其它官方标注 3D 技术", "Other official 3D technology");
+    }
+    return text("其它官方标注 3D 技术", "Other official 3D technology");
+}
+
 ThreeDTechnology threeDTechnologyFromLabel(const QString &label)
 {
     const QString normalized = label.trimmed();
-    if (normalized == threeDTechnologyLabel(ThreeDTechnology::LineLaserProfile))
-        return ThreeDTechnology::LineLaserProfile;
-    if (normalized == threeDTechnologyLabel(ThreeDTechnology::PointLaserProfile))
-        return ThreeDTechnology::PointLaserProfile;
-    if (normalized == threeDTechnologyLabel(ThreeDTechnology::StructuredLightSnapshot))
-        return ThreeDTechnology::StructuredLightSnapshot;
-    if (normalized == threeDTechnologyLabel(ThreeDTechnology::StereoStructuredLight))
-        return ThreeDTechnology::StereoStructuredLight;
-    if (normalized == threeDTechnologyLabel(ThreeDTechnology::LineConfocal))
-        return ThreeDTechnology::LineConfocal;
-    if (normalized == threeDTechnologyLabel(ThreeDTechnology::InterferometryWhiteLight))
-        return ThreeDTechnology::InterferometryWhiteLight;
+    const QVector<ThreeDTechnology> values = {
+        ThreeDTechnology::LineLaserProfile,
+        ThreeDTechnology::PointLaserProfile,
+        ThreeDTechnology::StructuredLightSnapshot,
+        ThreeDTechnology::StereoStructuredLight,
+        ThreeDTechnology::LineConfocal,
+        ThreeDTechnology::InterferometryWhiteLight,
+        ThreeDTechnology::Other
+    };
+    for (ThreeDTechnology technology : values) {
+        if (normalized == canonicalTechnologyLabel(technology)
+            || normalized.compare(englishTechnologyLabel(technology), Qt::CaseInsensitive) == 0
+            || normalized == threeDTechnologyLabel(technology)) {
+            return technology;
+        }
+    }
     return ThreeDTechnology::Other;
 }
 
@@ -62,13 +119,13 @@ QString threeDMatchStatusLabel(ThreeDMatchStatus status)
 {
     switch (status) {
     case ThreeDMatchStatus::Match:
-        return QString::fromUtf8("满足需求");
+        return text("满足需求", "Meets requirements");
     case ThreeDMatchStatus::MissingData:
-        return QString::fromUtf8("参数缺失待确认");
+        return text("参数缺失待确认", "Missing data");
     case ThreeDMatchStatus::NoMatch:
-        return QString::fromUtf8("不满足需求");
+        return text("不满足需求", "Does not meet requirements");
     }
-    return QString::fromUtf8("参数缺失待确认");
+    return text("参数缺失待确认", "Missing data");
 }
 
 int threeDMatchStatusOrder(ThreeDMatchStatus status)

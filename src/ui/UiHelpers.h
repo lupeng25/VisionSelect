@@ -27,6 +27,7 @@ QString productLabel(const QString &manufacturer, const QString &model);
 QString compatibilityText(const SelectionResult &result);
 QString riskSummary(const SelectionResult &result);
 QString exposureText(double exposureUs);
+QString localizedText(const char *zhUtf8, const char *enUtf8);
 QDoubleSpinBox *makeSpin(double min, double max, double value, const QString &suffix, int decimals = 2);
 QDoubleSpinBox *dialogSpin(double min, double max, double value, const QString &suffix = QString(), int decimals = 3);
 QSpinBox *dialogIntSpin(int min, int max, int value, const QString &suffix = QString());

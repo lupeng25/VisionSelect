@@ -16,6 +16,7 @@ class InputPage : public QWidget
 public:
     explicit InputPage(QWidget *parent = nullptr);
     SelectionRequest request() const;
+    void setRequest(const SelectionRequest &request);
 
 signals:
     void calculateRequested();

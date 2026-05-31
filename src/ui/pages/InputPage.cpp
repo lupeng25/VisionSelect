@@ -22,7 +22,7 @@ InputPage::InputPage(QWidget *parent)
     QVBoxLayout *outer = new QVBoxLayout(this);
     outer->setContentsMargins(28, 24, 28, 24);
     outer->setSpacing(16);
-    outer->addWidget(pageTitle(QString::fromUtf8("\351\234\200\346\261\202\350\276\223\345\205\245")));
+    outer->addWidget(pageTitle(localizedText("需求输入", "Requirement Input")));
 
     QScrollArea *scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
@@ -32,7 +32,7 @@ InputPage::InputPage(QWidget *parent)
     layout->setContentsMargins(0, 0, 12, 0);
     layout->setSpacing(14);
 
-    QGroupBox *objectBox = new QGroupBox(QString::fromUtf8("\345\267\245\344\273\266\344\270\216\347\262\276\345\272\246"));
+    QGroupBox *objectBox = new QGroupBox(localizedText("工件与精度", "Part and Accuracy"));
     QFormLayout *objectLayout = new QFormLayout(objectBox);
     objectLayout->setLabelAlignment(Qt::AlignLeft);
     m_widthSpin = makeSpin(0.1, 2000.0, 20.0, QStringLiteral(" mm"));
@@ -40,13 +40,13 @@ InputPage::InputPage(QWidget *parent)
     m_marginSpin = makeSpin(0.0, 200.0, 2.0, QStringLiteral(" mm"));
     m_minFeatureSpin = makeSpin(0.1, 10000.0, 50.0, QStringLiteral(" um"));
     m_toleranceSpin = makeSpin(0.1, 10000.0, 10.0, QStringLiteral(" um"));
-    objectLayout->addRow(QString::fromUtf8("\345\267\245\344\273\266\345\256\275\345\272\246"), m_widthSpin);
-    objectLayout->addRow(QString::fromUtf8("\345\267\245\344\273\266\351\253\230\345\272\246"), m_heightSpin);
-    objectLayout->addRow(QString::fromUtf8("\345\256\232\344\275\215/\350\243\205\345\244\271\344\275\231\351\207\217"), m_marginSpin);
-    objectLayout->addRow(QString::fromUtf8("\346\234\200\345\260\217\347\211\271\345\276\201\345\260\272\345\257\270"), m_minFeatureSpin);
-    objectLayout->addRow(QString::fromUtf8("\345\205\201\350\256\270\346\265\213\351\207\217\350\257\257\345\267\256"), m_toleranceSpin);
+    objectLayout->addRow(localizedText("工件宽度", "Part width"), m_widthSpin);
+    objectLayout->addRow(localizedText("工件高度", "Part height"), m_heightSpin);
+    objectLayout->addRow(localizedText("定位/装夹余量", "Positioning / fixture margin"), m_marginSpin);
+    objectLayout->addRow(localizedText("最小特征尺寸", "Minimum feature size"), m_minFeatureSpin);
+    objectLayout->addRow(localizedText("允许测量误差", "Allowed measurement error"), m_toleranceSpin);
 
-    QGroupBox *processBox = new QGroupBox(QString::fromUtf8("\345\267\245\350\211\272\344\270\216\345\256\211\350\243\205"));
+    QGroupBox *processBox = new QGroupBox(localizedText("工艺与安装", "Process and Installation"));
     QFormLayout *processLayout = new QFormLayout(processBox);
     m_detectionCombo = new QComboBox;
     m_detectionCombo->addItems({detectionTypeLabel(DetectionType::Measurement),
@@ -65,25 +65,25 @@ InputPage::InputPage(QWidget *parent)
     m_heightVariationSpin = makeSpin(0.0, 200.0, 2.0, QStringLiteral(" mm"));
     m_speedSpin = makeSpin(0.0, 10000.0, 0.0, QStringLiteral(" mm/s"));
     m_fpsSpin = makeSpin(1.0, 1000.0, 20.0, QStringLiteral(" fps"));
-    m_reflectiveCheck = new QCheckBox(QString::fromUtf8("\345\217\215\345\205\211/\351\253\230\345\205\211\350\241\250\351\235\242"));
+    m_reflectiveCheck = new QCheckBox(localizedText("反光/高光表面", "Reflective / glossy surface"));
     m_reflectiveCheck->setChecked(true);
-    m_monoCheck = new QCheckBox(QString::fromUtf8("\344\274\230\345\205\210\351\273\221\347\231\275\347\233\270\346\234\272"));
+    m_monoCheck = new QCheckBox(localizedText("优先黑白相机", "Prefer monochrome camera"));
     m_monoCheck->setChecked(true);
-    m_allowTelecentricCheck = new QCheckBox(QString::fromUtf8("\345\205\201\350\256\270\350\277\234\345\277\203\351\225\234\345\244\264"));
+    m_allowTelecentricCheck = new QCheckBox(localizedText("允许远心镜头", "Allow telecentric lens"));
     m_allowTelecentricCheck->setChecked(true);
-    processLayout->addRow(QString::fromUtf8("\346\243\200\346\265\213\347\261\273\345\236\213"), m_detectionCombo);
-    processLayout->addRow(QString::fromUtf8("\350\241\250\351\235\242\346\235\220\350\264\250"), m_surfaceCombo);
-    processLayout->addRow(QString::fromUtf8("\345\267\245\344\275\234\350\267\235\347\246\273"), m_wdSpin);
-    processLayout->addRow(QString::fromUtf8("\351\253\230\345\272\246\346\263\242\345\212\250"), m_heightVariationSpin);
-    processLayout->addRow(QString::fromUtf8("\350\277\220\345\212\250\351\200\237\345\272\246"), m_speedSpin);
-    processLayout->addRow(QString::fromUtf8("\350\212\202\346\213\215/\345\270\247\347\216\207"), m_fpsSpin);
+    processLayout->addRow(localizedText("检测类型", "Inspection type"), m_detectionCombo);
+    processLayout->addRow(localizedText("表面材质", "Surface material"), m_surfaceCombo);
+    processLayout->addRow(localizedText("工作距离", "Working distance"), m_wdSpin);
+    processLayout->addRow(localizedText("高度波动", "Height variation"), m_heightVariationSpin);
+    processLayout->addRow(localizedText("运动速度", "Motion speed"), m_speedSpin);
+    processLayout->addRow(localizedText("节拍/帧率", "Cycle / frame rate"), m_fpsSpin);
     processLayout->addRow(QString(), m_reflectiveCheck);
     processLayout->addRow(QString(), m_monoCheck);
     processLayout->addRow(QString(), m_allowTelecentricCheck);
 
     QHBoxLayout *buttonLayout = new QHBoxLayout;
-    QPushButton *calculateButton = new QPushButton(QString::fromUtf8("\350\256\241\347\256\227\346\216\250\350\215\220"));
-    QPushButton *resultButton = new QPushButton(QString::fromUtf8("\346\237\245\347\234\213\347\273\223\346\236\234"));
+    QPushButton *calculateButton = new QPushButton(localizedText("计算推荐", "Calculate Recommendations"));
+    QPushButton *resultButton = new QPushButton(localizedText("查看结果", "View Results"));
     resultButton->setObjectName(QStringLiteral("SecondaryButton"));
     connect(calculateButton, &QPushButton::clicked, this, &InputPage::calculateRequested);
     connect(resultButton, &QPushButton::clicked, this, &InputPage::resultsRequested);
@@ -117,4 +117,22 @@ SelectionRequest InputPage::request() const
     request.preferMono = m_monoCheck->isChecked();
     request.allowTelecentric = m_allowTelecentricCheck->isChecked();
     return request;
+}
+
+void InputPage::setRequest(const SelectionRequest &request)
+{
+    m_widthSpin->setValue(request.objectWidthMm);
+    m_heightSpin->setValue(request.objectHeightMm);
+    m_marginSpin->setValue(request.placementMarginMm);
+    m_minFeatureSpin->setValue(request.minFeatureUm);
+    m_toleranceSpin->setValue(request.measurementToleranceUm);
+    m_wdSpin->setValue(request.workingDistanceMm);
+    m_heightVariationSpin->setValue(request.heightVariationMm);
+    m_speedSpin->setValue(request.motionSpeedMmS);
+    m_fpsSpin->setValue(request.requiredFps);
+    m_detectionCombo->setCurrentIndex(static_cast<int>(request.detectionType));
+    m_surfaceCombo->setCurrentIndex(static_cast<int>(request.surfaceType));
+    m_reflectiveCheck->setChecked(request.reflective);
+    m_monoCheck->setChecked(request.preferMono);
+    m_allowTelecentricCheck->setChecked(request.allowTelecentric);
 }

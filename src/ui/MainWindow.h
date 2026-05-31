@@ -11,6 +11,7 @@
 #include <QVector>
 
 class ComparisonPage;
+class QComboBox;
 class InputPage;
 class QLabel;
 class PureCalculationPage;
@@ -36,6 +37,12 @@ private:
     QVector<QPushButton *> m_navButtons;
 
     QLabel *m_summaryLabel = nullptr;
+    QLabel *m_brandSubtitleLabel = nullptr;
+    QLabel *m_brandBadgeLabel = nullptr;
+    QLabel *m_navTitleLabel = nullptr;
+    QLabel *m_summaryTitleLabel = nullptr;
+    QComboBox *m_languageCombo = nullptr;
+    QPushButton *m_licenseButton = nullptr;
     bool m_catalogPageInitialized = false;
 
     CalculationPage *m_calculationPage = nullptr;
@@ -53,6 +60,11 @@ private:
 
     void buildUi();
     QWidget *createSidebar();
+    QStringList navigationLabels() const;
+    void retranslateUi();
+    void rebuildPagesForLanguage();
+    void syncLanguageCombo();
+    void showLicenseInfo();
 
     void ensurePureCalculationPage();
     void ensureCalculationPage();

@@ -8,12 +8,18 @@ DESTDIR = ../bin
 INCLUDEPATH += ../src
 
 win32-msvc*: QMAKE_CXXFLAGS += /utf-8 /wd4819
+win32: LIBS += -lbcrypt
 win32: RC_FILE = ../resources/windows/VisionSelect.rc
+TRANSLATIONS += \
+    ../resources/i18n/visionselect_zh_CN.ts \
+    ../resources/i18n/visionselect_en_US.ts
 
 SOURCES += \
     ../src/main.cpp \
     ../src/catalog/CatalogRepository.cpp \
     ../src/core/SelectionTypes.cpp \
+    ../src/i18n/LanguageManager.cpp \
+    ../src/license/LicenseManager.cpp \
     ../src/report/PdfReportWriter.cpp \
     ../src/selection/CalculationAssistant.cpp \
     ../src/selection/SelectionEngine.cpp \
@@ -21,6 +27,7 @@ SOURCES += \
     ../src/three_d/ThreeDCameraRepository.cpp \
     ../src/three_d/ThreeDCameraTypes.cpp \
     ../src/ui/CatalogDialogs.cpp \
+    ../src/ui/LicenseDialog.cpp \
     ../src/ui/UiHelpers.cpp \
     ../src/ui/MainWindow.cpp \
     ../src/ui/pages/CalculationPage.cpp \
@@ -35,6 +42,8 @@ SOURCES += \
 HEADERS += \
     ../src/catalog/CatalogRepository.h \
     ../src/core/SelectionTypes.h \
+    ../src/i18n/LanguageManager.h \
+    ../src/license/LicenseManager.h \
     ../src/report/PdfReportWriter.h \
     ../src/selection/CalculationAssistant.h \
     ../src/selection/SelectionEngine.h \
@@ -42,6 +51,7 @@ HEADERS += \
     ../src/three_d/ThreeDCameraRepository.h \
     ../src/three_d/ThreeDCameraTypes.h \
     ../src/ui/CatalogDialogs.h \
+    ../src/ui/LicenseDialog.h \
     ../src/ui/UiHelpers.h \
     ../src/ui/MainWindow.h \
     ../src/ui/pages/CalculationPage.h \

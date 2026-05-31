@@ -1,9 +1,12 @@
 #include "ui/UiHelpers.h"
 
+#include "i18n/LanguageManager.h"
+
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QClipboard>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDoubleSpinBox>
 #include <QHeaderView>
 #include <QKeySequence>
@@ -115,25 +118,34 @@ QString productLabel(const QString &manufacturer, const QString &model)
 QString compatibilityText(const SelectionResult &result)
 {
     return result.hardConstraintsPassed
-        ? QString::fromUtf8("可用")
-        : QString::fromUtf8("不适配");
+        ? QCoreApplication::translate("UiHelpers", "Compatible")
+        : QCoreApplication::translate("UiHelpers", "Not compatible");
 }
 
 QString riskSummary(const SelectionResult &result)
 {
     QStringList risks = result.score.risks;
+    const QString separator = QCoreApplication::translate("UiHelpers", "; ");
     if (!result.hardFailures.isEmpty())
-        risks.prepend(QString::fromUtf8("硬性不适配：") + result.hardFailures.join(QString::fromUtf8("；")));
+        risks.prepend(QCoreApplication::translate("UiHelpers", "Hard mismatch: %1")
+            .arg(result.hardFailures.join(separator)));
     return risks.isEmpty()
-        ? QString::fromUtf8("无主要风险")
-        : risks.join(QString::fromUtf8("；"));
+        ? QCoreApplication::translate("UiHelpers", "No major risk")
+        : risks.join(separator);
 }
 
 QString exposureText(double exposureUs)
 {
     return exposureUs > 0.0
         ? QStringLiteral("%1 us").arg(exposureUs, 0, 'f', 1)
-        : QString::fromUtf8("无运动约束");
+        : QCoreApplication::translate("UiHelpers", "No motion constraint");
+}
+
+QString localizedText(const char *zhUtf8, const char *enUtf8)
+{
+    return LanguageManager::instance().currentLanguage() == QLatin1String("en_US")
+        ? QString::fromUtf8(enUtf8)
+        : QString::fromUtf8(zhUtf8);
 }
 
 QDoubleSpinBox *makeSpin(double min, double max, double value, const QString &suffix, int decimals)

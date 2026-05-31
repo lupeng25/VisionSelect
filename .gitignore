@@ -7,6 +7,8 @@ Makefile.*
 
 # Build outputs
 bin/
+build/
+dist/
 debug/
 release/
 app/debug/

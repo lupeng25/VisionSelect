@@ -23,7 +23,10 @@ signals:
     void recalculateRequested();
 
 private:
+    SelectionRequest m_request;
+    QVector<SelectionResult> m_results;
     QTextEdit *m_reportPreview = nullptr;
+    void refreshPreview();
 };
 
 #endif

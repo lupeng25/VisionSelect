@@ -54,27 +54,27 @@ void selectCatalogRow(QTableWidget *table, const QString &key, int fallbackRow)
 
 QString allManufacturersText()
 {
-    return QString::fromUtf8("全部厂家");
+    return localizedText("全部厂家", "All Manufacturers");
 }
 
 QString allInterfacesText()
 {
-    return QString::fromUtf8("全部接口");
+    return localizedText("全部接口", "All Interfaces");
 }
 
 QString allTypesText()
 {
-    return QString::fromUtf8("全部类型");
+    return localizedText("全部类型", "All Types");
 }
 
 QString allMountsText()
 {
-    return QString::fromUtf8("全部接口");
+    return localizedText("全部接口", "All Mounts");
 }
 
 QString allModesText()
 {
-    return QString::fromUtf8("全部模式");
+    return localizedText("全部模式", "All Modes");
 }
 
 void fillComboPreservingText(QComboBox *combo, const QString &allText, const QStringList &values)
@@ -128,7 +128,7 @@ CatalogPage::CatalogPage(QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(28, 24, 28, 24);
     layout->setSpacing(14);
-    layout->addWidget(pageTitle(QString::fromUtf8("参数库")));
+    layout->addWidget(pageTitle(localizedText("参数库", "Catalog")));
 
     QTabWidget *tabs = new QTabWidget;
 
@@ -138,10 +138,10 @@ CatalogPage::CatalogPage(QWidget *parent)
     cameraLayout->setSpacing(8);
     QHBoxLayout *cameraFilters = new QHBoxLayout;
     m_cameraSearchEdit = new QLineEdit;
-    m_cameraSearchEdit->setPlaceholderText(QString::fromUtf8("搜索型号/厂家/接口"));
+    m_cameraSearchEdit->setPlaceholderText(localizedText("搜索型号/厂家/接口", "Search model / manufacturer / interface"));
     m_cameraManufacturerFilter = new QComboBox;
     m_cameraInterfaceFilter = new QComboBox;
-    QPushButton *clearCameraFilterButton = new QPushButton(QString::fromUtf8("清空筛选"));
+    QPushButton *clearCameraFilterButton = new QPushButton(localizedText("清空筛选", "Clear Filters"));
     clearCameraFilterButton->setObjectName(QStringLiteral("SecondaryButton"));
     cameraFilters->addWidget(m_cameraSearchEdit, 2);
     cameraFilters->addWidget(m_cameraManufacturerFilter);
@@ -149,13 +149,13 @@ CatalogPage::CatalogPage(QWidget *parent)
     cameraFilters->addWidget(clearCameraFilterButton);
     cameraLayout->addLayout(cameraFilters);
     QHBoxLayout *cameraActions = new QHBoxLayout;
-    QPushButton *addCameraButton = new QPushButton(QString::fromUtf8("新增相机"));
-    QPushButton *editCameraButton = new QPushButton(QString::fromUtf8("编辑"));
-    QPushButton *removeCameraButton = new QPushButton(QString::fromUtf8("删除"));
-    QPushButton *importCameraButton = new QPushButton(QString::fromUtf8("导入 CSV"));
-    QPushButton *exportCameraButton = new QPushButton(QString::fromUtf8("导出 CSV"));
-    QPushButton *exportFilteredCameraButton = new QPushButton(QString::fromUtf8("导出筛选"));
-    QPushButton *resetCameraButton = new QPushButton(QString::fromUtf8("重置内置"));
+    QPushButton *addCameraButton = new QPushButton(localizedText("新增相机", "Add Camera"));
+    QPushButton *editCameraButton = new QPushButton(localizedText("编辑", "Edit"));
+    QPushButton *removeCameraButton = new QPushButton(localizedText("删除", "Delete"));
+    QPushButton *importCameraButton = new QPushButton(localizedText("导入 CSV", "Import CSV"));
+    QPushButton *exportCameraButton = new QPushButton(localizedText("导出 CSV", "Export CSV"));
+    QPushButton *exportFilteredCameraButton = new QPushButton(localizedText("导出筛选", "Export Filtered"));
+    QPushButton *resetCameraButton = new QPushButton(localizedText("重置内置", "Reset Built-in"));
     editCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
     removeCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
     importCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
@@ -174,7 +174,7 @@ CatalogPage::CatalogPage(QWidget *parent)
     m_cameraTable = new QTableWidget;
     setupTable(m_cameraTable);
     cameraLayout->addWidget(m_cameraTable, 1);
-    tabs->addTab(cameraPage, QString::fromUtf8("相机"));
+    tabs->addTab(cameraPage, localizedText("相机", "Cameras"));
 
     QWidget *lensPage = new QWidget;
     QVBoxLayout *lensLayout = new QVBoxLayout(lensPage);
@@ -182,11 +182,11 @@ CatalogPage::CatalogPage(QWidget *parent)
     lensLayout->setSpacing(8);
     QHBoxLayout *lensFilters = new QHBoxLayout;
     m_lensSearchEdit = new QLineEdit;
-    m_lensSearchEdit->setPlaceholderText(QString::fromUtf8("搜索型号/厂家/备注"));
+    m_lensSearchEdit->setPlaceholderText(localizedText("搜索型号/厂家/备注", "Search model / manufacturer / notes"));
     m_lensManufacturerFilter = new QComboBox;
     m_lensTypeFilter = new QComboBox;
     m_lensMountFilter = new QComboBox;
-    QPushButton *clearLensFilterButton = new QPushButton(QString::fromUtf8("清空筛选"));
+    QPushButton *clearLensFilterButton = new QPushButton(localizedText("清空筛选", "Clear Filters"));
     clearLensFilterButton->setObjectName(QStringLiteral("SecondaryButton"));
     lensFilters->addWidget(m_lensSearchEdit, 2);
     lensFilters->addWidget(m_lensManufacturerFilter);
@@ -195,13 +195,13 @@ CatalogPage::CatalogPage(QWidget *parent)
     lensFilters->addWidget(clearLensFilterButton);
     lensLayout->addLayout(lensFilters);
     QHBoxLayout *lensActions = new QHBoxLayout;
-    QPushButton *addLensButton = new QPushButton(QString::fromUtf8("新增镜头"));
-    QPushButton *editLensButton = new QPushButton(QString::fromUtf8("编辑"));
-    QPushButton *removeLensButton = new QPushButton(QString::fromUtf8("删除"));
-    QPushButton *importLensButton = new QPushButton(QString::fromUtf8("导入 CSV"));
-    QPushButton *exportLensButton = new QPushButton(QString::fromUtf8("导出 CSV"));
-    QPushButton *exportFilteredLensButton = new QPushButton(QString::fromUtf8("导出筛选"));
-    QPushButton *resetLensButton = new QPushButton(QString::fromUtf8("重置内置"));
+    QPushButton *addLensButton = new QPushButton(localizedText("新增镜头", "Add Lens"));
+    QPushButton *editLensButton = new QPushButton(localizedText("编辑", "Edit"));
+    QPushButton *removeLensButton = new QPushButton(localizedText("删除", "Delete"));
+    QPushButton *importLensButton = new QPushButton(localizedText("导入 CSV", "Import CSV"));
+    QPushButton *exportLensButton = new QPushButton(localizedText("导出 CSV", "Export CSV"));
+    QPushButton *exportFilteredLensButton = new QPushButton(localizedText("导出筛选", "Export Filtered"));
+    QPushButton *resetLensButton = new QPushButton(localizedText("重置内置", "Reset Built-in"));
     editLensButton->setObjectName(QStringLiteral("SecondaryButton"));
     removeLensButton->setObjectName(QStringLiteral("SecondaryButton"));
     importLensButton->setObjectName(QStringLiteral("SecondaryButton"));
@@ -220,7 +220,7 @@ CatalogPage::CatalogPage(QWidget *parent)
     m_lensTable = new QTableWidget;
     setupTable(m_lensTable);
     lensLayout->addWidget(m_lensTable, 1);
-    tabs->addTab(lensPage, QString::fromUtf8("镜头"));
+    tabs->addTab(lensPage, localizedText("镜头", "Lenses"));
 
     QWidget *lightPage = new QWidget;
     QVBoxLayout *lightLayout = new QVBoxLayout(lightPage);
@@ -228,11 +228,11 @@ CatalogPage::CatalogPage(QWidget *parent)
     lightLayout->setSpacing(8);
     QHBoxLayout *lightFilters = new QHBoxLayout;
     m_lightSearchEdit = new QLineEdit;
-    m_lightSearchEdit->setPlaceholderText(QString::fromUtf8("搜索型号/厂家/场景"));
+    m_lightSearchEdit->setPlaceholderText(localizedText("搜索型号/厂家/场景", "Search model / manufacturer / scenario"));
     m_lightManufacturerFilter = new QComboBox;
     m_lightTypeFilter = new QComboBox;
     m_lightModeFilter = new QComboBox;
-    QPushButton *clearLightFilterButton = new QPushButton(QString::fromUtf8("清空筛选"));
+    QPushButton *clearLightFilterButton = new QPushButton(localizedText("清空筛选", "Clear Filters"));
     clearLightFilterButton->setObjectName(QStringLiteral("SecondaryButton"));
     lightFilters->addWidget(m_lightSearchEdit, 2);
     lightFilters->addWidget(m_lightManufacturerFilter);
@@ -241,13 +241,13 @@ CatalogPage::CatalogPage(QWidget *parent)
     lightFilters->addWidget(clearLightFilterButton);
     lightLayout->addLayout(lightFilters);
     QHBoxLayout *lightActions = new QHBoxLayout;
-    QPushButton *addLightButton = new QPushButton(QString::fromUtf8("新增光源"));
-    QPushButton *editLightButton = new QPushButton(QString::fromUtf8("编辑"));
-    QPushButton *removeLightButton = new QPushButton(QString::fromUtf8("删除"));
-    QPushButton *importLightButton = new QPushButton(QString::fromUtf8("导入 CSV"));
-    QPushButton *exportLightButton = new QPushButton(QString::fromUtf8("导出 CSV"));
-    QPushButton *exportFilteredLightButton = new QPushButton(QString::fromUtf8("导出筛选"));
-    QPushButton *resetLightButton = new QPushButton(QString::fromUtf8("重置内置"));
+    QPushButton *addLightButton = new QPushButton(localizedText("新增光源", "Add Light"));
+    QPushButton *editLightButton = new QPushButton(localizedText("编辑", "Edit"));
+    QPushButton *removeLightButton = new QPushButton(localizedText("删除", "Delete"));
+    QPushButton *importLightButton = new QPushButton(localizedText("导入 CSV", "Import CSV"));
+    QPushButton *exportLightButton = new QPushButton(localizedText("导出 CSV", "Export CSV"));
+    QPushButton *exportFilteredLightButton = new QPushButton(localizedText("导出筛选", "Export Filtered"));
+    QPushButton *resetLightButton = new QPushButton(localizedText("重置内置", "Reset Built-in"));
     editLightButton->setObjectName(QStringLiteral("SecondaryButton"));
     removeLightButton->setObjectName(QStringLiteral("SecondaryButton"));
     importLightButton->setObjectName(QStringLiteral("SecondaryButton"));
@@ -266,7 +266,7 @@ CatalogPage::CatalogPage(QWidget *parent)
     m_lightTable = new QTableWidget;
     setupTable(m_lightTable);
     lightLayout->addWidget(m_lightTable, 1);
-    tabs->addTab(lightPage, QString::fromUtf8("光源"));
+    tabs->addTab(lightPage, localizedText("光源", "Lights"));
 
     connect(m_cameraSearchEdit, &QLineEdit::textChanged, this, &CatalogPage::refreshCameraTable);
     connect(m_cameraManufacturerFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CatalogPage::refreshCameraTable);
@@ -371,9 +371,9 @@ void CatalogPage::refreshCameraTable()
     const int previousRow = m_cameraTable->currentRow();
     m_cameraTable->setSortingEnabled(false);
     m_cameraTable->setColumnCount(10);
-    m_cameraTable->setHorizontalHeaderLabels({QString::fromUtf8("型号"), QString::fromUtf8("厂家"), QString::fromUtf8("分辨率"), QString::fromUtf8("像元"),
-        QString::fromUtf8("传感器"), QString::fromUtf8("靶面"), QString::fromUtf8("快门"), QStringLiteral("fps"),
-        QString::fromUtf8("接口"), QString::fromUtf8("镜头口")});
+    m_cameraTable->setHorizontalHeaderLabels({localizedText("型号", "Model"), localizedText("厂家", "Manufacturer"), localizedText("分辨率", "Resolution"), localizedText("像元", "Pixel"),
+        localizedText("传感器", "Sensor"), localizedText("靶面", "Format"), localizedText("快门", "Shutter"), QStringLiteral("fps"),
+        localizedText("接口", "Interface"), localizedText("镜头口", "Lens Mount")});
     m_cameraTable->setRowCount(0);
     const QString search = m_cameraSearchEdit ? m_cameraSearchEdit->text() : QString();
     const QString manufacturer = m_cameraManufacturerFilter && m_cameraManufacturerFilter->currentIndex() > 0
@@ -415,9 +415,9 @@ void CatalogPage::refreshLensTable()
     const int previousRow = m_lensTable->currentRow();
     m_lensTable->setSortingEnabled(false);
     m_lensTable->setColumnCount(12);
-    m_lensTable->setHorizontalHeaderLabels({QString::fromUtf8("型号"), QString::fromUtf8("厂家"), QString::fromUtf8("类型"), QString::fromUtf8("接口"),
-        QString::fromUtf8("焦距"), QStringLiteral("PMAG"), QStringLiteral("WD"), QString::fromUtf8("像圈"),
-        QString::fromUtf8("远心度"), QString::fromUtf8("畸变"), QStringLiteral("DOF"), QString::fromUtf8("同轴")});
+    m_lensTable->setHorizontalHeaderLabels({localizedText("型号", "Model"), localizedText("厂家", "Manufacturer"), localizedText("类型", "Type"), localizedText("接口", "Mount"),
+        localizedText("焦距", "Focal"), QStringLiteral("PMAG"), QStringLiteral("WD"), localizedText("像圈", "Image Circle"),
+        localizedText("远心度", "Telecentricity"), localizedText("畸变", "Distortion"), QStringLiteral("DOF"), localizedText("同轴", "Coaxial")});
     m_lensTable->setRowCount(0);
     const QString search = m_lensSearchEdit ? m_lensSearchEdit->text() : QString();
     const QString manufacturer = m_lensManufacturerFilter && m_lensManufacturerFilter->currentIndex() > 0
@@ -465,8 +465,8 @@ void CatalogPage::refreshLightTable()
     const int previousRow = m_lightTable->currentRow();
     m_lightTable->setSortingEnabled(false);
     m_lightTable->setColumnCount(8);
-    m_lightTable->setHorizontalHeaderLabels({QString::fromUtf8("型号"), QString::fromUtf8("厂家"), QString::fromUtf8("类型"), QString::fromUtf8("颜色"),
-        QString::fromUtf8("波长"), QString::fromUtf8("模式"), QString::fromUtf8("有效面积"), QString::fromUtf8("适用场景")});
+    m_lightTable->setHorizontalHeaderLabels({localizedText("型号", "Model"), localizedText("厂家", "Manufacturer"), localizedText("类型", "Type"), localizedText("颜色", "Color"),
+        localizedText("波长", "Wavelength"), localizedText("模式", "Mode"), localizedText("有效面积", "Active Area"), localizedText("适用场景", "Best For")});
     m_lightTable->setRowCount(0);
     const QString search = m_lightSearchEdit ? m_lightSearchEdit->text() : QString();
     const QString manufacturer = m_lightManufacturerFilter && m_lightManufacturerFilter->currentIndex() > 0
@@ -492,7 +492,7 @@ void CatalogPage::refreshLightTable()
             m_lightTable->setItem(row, 1, item(l.manufacturer));
             m_lightTable->setItem(row, 2, item(l.typeLabel()));
             m_lightTable->setItem(row, 3, item(l.color));
-            m_lightTable->setItem(row, 4, item(l.wavelengthNm > 0 ? QStringLiteral("%1 nm").arg(l.wavelengthNm) : QString::fromUtf8("宽谱")));
+            m_lightTable->setItem(row, 4, item(l.wavelengthNm > 0 ? QStringLiteral("%1 nm").arg(l.wavelengthNm) : localizedText("宽谱", "Broadband")));
             m_lightTable->setItem(row, 5, item(l.mode));
             m_lightTable->setItem(row, 6, item(QStringLiteral("%1 x %2 mm").arg(l.activeWidthMm, 0, 'f', 0).arg(l.activeHeightMm, 0, 'f', 0)));
             m_lightTable->setItem(row, 7, item(l.bestFor));

@@ -1,5 +1,7 @@
 #include "three_d/ThreeDCameraRepository.h"
 
+#include "i18n/LanguageManager.h"
+
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -7,6 +9,13 @@
 #include <QSet>
 
 namespace {
+QString text(const char *zhUtf8, const char *enUtf8)
+{
+    return LanguageManager::instance().currentLanguage() == QLatin1String("en_US")
+        ? QString::fromUtf8(enUtf8)
+        : QString::fromUtf8(zhUtf8);
+}
+
 double numberValue(const QJsonObject &object, const char *key)
 {
     const QJsonValue value = object.value(QLatin1String(key));
@@ -62,20 +71,20 @@ bool ThreeDCameraRepository::loadFromResource(const QString &resourcePath, QStri
 {
     QFile file(resourcePath);
     if (!file.open(QIODevice::ReadOnly)) {
-        setError(error, QString::fromUtf8("无法打开 3D 相机数据：%1").arg(resourcePath));
+        setError(error, text("无法打开 3D 相机数据：%1", "Unable to open 3D camera data: %1").arg(resourcePath));
         return false;
     }
 
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-        setError(error, QString::fromUtf8("3D 相机 JSON 格式无效：%1").arg(parseError.errorString()));
+        setError(error, text("3D 相机 JSON 格式无效：%1", "Invalid 3D camera JSON: %1").arg(parseError.errorString()));
         return false;
     }
 
     const QJsonArray array = document.object().value(QStringLiteral("cameras")).toArray();
     if (array.isEmpty()) {
-        setError(error, QString::fromUtf8("3D 相机数据为空。"));
+        setError(error, text("3D 相机数据为空。", "3D camera data is empty."));
         return false;
     }
 
@@ -133,7 +142,8 @@ bool ThreeDCameraRepository::loadFromResource(const QString &resourcePath, QStri
 
         if (spec.manufacturer.isEmpty() || spec.series.isEmpty() || spec.model.isEmpty()
             || spec.technologyLabel.isEmpty() || spec.status.isEmpty() || spec.sourceUrl.isEmpty()) {
-            setError(error, QString::fromUtf8("第 %1 条 3D 相机数据缺少品牌、系列、型号、技术路线、状态或来源。").arg(i + 1));
+            setError(error, text("第 %1 条 3D 相机数据缺少品牌、系列、型号、技术路线、状态或来源。",
+                                 "3D camera record %1 is missing brand, series, model, technology, status, or source.").arg(i + 1));
             return false;
         }
         loaded.append(spec);

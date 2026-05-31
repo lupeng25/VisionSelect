@@ -34,11 +34,11 @@ CalculationPage::CalculationPage(QWidget *parent)
     layout->setContentsMargins(28, 24, 28, 24);
     layout->setSpacing(14);
 
-    layout->addWidget(pageTitle(QString::fromUtf8("产品计算助手")));
+    layout->addWidget(pageTitle(localizedText("产品计算助手", "Product Calculation Assistant")));
 
     QHBoxLayout *buttons = new QHBoxLayout;
-    QPushButton *refreshButton = new QPushButton(QString::fromUtf8("\346\240\271\346\215\256\345\275\223\345\211\215\351\234\200\346\261\202\350\256\241\347\256\227"));
-    QPushButton *inputButton = new QPushButton(QString::fromUtf8("\350\277\224\345\233\236\351\234\200\346\261\202\350\276\223\345\205\245"));
+    QPushButton *refreshButton = new QPushButton(localizedText("根据当前需求计算", "Calculate From Current Requirements"));
+    QPushButton *inputButton = new QPushButton(localizedText("返回需求输入", "Back to Requirements"));
     inputButton->setObjectName(QStringLiteral("SecondaryButton"));
     connect(refreshButton, &QPushButton::clicked, this, &CalculationPage::recalculateRequested);
     connect(inputButton, &QPushButton::clicked, this, &CalculationPage::inputRequested);
@@ -52,7 +52,7 @@ CalculationPage::CalculationPage(QWidget *parent)
     m_summaryLabel->setWordWrap(true);
     layout->addWidget(m_summaryLabel);
 
-    QLabel *cameraTitle = new QLabel(QString::fromUtf8("\347\233\270\346\234\272\344\274\260\347\256\227"));
+    QLabel *cameraTitle = new QLabel(localizedText("相机估算", "Camera Estimates"));
     cameraTitle->setObjectName(QStringLiteral("SectionTitle"));
     layout->addWidget(cameraTitle);
 
@@ -60,11 +60,11 @@ CalculationPage::CalculationPage(QWidget *parent)
     setupTable(m_cameraTable);
     m_cameraTable->setColumnCount(10);
     m_cameraTable->setHorizontalHeaderLabels({
-        QString::fromUtf8("\347\233\270\346\234\272"), QString::fromUtf8("\345\216\202\345\256\266"),
-        QString::fromUtf8("\345\210\206\350\276\250\347\216\207"), QString::fromUtf8("\345\203\217\345\205\203"),
-        QString::fromUtf8("\344\274\240\346\204\237\345\231\250"), QString::fromUtf8("\347\211\251\346\226\271\345\203\217\347\264\240"),
-        QString::fromUtf8("\346\231\256\351\200\232\347\204\246\350\267\235"), QStringLiteral("PMAG"),
-        QString::fromUtf8("\345\270\246\345\256\275"), QString::fromUtf8("\345\210\244\346\226\255")
+        localizedText("相机", "Camera"), localizedText("厂家", "Manufacturer"),
+        localizedText("分辨率", "Resolution"), localizedText("像元", "Pixel"),
+        localizedText("传感器", "Sensor"), localizedText("物方像素", "Object Pixel"),
+        localizedText("普通焦距", "Fixed Focal"), QStringLiteral("PMAG"),
+        localizedText("带宽", "Bandwidth"), localizedText("判断", "Verdict")
     });
     m_cameraTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_cameraTable->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Stretch);
@@ -75,7 +75,7 @@ CalculationPage::CalculationPage(QWidget *parent)
     });
     layout->addWidget(m_cameraTable, 1);
 
-    QLabel *lensTitle = new QLabel(QString::fromUtf8("\351\225\234\345\244\264\345\200\231\351\200\211"));
+    QLabel *lensTitle = new QLabel(localizedText("镜头候选", "Lens Candidates"));
     lensTitle->setObjectName(QStringLiteral("SectionTitle"));
     layout->addWidget(lensTitle);
 
@@ -83,11 +83,11 @@ CalculationPage::CalculationPage(QWidget *parent)
     setupTable(m_lensTable);
     m_lensTable->setColumnCount(10);
     m_lensTable->setHorizontalHeaderLabels({
-        QString::fromUtf8("\347\261\273\345\236\213"), QString::fromUtf8("\345\216\202\345\256\266"),
-        QString::fromUtf8("\351\225\234\345\244\264"), QString::fromUtf8("\346\216\245\345\217\243"),
-        QString::fromUtf8("\347\204\246\350\267\235/PMAG"), QStringLiteral("FOV"),
-        QString::fromUtf8("\347\211\251\346\226\271\345\203\217\347\264\240"), QStringLiteral("WD/DOF"),
-        QString::fromUtf8("\345\203\217\345\234\206"), QString::fromUtf8("\345\210\244\346\226\255")
+        localizedText("类型", "Type"), localizedText("厂家", "Manufacturer"),
+        localizedText("镜头", "Lens"), localizedText("接口", "Mount"),
+        localizedText("焦距/PMAG", "Focal / PMAG"), QStringLiteral("FOV"),
+        localizedText("物方像素", "Object Pixel"), QStringLiteral("WD/DOF"),
+        localizedText("像圈", "Image Circle"), localizedText("判断", "Verdict")
     });
     m_lensTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_lensTable->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Stretch);
@@ -116,14 +116,10 @@ void CalculationPage::setCameraEstimates(const QVector<CameraEstimate> &estimate
         const CameraEstimate &estimate = estimates.at(row);
         const CameraSpec &camera = estimate.camera;
         QStringList verdict;
-        verdict.append(estimate.meetsSampling
-            ? QString::fromUtf8("\345\203\217\347\264\240\346\273\241\350\266\263")
-            : QString::fromUtf8("\345\203\217\347\264\240\344\270\215\350\266\263"));
-        verdict.append(estimate.meetsFps
-            ? QString::fromUtf8("\345\270\247\347\216\207\346\273\241\350\266\263")
-            : QString::fromUtf8("\345\270\247\347\216\207\344\270\215\350\266\263"));
+        verdict.append(estimate.meetsSampling ? localizedText("像素满足", "Sampling OK") : localizedText("像素不足", "Sampling low"));
+        verdict.append(estimate.meetsFps ? localizedText("帧率满足", "FPS OK") : localizedText("帧率不足", "FPS low"));
         if (estimate.globalShutterRecommended)
-            verdict.append(QString::fromUtf8("\345\273\272\350\256\256\345\205\250\345\261\200\345\277\253\351\227\250"));
+            verdict.append(localizedText("建议全局快门", "Global shutter recommended"));
 
         m_cameraTable->setItem(row, 0, indexedItem(camera.model, row));
         m_cameraTable->setItem(row, 1, item(camera.manufacturer));
@@ -134,9 +130,9 @@ void CalculationPage::setCameraEstimates(const QVector<CameraEstimate> &estimate
         m_cameraTable->setItem(row, 6, item(QStringLiteral("%1 mm").arg(estimate.fixedFocalLengthMm, 0, 'f', 1)));
         m_cameraTable->setItem(row, 7, item(estimate.telecentricFeasible
             ? QStringLiteral("%1 - %2x").arg(estimate.telecentricPmagMin, 0, 'f', 3).arg(estimate.telecentricPmagMax, 0, 'f', 3)
-            : QString::fromUtf8("\344\270\215\345\273\272\350\256\256")));
+            : localizedText("不建议", "Not recommended")));
         m_cameraTable->setItem(row, 8, item(QStringLiteral("%1 MB/s").arg(estimate.bandwidthRequiredMBps, 0, 'f', 1)));
-        m_cameraTable->setItem(row, 9, item(verdict.join(QString::fromUtf8("\357\274\233"))));
+        m_cameraTable->setItem(row, 9, item(verdict.join(localizedText("；", "; "))));
     }
     m_cameraTable->setSortingEnabled(true);
 
@@ -166,10 +162,10 @@ void CalculationPage::setLensEstimates(const QVector<LensEstimate> &estimates)
             ? QStringLiteral("WD %1 / DOF %2").arg(lens.nominalWorkingDistanceMm, 0, 'f', 0).arg(lens.dofMm, 0, 'f', 1)
             : QStringLiteral("min WD %1 / DOF %2").arg(lens.minWorkingDistanceMm, 0, 'f', 0).arg(estimate.estimatedDofMm, 0, 'f', 1);
         QStringList verdict;
-        verdict.append(estimate.fovOk ? QString::fromUtf8("FOV \346\273\241\350\266\263") : QString::fromUtf8("FOV \344\270\215\350\266\263"));
-        verdict.append(estimate.samplingOk ? QString::fromUtf8("\345\203\217\347\264\240\346\273\241\350\266\263") : QString::fromUtf8("\345\203\217\347\264\240\344\270\215\350\266\263"));
+        verdict.append(estimate.fovOk ? localizedText("FOV 满足", "FOV OK") : localizedText("FOV 不足", "FOV low"));
+        verdict.append(estimate.samplingOk ? localizedText("像素满足", "Sampling OK") : localizedText("像素不足", "Sampling low"));
         if (!estimate.mountOk)
-            verdict.append(QString::fromUtf8("\346\216\245\345\217\243\344\270\215\345\214\271\351\205\215"));
+            verdict.append(localizedText("接口不匹配", "Mount mismatch"));
         if (!estimate.workingDistanceOk)
             verdict.append(QStringLiteral("WD"));
         if (!estimate.dofOk)
@@ -184,7 +180,7 @@ void CalculationPage::setLensEstimates(const QVector<LensEstimate> &estimates)
         m_lensTable->setItem(row, 6, item(QStringLiteral("%1 um").arg(estimate.objectPixelSizeUm, 0, 'f', 2)));
         m_lensTable->setItem(row, 7, item(wdOrDof));
         m_lensTable->setItem(row, 8, item(QStringLiteral("%1 mm").arg(lens.imageCircleMm, 0, 'f', 1)));
-        m_lensTable->setItem(row, 9, item(verdict.join(QString::fromUtf8("\357\274\233"))));
+        m_lensTable->setItem(row, 9, item(verdict.join(localizedText("；", "; "))));
     }
     m_lensTable->setSortingEnabled(true);
 }

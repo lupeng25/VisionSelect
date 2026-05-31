@@ -1,5 +1,7 @@
 #include "ui/MainWindow.h"
 
+#include "i18n/LanguageManager.h"
+#include "license/LicenseManager.h"
 #include "report/PdfReportWriter.h"
 #include "selection/CalculationAssistant.h"
 #include "selection/SelectionEngine.h"
@@ -15,6 +17,7 @@
 #include "ui/pages/ThreeDCameraPage.h"
 
 #include <QDateTime>
+#include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFile>
@@ -106,9 +109,10 @@ MainWindow::MainWindow(QWidget *parent)
 {
     QString error;
     if (!m_catalog.loadDefaults(&error))
-        QMessageBox::critical(this, QString::fromUtf8("\345\217\202\346\225\260\345\272\223\345\212\240\350\275\275\345\244\261\350\264\245"), error);
+        QMessageBox::critical(this, tr("Catalog Load Failed"), error);
 
     buildUi();
+    connect(&LanguageManager::instance(), &LanguageManager::languageChanged, this, &MainWindow::rebuildPagesForLanguage);
 }
 
 void MainWindow::buildUi()
@@ -133,7 +137,7 @@ void MainWindow::buildUi()
     rootLayout->addWidget(m_pages, 1);
 
     setCentralWidget(root);
-    setWindowTitle(QString::fromUtf8("VisionSelect - \345\267\245\344\270\232\346\234\272\345\231\250\350\247\206\350\247\211\351\200\211\345\236\213\345\212\251\346\211\213"));
+    retranslateUi();
     setActivePage(0);
 }
 
@@ -154,48 +158,47 @@ QWidget *MainWindow::createSidebar()
     brandLayout->setSpacing(6);
     QLabel *title = new QLabel(QStringLiteral("VisionSelect"));
     title->setObjectName(QStringLiteral("AppTitle"));
-    QLabel *subtitle = new QLabel(QString::fromUtf8("\345\267\245\344\270\232\346\234\272\345\231\250\350\247\206\350\247\211\351\200\211\345\236\213\345\212\251\346\211\213"));
-    subtitle->setObjectName(QStringLiteral("AppSubtitle"));
-    subtitle->setWordWrap(true);
-    QLabel *badge = new QLabel(QString::fromUtf8("\351\234\200\346\261\202 \302\267 \350\256\241\347\256\227 \302\267 \351\200\211\345\236\213"));
-    badge->setObjectName(QStringLiteral("AppBadge"));
+    m_brandSubtitleLabel = new QLabel;
+    m_brandSubtitleLabel->setObjectName(QStringLiteral("AppSubtitle"));
+    m_brandSubtitleLabel->setWordWrap(true);
+    m_brandBadgeLabel = new QLabel;
+    m_brandBadgeLabel->setObjectName(QStringLiteral("AppBadge"));
     brandLayout->addWidget(title);
-    brandLayout->addWidget(subtitle);
-    brandLayout->addWidget(badge, 0, Qt::AlignLeft);
+    brandLayout->addWidget(m_brandSubtitleLabel);
+    brandLayout->addWidget(m_brandBadgeLabel, 0, Qt::AlignLeft);
     layout->addWidget(brand);
 
-    QLabel *navTitle = new QLabel(QString::fromUtf8("\345\267\245\344\275\234\345\217\260"));
-    navTitle->setObjectName(QStringLiteral("SidebarSectionLabel"));
-    layout->addWidget(navTitle);
+    m_languageCombo = new QComboBox(sidebar);
+    for (const QString &language : LanguageManager::instance().availableLanguages())
+        m_languageCombo->addItem(LanguageManager::instance().displayName(language), language);
+    connect(m_languageCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        const QString language = m_languageCombo->itemData(index).toString();
+        if (!language.isEmpty() && language != LanguageManager::instance().currentLanguage())
+            LanguageManager::instance().setLanguage(language);
+    });
+    layout->addWidget(m_languageCombo);
 
-    const QStringList pages = {
-        QString::fromUtf8("\351\234\200\346\261\202\350\276\223\345\205\245"),
-        QString::fromUtf8("纯计算"),
-        QString::fromUtf8("产品计算助手"),
-        QString::fromUtf8("\346\216\250\350\215\220\347\273\223\346\236\234"),
-        QString::fromUtf8("方案对比"),
-        QString::fromUtf8("\345\217\202\346\225\260\345\272\223"),
-        QString::fromUtf8("PDF \346\212\245\345\221\212")
-    };
+    m_navTitleLabel = new QLabel;
+    m_navTitleLabel->setObjectName(QStringLiteral("SidebarSectionLabel"));
+    layout->addWidget(m_navTitleLabel);
+
+    const QStringList navPages = navigationLabels();
     const QVector<QStyle::StandardPixmap> icons = {
         QStyle::SP_FileDialogContentsView,
         QStyle::SP_FileDialogDetailedView,
         QStyle::SP_FileDialogInfoView,
+        QStyle::SP_ComputerIcon,
         QStyle::SP_DialogApplyButton,
         QStyle::SP_ArrowRight,
         QStyle::SP_DirIcon,
         QStyle::SP_FileIcon
     };
-    QStringList navPages = pages;
-    navPages.insert(3, QString::fromUtf8("3D 相机助手"));
-    QVector<QStyle::StandardPixmap> navIcons = icons;
-    navIcons.insert(3, QStyle::SP_ComputerIcon);
     for (int i = 0; i < navPages.size(); ++i) {
         QPushButton *button = new QPushButton(navPages.at(i));
         button->setObjectName(QStringLiteral("NavButton"));
         button->setCursor(Qt::PointingHandCursor);
         button->setMinimumHeight(44);
-        button->setIcon(style()->standardIcon(navIcons.value(i, QStyle::SP_FileIcon)));
+        button->setIcon(style()->standardIcon(icons.value(i, QStyle::SP_FileIcon)));
         button->setIconSize(QSize(16, 16));
         button->setFocusPolicy(Qt::NoFocus);
         connect(button, &QPushButton::clicked, this, [this, i]() { setActivePage(i); });
@@ -209,16 +212,158 @@ QWidget *MainWindow::createSidebar()
     QVBoxLayout *summaryLayout = new QVBoxLayout(summaryBox);
     summaryLayout->setContentsMargins(12, 12, 12, 12);
     summaryLayout->setSpacing(5);
-    QLabel *summaryTitle = new QLabel(QString::fromUtf8("\344\272\247\345\223\201\345\272\223"));
-    summaryTitle->setObjectName(QStringLiteral("SidebarSummaryTitle"));
+    m_summaryTitleLabel = new QLabel;
+    m_summaryTitleLabel->setObjectName(QStringLiteral("SidebarSummaryTitle"));
     m_summaryLabel = new QLabel(m_catalog.summary());
     m_summaryLabel->setObjectName(QStringLiteral("SidebarSummaryValue"));
     m_summaryLabel->setWordWrap(true);
-    summaryLayout->addWidget(summaryTitle);
+    summaryLayout->addWidget(m_summaryTitleLabel);
     summaryLayout->addWidget(m_summaryLabel);
+    m_licenseButton = new QPushButton(summaryBox);
+    m_licenseButton->setObjectName(QStringLiteral("SecondaryButton"));
+    connect(m_licenseButton, &QPushButton::clicked, this, &MainWindow::showLicenseInfo);
+    summaryLayout->addWidget(m_licenseButton);
     layout->addWidget(summaryBox);
 
     return sidebar;
+}
+
+QStringList MainWindow::navigationLabels() const
+{
+    return {
+        tr("Requirement Input"),
+        tr("Pure Calculation"),
+        tr("Product Calculation Assistant"),
+        tr("3D Camera Assistant"),
+        tr("Recommended Results"),
+        tr("Plan Comparison"),
+        tr("Catalog"),
+        tr("PDF Report")
+    };
+}
+
+void MainWindow::syncLanguageCombo()
+{
+    if (!m_languageCombo)
+        return;
+    const QString language = LanguageManager::instance().currentLanguage();
+    for (int i = 0; i < m_languageCombo->count(); ++i) {
+        if (m_languageCombo->itemData(i).toString() == language) {
+            m_languageCombo->blockSignals(true);
+            m_languageCombo->setCurrentIndex(i);
+            m_languageCombo->blockSignals(false);
+            return;
+        }
+    }
+}
+
+void MainWindow::retranslateUi()
+{
+    setWindowTitle(tr("VisionSelect - Industrial Machine Vision Selection Assistant"));
+    if (m_brandSubtitleLabel)
+        m_brandSubtitleLabel->setText(tr("Industrial Machine Vision Selection Assistant"));
+    if (m_brandBadgeLabel)
+        m_brandBadgeLabel->setText(tr("Requirements · Calculation · Selection"));
+    if (m_navTitleLabel)
+        m_navTitleLabel->setText(tr("Workspace"));
+    const QStringList labels = navigationLabels();
+    for (int i = 0; i < m_navButtons.size() && i < labels.size(); ++i)
+        m_navButtons.at(i)->setText(labels.at(i));
+    if (m_summaryTitleLabel)
+        m_summaryTitleLabel->setText(tr("Catalog"));
+    if (m_summaryLabel)
+        m_summaryLabel->setText(m_catalog.summary());
+    if (m_licenseButton)
+        m_licenseButton->setText(tr("License Info"));
+    syncLanguageCombo();
+}
+
+void MainWindow::rebuildPagesForLanguage()
+{
+    if (!m_pages)
+        return;
+
+    const int currentIndex = m_pages->currentIndex();
+    const SelectionRequest savedRequest = m_inputPage ? m_inputPage->request() : m_request;
+    const bool hadPureCalculationPage = m_pureCalculationPage != nullptr;
+    const bool hadCalculationPage = m_calculationPage != nullptr;
+    const bool hadThreeDPage = m_threeDCameraPage != nullptr;
+    const bool hadResultsPage = m_resultsPage != nullptr;
+    const bool hadComparisonPage = m_comparisonPage != nullptr;
+    const bool hadCatalogPage = m_catalogPage != nullptr;
+    const bool hadReportPage = m_reportPage != nullptr;
+    const bool hadResults = !m_results.isEmpty();
+
+    m_inputPage = new InputPage;
+    m_inputPage->setRequest(savedRequest);
+    connect(m_inputPage, &InputPage::calculateRequested, this, &MainWindow::calculate);
+    connect(m_inputPage, &InputPage::resultsRequested, this, [this]() {
+        calculate();
+        setActivePage(kResultsPageIndex);
+    });
+    replaceStackPage(m_pages, 0, m_inputPage);
+
+    m_pureCalculationPage = nullptr;
+    m_calculationPage = nullptr;
+    m_threeDCameraPage = nullptr;
+    m_resultsPage = nullptr;
+    m_comparisonPage = nullptr;
+    m_catalogPage = nullptr;
+    m_reportPage = nullptr;
+    m_catalogPageInitialized = false;
+    m_request = savedRequest;
+
+    if (hadPureCalculationPage)
+        ensurePureCalculationPage();
+    if (hadCalculationPage) {
+        ensureCalculationPage();
+        refreshCalculationAssistant();
+    }
+    if (hadThreeDPage) {
+        ensureThreeDCameraPage();
+        if (m_threeDCameraPage)
+            m_threeDCameraPage->activate();
+    }
+    if (hadResultsPage)
+        ensureResultsPage();
+    if (hadComparisonPage)
+        ensureComparisonPage();
+    if (hadCatalogPage)
+        ensureCatalogPageInitialized();
+    if (hadReportPage)
+        ensureReportPage();
+
+    if (hadResults) {
+        SelectionEngine engine;
+        m_results = engine.select(m_request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 20);
+        if (m_resultsPage)
+            m_resultsPage->setResults(m_results, m_request);
+        if (m_comparisonPage)
+            m_comparisonPage->setResults(m_results);
+        if (m_reportPage)
+            m_reportPage->setReportData(m_request, m_results);
+    }
+
+    retranslateUi();
+    setActivePage(currentIndex);
+}
+
+void MainWindow::showLicenseInfo()
+{
+    LicenseManager manager;
+    const LicenseStatus status = manager.currentStatus();
+    if (!status.isValid()) {
+        QMessageBox::warning(this, tr("License Info"), status.message);
+        return;
+    }
+
+    const LicenseInfo &info = status.info;
+    QMessageBox::information(this, tr("License Info"),
+        tr("Licensee: %1\nSerial: %2\nMachine code: %3\nExpires: %4")
+            .arg(info.licensee,
+                 info.serial,
+                 info.machineCode,
+                 info.expiresAt.toString(Qt::ISODate)));
 }
 
 void MainWindow::setActivePage(int index)
@@ -401,7 +546,8 @@ void MainWindow::refreshCalculationAssistant()
     const RequirementEstimate requirement = CalculationAssistant::estimateRequirement(m_request);
     m_assistantCameraEstimates = CalculationAssistant::estimateCameras(m_request, m_catalog.cameras(), 12);
 
-    m_calculationPage->setSummary(QString::fromUtf8("\351\234\200\346\261\202 FOV\357\274\232%1 x %2 mm\357\274\214\347\233\256\346\240\207\347\211\251\346\226\271\345\203\217\347\264\240\357\274\232%3 um/px\357\274\214\347\233\270\346\234\272\344\270\213\351\231\220\357\274\232%4 x %5\357\274\210%6 MP\357\274\211")
+    m_calculationPage->setSummary(localizedText("需求 FOV：%1 x %2 mm，目标物方像素：%3 um/px，相机下限：%4 x %5（%6 MP）",
+                                                "Required FOV: %1 x %2 mm, target object pixel: %3 um/px, minimum camera: %4 x %5 (%6 MP)")
         .arg(requirement.requiredFovWidthMm, 0, 'f', 2)
         .arg(requirement.requiredFovHeightMm, 0, 'f', 2)
         .arg(requirement.targetObjectPixelUm, 0, 'f', 2)
@@ -421,26 +567,28 @@ void MainWindow::refreshAssistantLensTable()
 
     const RequirementEstimate requirement = CalculationAssistant::estimateRequirement(m_request);
     QString details;
-    details += QString::fromUtf8("\345\217\202\346\225\260\350\246\201\346\261\202\n");
-    details += QString::fromUtf8("- \346\234\200\344\275\216\345\210\206\350\276\250\347\216\207\357\274\232%1 x %2\357\274\214\345\273\272\350\256\256\344\270\215\344\275\216\344\272\216 %3 MP\343\200\202\n")
+    details += localizedText("参数要求\n", "Requirements\n");
+    details += localizedText("- 最低分辨率：%1 x %2，建议不低于 %3 MP。\n",
+                             "- Minimum resolution: %1 x %2, recommended at least %3 MP.\n")
         .arg(requirement.requiredResolutionX)
         .arg(requirement.requiredResolutionY)
         .arg(requirement.requiredMegapixels, 0, 'f', 2);
-    details += QString::fromUtf8("- 12 bit \345\216\237\345\247\213\346\225\260\346\215\256\345\270\246\345\256\275\344\274\260\347\256\227\357\274\232%1 MB/s @ %2 fps\343\200\202\n")
+    details += localizedText("- 12 bit 原始数据带宽估算：%1 MB/s @ %2 fps。\n",
+                             "- Estimated 12-bit raw bandwidth: %1 MB/s @ %2 fps.\n")
         .arg(requirement.requiredBandwidthMBps12Bit, 0, 'f', 1)
         .arg(m_request.requiredFps, 0, 'f', 1);
-    details += QString::fromUtf8("- \351\225\234\345\244\264\347\261\273\345\236\213\345\200\276\345\220\221\357\274\232%1\343\200\202\n")
+    details += localizedText("- 镜头类型倾向：%1。\n", "- Lens type preference: %1.\n")
         .arg(requirement.telecentricPreferred
-            ? QString::fromUtf8("\351\253\230\347\262\276\345\272\246/\351\253\230\345\272\246\346\263\242\345\212\250\357\274\214\344\274\230\345\205\210\350\257\204\344\274\260\350\277\234\345\277\203\351\225\234\345\244\264")
-            : QString::fromUtf8("\346\231\256\351\200\232\345\267\245\344\270\232\351\225\234\345\244\264\345\217\257\344\273\245\345\205\210\347\262\227\347\256\227"));
-    details += QString::fromUtf8("- \350\277\220\345\212\250\346\233\235\345\205\211\344\270\212\351\231\220\357\274\232%1\343\200\202\n")
+            ? localizedText("高精度/高度波动，优先评估远心镜头", "high precision / height variation, evaluate telecentric lenses first")
+            : localizedText("普通工业镜头可以先粗算", "fixed-focal industrial lenses can be estimated first"));
+    details += localizedText("- 运动曝光上限：%1。\n", "- Motion exposure limit: %1.\n")
         .arg(requirement.hasMotionConstraint
             ? QStringLiteral("%1 us").arg(requirement.maxExposureUsForOnePixelBlur, 0, 'f', 1)
-            : QString::fromUtf8("\346\227\240\350\277\220\345\212\250\346\250\241\347\263\212\347\272\246\346\235\237"));
+            : localizedText("无运动模糊约束", "no motion blur constraint"));
 
     if (m_assistantSelectedCameraRow < 0 || m_assistantSelectedCameraRow >= m_assistantCameraEstimates.size()) {
         m_calculationPage->setLensEstimates(QVector<LensCalculationEstimate>());
-        details += QString::fromUtf8("\n\351\225\234\345\244\264\345\200\231\351\200\211\357\274\232\346\232\202\346\227\240\345\217\257\347\224\250\347\233\270\346\234\272\344\274\260\347\256\227\343\200\202");
+        details += localizedText("\n镜头候选：暂无可用相机估算。", "\nLens candidates: no available camera estimate.");
         m_calculationPage->setDetails(details);
         return;
     }
@@ -449,29 +597,30 @@ void MainWindow::refreshAssistantLensTable()
     m_assistantLensEstimates = CalculationAssistant::estimateLenses(m_request, camera, m_catalog.lenses(), 12);
     m_calculationPage->setLensEstimates(m_assistantLensEstimates);
 
-    details += QString::fromUtf8("\n\345\275\223\345\211\215\351\225\234\345\244\264\345\200\231\351\200\211\345\237\272\344\272\216\347\233\270\346\234\272\357\274\232%1\343\200\202\n")
+    details += localizedText("\n当前镜头候选基于相机：%1。\n", "\nCurrent lens candidates are based on camera: %1.\n")
         .arg(productLabel(camera.manufacturer, camera.model));
     if (!m_assistantLensEstimates.isEmpty()) {
         const LensCalculationEstimate &top = m_assistantLensEstimates.first();
-        details += QString::fromUtf8("- \351\246\226\351\200\211\351\225\234\345\244\264\357\274\232%1 %2\357\274\214FOV %3 x %4 mm\357\274\214\347\211\251\346\226\271\345\203\217\347\264\240 %5 um/px\343\200\202\n")
+        details += localizedText("- 首选镜头：%1 %2，FOV %3 x %4 mm，物方像素 %5 um/px。\n",
+                                 "- Top lens: %1 %2, FOV %3 x %4 mm, object pixel %5 um/px.\n")
             .arg(top.lens.manufacturer, top.lens.model)
             .arg(top.effectiveFovWidthMm, 0, 'f', 2)
             .arg(top.effectiveFovHeightMm, 0, 'f', 2)
             .arg(top.objectPixelSizeUm, 0, 'f', 2);
-        details += QString::fromUtf8("- 工程估算：DOF %1 mm，畸变边缘误差约 %2 um。\n")
+        details += localizedText("- 工程估算：DOF %1 mm，畸变边缘误差约 %2 um。\n",
+                                 "- Engineering estimate: DOF %1 mm, distortion edge error about %2 um.\n")
             .arg(top.estimatedDofMm, 0, 'f', 2)
             .arg(top.distortionErrorUm, 0, 'f', 2);
-        details += QString::fromUtf8("- \345\205\254\345\274\217\357\274\232%1\343\200\202\n").arg(top.formulaSummary);
-        details += QString::fromUtf8("- \346\216\250\350\215\220\347\220\206\347\224\261\357\274\232%1\343\200\202\n")
-            .arg(top.reasons.isEmpty() ? QString::fromUtf8("\346\214\211\347\273\274\345\220\210\345\217\202\346\225\260\346\216\222\345\220\215") : top.reasons.join(QString::fromUtf8("\357\274\233")));
-        details += QString::fromUtf8("- \351\243\216\351\231\251\357\274\232%1")
-            .arg(top.risks.isEmpty() ? QString::fromUtf8("\346\227\240\344\270\273\350\246\201\351\243\216\351\231\251") : top.risks.join(QString::fromUtf8("\357\274\233")));
+        details += localizedText("- 公式：%1。\n", "- Formula: %1.\n").arg(top.formulaSummary);
+        details += localizedText("- 推荐理由：%1。\n", "- Reasons: %1.\n")
+            .arg(top.reasons.isEmpty() ? localizedText("按综合参数排名", "ranked by combined parameters") : top.reasons.join(localizedText("；", "; ")));
+        details += localizedText("- 风险：%1", "- Risks: %1")
+            .arg(top.risks.isEmpty() ? localizedText("无主要风险", "No major risk") : top.risks.join(localizedText("；", "; ")));
     } else {
-        details += QString::fromUtf8("- \346\262\241\346\234\211\347\254\246\345\220\210\345\275\223\345\211\215\351\231\220\345\210\266\347\232\204\351\225\234\345\244\264\345\200\231\351\200\211\343\200\202");
+        details += localizedText("- 没有符合当前限制的镜头候选。", "- No lens candidates match the current constraints.");
     }
     m_calculationPage->setDetails(details);
 }
-
 void MainWindow::refreshCatalogTables()
 {
     if (m_catalogPageInitialized && m_catalogPage)
@@ -480,7 +629,7 @@ void MainWindow::refreshCatalogTables()
 
 void MainWindow::importCameras()
 {
-    const QString path = QFileDialog::getOpenFileName(this, QString::fromUtf8("\345\257\274\345\205\245\347\233\270\346\234\272 CSV"), QString(), QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getOpenFileName(this, localizedText("导入相机 CSV", "Import Camera CSV"), QString(), QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
     QString error;
@@ -493,7 +642,7 @@ void MainWindow::importCameras()
 
 void MainWindow::importLenses()
 {
-    const QString path = QFileDialog::getOpenFileName(this, QString::fromUtf8("\345\257\274\345\205\245\351\225\234\345\244\264 CSV"), QString(), QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getOpenFileName(this, localizedText("导入镜头 CSV", "Import Lens CSV"), QString(), QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
     QString error;
@@ -506,7 +655,7 @@ void MainWindow::importLenses()
 
 void MainWindow::importLights()
 {
-    const QString path = QFileDialog::getOpenFileName(this, QString::fromUtf8("\345\257\274\345\205\245\345\205\211\346\272\220 CSV"), QString(), QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getOpenFileName(this, localizedText("导入光源 CSV", "Import Light CSV"), QString(), QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
     QString error;
@@ -519,7 +668,7 @@ void MainWindow::importLights()
 
 void MainWindow::exportCameras()
 {
-    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出相机 CSV"), QStringLiteral("cameras.csv"), QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export Camera CSV"), QStringLiteral("cameras.csv"), QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
     QString error;
@@ -527,12 +676,12 @@ void MainWindow::exportCameras()
         showError(error);
         return;
     }
-    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+    QMessageBox::information(this, tr("Export Complete"), path);
 }
 
 void MainWindow::exportLenses()
 {
-    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出镜头 CSV"), QStringLiteral("lenses.csv"), QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export Lens CSV"), QStringLiteral("lenses.csv"), QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
     QString error;
@@ -540,12 +689,12 @@ void MainWindow::exportLenses()
         showError(error);
         return;
     }
-    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+    QMessageBox::information(this, tr("Export Complete"), path);
 }
 
 void MainWindow::exportLights()
 {
-    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出光源 CSV"), QStringLiteral("lights.csv"), QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export Light CSV"), QStringLiteral("lights.csv"), QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
     QString error;
@@ -553,12 +702,12 @@ void MainWindow::exportLights()
         showError(error);
         return;
     }
-    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+    QMessageBox::information(this, tr("Export Complete"), path);
 }
 
 void MainWindow::exportFilteredCameras()
 {
-    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出筛选相机 CSV"), QStringLiteral("cameras_filtered.csv"), QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export Filtered Camera CSV"), QStringLiteral("cameras_filtered.csv"), QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
     QString error;
@@ -567,12 +716,12 @@ void MainWindow::exportFilteredCameras()
         showError(error);
         return;
     }
-    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+    QMessageBox::information(this, tr("Export Complete"), path);
 }
 
 void MainWindow::exportFilteredLenses()
 {
-    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出筛选镜头 CSV"), QStringLiteral("lenses_filtered.csv"), QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export Filtered Lens CSV"), QStringLiteral("lenses_filtered.csv"), QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
     QString error;
@@ -581,12 +730,12 @@ void MainWindow::exportFilteredLenses()
         showError(error);
         return;
     }
-    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+    QMessageBox::information(this, tr("Export Complete"), path);
 }
 
 void MainWindow::exportFilteredLights()
 {
-    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出筛选光源 CSV"), QStringLiteral("lights_filtered.csv"), QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export Filtered Light CSV"), QStringLiteral("lights_filtered.csv"), QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
     QString error;
@@ -595,7 +744,7 @@ void MainWindow::exportFilteredLights()
         showError(error);
         return;
     }
-    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+    QMessageBox::information(this, tr("Export Complete"), path);
 }
 
 void MainWindow::addCamera()
@@ -613,7 +762,7 @@ void MainWindow::addCamera()
     camera.bitDepth = 12.0;
     camera.dynamicRangeDb = 60.0;
     camera.lensMount = QStringLiteral("C");
-    if (!editCameraDialog(this, &camera, QString::fromUtf8("新增相机")))
+    if (!editCameraDialog(this, &camera, tr("Add Camera")))
         return;
     QString error;
     if (!m_catalog.addCamera(camera, &error)) {
@@ -629,7 +778,7 @@ void MainWindow::editCamera()
     if (index < 0)
         return;
     CameraSpec camera = m_catalog.cameras().at(index);
-    if (!editCameraDialog(this, &camera, QString::fromUtf8("编辑相机")))
+    if (!editCameraDialog(this, &camera, tr("Edit Camera")))
         return;
     QString error;
     if (!m_catalog.updateCamera(index, camera, &error)) {
@@ -645,9 +794,8 @@ void MainWindow::removeCamera()
     if (index < 0)
         return;
     const CameraSpec camera = m_catalog.cameras().at(index);
-    if (QMessageBox::question(this, QString::fromUtf8("删除相机"),
-            QString::fromUtf8("确定删除相机：%1？").arg(productLabel(camera.manufacturer, camera.model)))
-        != QMessageBox::Yes) {
+    if (QMessageBox::question(this, tr("Delete Camera"),
+            tr("Delete camera %1?").arg(productLabel(camera.manufacturer, camera.model))) != QMessageBox::Yes) {
         return;
     }
     QString error;
@@ -669,7 +817,7 @@ void MainWindow::addLens()
     lens.megapixelRating = 5.0;
     lens.recommendedMinPixelUm = 3.45;
     lens.fNumber = 2.8;
-    if (!editLensDialog(this, &lens, QString::fromUtf8("新增镜头")))
+    if (!editLensDialog(this, &lens, tr("Add Lens")))
         return;
     QString error;
     if (!m_catalog.addLens(lens, &error)) {
@@ -685,7 +833,7 @@ void MainWindow::editLens()
     if (index < 0)
         return;
     LensSpec lens = m_catalog.lenses().at(index);
-    if (!editLensDialog(this, &lens, QString::fromUtf8("编辑镜头")))
+    if (!editLensDialog(this, &lens, tr("Edit Lens")))
         return;
     QString error;
     if (!m_catalog.updateLens(index, lens, &error)) {
@@ -701,9 +849,8 @@ void MainWindow::removeLens()
     if (index < 0)
         return;
     const LensSpec lens = m_catalog.lenses().at(index);
-    if (QMessageBox::question(this, QString::fromUtf8("删除镜头"),
-            QString::fromUtf8("确定删除镜头：%1？").arg(productLabel(lens.manufacturer, lens.model)))
-        != QMessageBox::Yes) {
+    if (QMessageBox::question(this, tr("Delete Lens"),
+            tr("Delete lens %1?").arg(productLabel(lens.manufacturer, lens.model))) != QMessageBox::Yes) {
         return;
     }
     QString error;
@@ -724,7 +871,7 @@ void MainWindow::addLight()
     light.mode = QStringLiteral("Continuous");
     light.activeWidthMm = 100.0;
     light.activeHeightMm = 100.0;
-    if (!editLightDialog(this, &light, QString::fromUtf8("新增光源")))
+    if (!editLightDialog(this, &light, tr("Add Light")))
         return;
     QString error;
     if (!m_catalog.addLight(light, &error)) {
@@ -740,7 +887,7 @@ void MainWindow::editLight()
     if (index < 0)
         return;
     LightSpec light = m_catalog.lights().at(index);
-    if (!editLightDialog(this, &light, QString::fromUtf8("编辑光源")))
+    if (!editLightDialog(this, &light, tr("Edit Light")))
         return;
     QString error;
     if (!m_catalog.updateLight(index, light, &error)) {
@@ -756,9 +903,8 @@ void MainWindow::removeLight()
     if (index < 0)
         return;
     const LightSpec light = m_catalog.lights().at(index);
-    if (QMessageBox::question(this, QString::fromUtf8("删除光源"),
-            QString::fromUtf8("确定删除光源：%1？").arg(productLabel(light.manufacturer, light.model)))
-        != QMessageBox::Yes) {
+    if (QMessageBox::question(this, tr("Delete Light"),
+            tr("Delete light %1?").arg(productLabel(light.manufacturer, light.model))) != QMessageBox::Yes) {
         return;
     }
     QString error;
@@ -771,8 +917,8 @@ void MainWindow::removeLight()
 
 void MainWindow::resetCameras()
 {
-    if (QMessageBox::question(this, QString::fromUtf8("重置相机库"),
-            QString::fromUtf8("确定用内置相机库覆盖本地相机维护数据？")) != QMessageBox::Yes) {
+    if (QMessageBox::question(this, tr("Reset Camera Catalog"),
+            tr("Overwrite local camera catalog data with the built-in camera catalog?")) != QMessageBox::Yes) {
         return;
     }
     QString error;
@@ -785,8 +931,8 @@ void MainWindow::resetCameras()
 
 void MainWindow::resetLenses()
 {
-    if (QMessageBox::question(this, QString::fromUtf8("重置镜头库"),
-            QString::fromUtf8("确定用内置镜头库覆盖本地镜头维护数据？")) != QMessageBox::Yes) {
+    if (QMessageBox::question(this, tr("Reset Lens Catalog"),
+            tr("Overwrite local lens catalog data with the built-in lens catalog?")) != QMessageBox::Yes) {
         return;
     }
     QString error;
@@ -799,8 +945,8 @@ void MainWindow::resetLenses()
 
 void MainWindow::resetLights()
 {
-    if (QMessageBox::question(this, QString::fromUtf8("重置光源库"),
-            QString::fromUtf8("确定用内置光源库覆盖本地光源维护数据？")) != QMessageBox::Yes) {
+    if (QMessageBox::question(this, tr("Reset Light Catalog"),
+            tr("Overwrite local light catalog data with the built-in light catalog?")) != QMessageBox::Yes) {
         return;
     }
     QString error;
@@ -816,19 +962,19 @@ void MainWindow::exportBomCsv()
     if (m_results.isEmpty())
         calculate();
     if (m_results.isEmpty()) {
-        showError(QString::fromUtf8("暂无推荐方案，无法导出 BOM。"));
+        showError(tr("No recommended plan is available; BOM cannot be exported."));
         return;
     }
 
     const QString defaultName = QStringLiteral("VisionSelect_BOM_%1.csv")
         .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")));
-    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("导出 BOM CSV"), defaultName, QStringLiteral("CSV (*.csv)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("Export BOM CSV"), defaultName, QStringLiteral("CSV (*.csv)"));
     if (path.isEmpty())
         return;
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        showError(QString::fromUtf8("无法写入 BOM CSV：%1").arg(path));
+        showError(tr("Unable to write BOM CSV: %1").arg(path));
         return;
     }
 
@@ -840,7 +986,7 @@ void MainWindow::exportBomCsv()
         const SelectionResult &r = m_results.at(i);
         const QString scheme = QStringLiteral("#%1 %2").arg(i + 1).arg(r.schemeTitle);
         out << csvCell(scheme) << "," << (i + 1) << ","
-            << csvCell(QString::fromUtf8("相机")) << ","
+            << csvCell(tr("Camera")) << ","
             << csvCell(r.camera.manufacturer) << ","
             << csvCell(r.camera.model) << ","
             << csvCell(bomSpecForCamera(r.camera, r)) << ","
@@ -850,7 +996,7 @@ void MainWindow::exportBomCsv()
                 .arg(r.objectPixelSizeUm, 0, 'f', 2))
             << "\n";
         out << csvCell(scheme) << "," << (i + 1) << ","
-            << csvCell(QString::fromUtf8("镜头")) << ","
+            << csvCell(tr("Lens")) << ","
             << csvCell(r.lens.manufacturer) << ","
             << csvCell(r.lens.model) << ","
             << csvCell(bomSpecForLens(r.lens, r)) << ","
@@ -859,7 +1005,7 @@ void MainWindow::exportBomCsv()
                 .arg(r.lensMegapixelUtilizationPercent, 0, 'f', 0))
             << "\n";
         out << csvCell(scheme) << "," << (i + 1) << ","
-            << csvCell(QString::fromUtf8("光源")) << ","
+            << csvCell(tr("Light")) << ","
             << csvCell(r.light.manufacturer) << ","
             << csvCell(r.light.model) << ","
             << csvCell(bomSpecForLight(r.light, r)) << ","
@@ -867,7 +1013,7 @@ void MainWindow::exportBomCsv()
             << "\n";
     }
     file.close();
-    QMessageBox::information(this, QString::fromUtf8("导出完成"), path);
+    QMessageBox::information(this, tr("Export Complete"), path);
 }
 
 void MainWindow::exportReportPdf()
@@ -877,7 +1023,7 @@ void MainWindow::exportReportPdf()
 
     const QString defaultName = QStringLiteral("VisionSelect_%1.pdf")
         .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")));
-    const QString path = QFileDialog::getSaveFileName(this, QString::fromUtf8("\345\257\274\345\207\272 PDF \346\212\245\345\221\212"), defaultName, QStringLiteral("PDF (*.pdf)"));
+    const QString path = QFileDialog::getSaveFileName(this, localizedText("导出 PDF 报告", "Export PDF Report"), defaultName, QStringLiteral("PDF (*.pdf)"));
     if (path.isEmpty())
         return;
 
@@ -887,10 +1033,11 @@ void MainWindow::exportReportPdf()
         showError(error);
         return;
     }
-    QMessageBox::information(this, QString::fromUtf8("\345\257\274\345\207\272\345\256\214\346\210\220"), QString::fromUtf8("PDF \346\212\245\345\221\212\345\267\262\347\224\237\346\210\220\357\274\232\n%1").arg(path));
+    QMessageBox::information(this, localizedText("导出完成", "Export Complete"),
+        localizedText("PDF 报告已生成：\n%1", "PDF report generated:\n%1").arg(path));
 }
 
 void MainWindow::showError(const QString &message)
 {
-    QMessageBox::warning(this, QString::fromUtf8("\346\223\215\344\275\234\345\244\261\350\264\245"), message);
+    QMessageBox::warning(this, localizedText("操作失败", "Operation Failed"), message);
 }

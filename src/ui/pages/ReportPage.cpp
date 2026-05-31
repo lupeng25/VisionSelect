@@ -16,12 +16,12 @@ ReportPage::ReportPage(QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(28, 24, 28, 24);
     layout->setSpacing(14);
-    layout->addWidget(pageTitle(QString::fromUtf8("PDF \346\212\245\345\221\212")));
+    layout->addWidget(pageTitle(localizedText("PDF 报告", "PDF Report")));
 
     QHBoxLayout *buttons = new QHBoxLayout;
-    QPushButton *exportButton = new QPushButton(QString::fromUtf8("\345\257\274\345\207\272 PDF"));
-    QPushButton *exportBomButton = new QPushButton(QString::fromUtf8("导出 BOM CSV"));
-    QPushButton *recalculateButton = new QPushButton(QString::fromUtf8("\351\207\215\346\226\260\350\256\241\347\256\227"));
+    QPushButton *exportButton = new QPushButton(localizedText("导出 PDF", "Export PDF"));
+    QPushButton *exportBomButton = new QPushButton(localizedText("导出 BOM CSV", "Export BOM CSV"));
+    QPushButton *recalculateButton = new QPushButton(localizedText("重新计算", "Recalculate"));
     exportBomButton->setObjectName(QStringLiteral("SecondaryButton"));
     recalculateButton->setObjectName(QStringLiteral("SecondaryButton"));
     connect(exportButton, &QPushButton::clicked, this, &ReportPage::exportPdfRequested);
@@ -41,27 +41,34 @@ ReportPage::ReportPage(QWidget *parent)
 void ReportPage::setReportData(const SelectionRequest &request,
                                const QVector<SelectionResult> &results)
 {
-    Q_UNUSED(request);
+    m_request = request;
+    m_results = results;
+    refreshPreview();
+}
 
+void ReportPage::refreshPreview()
+{
     if (!m_reportPreview)
         return;
+
     QString text;
-    text += QString::fromUtf8("PDF \345\260\206\345\214\205\345\220\253\357\274\232\n");
-    text += QString::fromUtf8("- \351\234\200\346\261\202\350\276\223\345\205\245\343\200\201\347\233\256\346\240\207 FOV\343\200\201\347\233\256\346\240\207\347\211\251\346\226\271\345\203\217\347\264\240\n");
-    text += QString::fromUtf8("- \346\231\256\351\200\232\351\225\234\345\244\264\344\270\216\350\277\234\345\277\203\351\225\234\345\244\264\347\232\204\345\205\263\351\224\256\345\205\254\345\274\217\n");
-    text += QString::fromUtf8("- Top 推荐方案、方案对比、BOM、带宽/存储/曝光/DOF/畸变风险\n\n");
-    if (!results.isEmpty()) {
-        const SelectionResult &top = results.first();
-        text += QString::fromUtf8("\345\275\223\345\211\215\351\246\226\351\200\211\357\274\232") + top.schemeTitle
-            + QString::fromUtf8("\n\347\233\270\346\234\272\357\274\232") + productLabel(top.camera.manufacturer, top.camera.model)
-            + QString::fromUtf8("\n\351\225\234\345\244\264\357\274\232") + productLabel(top.lens.manufacturer, top.lens.model)
-            + QString::fromUtf8("\n\345\205\211\346\272\220\357\274\232") + productLabel(top.light.manufacturer, top.light.model)
-            + QString::fromUtf8("\n适配状态：") + compatibilityText(top)
-            + QString::fromUtf8("\n\345\276\227\345\210\206\357\274\232") + QString::number(top.score.score, 'f', 1)
-            + QString::fromUtf8("\n带宽/存储：") + QStringLiteral("%1 MB/s, %2 GB/h")
+    text += localizedText("PDF 将包含：\n", "The PDF will include:\n");
+    text += localizedText("- 需求输入、目标 FOV、目标物方像素\n", "- Requirements, target FOV, and target object pixel size\n");
+    text += localizedText("- 普通镜头与远心镜头的关键公式\n", "- Key formulas for fixed-focal and telecentric lenses\n");
+    text += localizedText("- Top 推荐方案、方案对比、BOM、带宽/存储/曝光/DOF/畸变风险\n\n",
+                          "- Top recommendations, plan comparison, BOM, bandwidth/storage/exposure/DOF/distortion risks\n\n");
+    if (!m_results.isEmpty()) {
+        const SelectionResult &top = m_results.first();
+        text += localizedText("当前首选：", "Current top choice: ") + top.schemeTitle
+            + localizedText("\n相机：", "\nCamera: ") + productLabel(top.camera.manufacturer, top.camera.model)
+            + localizedText("\n镜头：", "\nLens: ") + productLabel(top.lens.manufacturer, top.lens.model)
+            + localizedText("\n光源：", "\nLight: ") + productLabel(top.light.manufacturer, top.light.model)
+            + localizedText("\n适配状态：", "\nCompatibility: ") + compatibilityText(top)
+            + localizedText("\n得分：", "\nScore: ") + QString::number(top.score.score, 'f', 1)
+            + localizedText("\n带宽/存储：", "\nBandwidth / storage: ") + QStringLiteral("%1 MB/s, %2 GB/h")
                 .arg(top.bandwidthRequiredMBps, 0, 'f', 1)
                 .arg(top.storagePerHourGB, 0, 'f', 0)
-            + QString::fromUtf8("\nBOM：相机、镜头、光源 3 项")
+            + localizedText("\nBOM：相机、镜头、光源 3 项", "\nBOM: camera, lens, and light")
             + QStringLiteral("\n");
     }
     m_reportPreview->setPlainText(text);

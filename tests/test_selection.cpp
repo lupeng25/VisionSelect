@@ -1,4 +1,7 @@
 #include "catalog/CatalogRepository.h"
+#include "i18n/LanguageManager.h"
+#include "license/LicenseIssuer.h"
+#include "license/LicenseManager.h"
 #include "report/PdfReportWriter.h"
 #include "selection/CalculationAssistant.h"
 #include "selection/SelectionEngine.h"
@@ -38,6 +41,11 @@ private slots:
     void threeDCameraCatalogLoadsFromResource();
     void threeDCameraMatcherClassifiesRequirements();
     void threeDCameraDataDoesNotAffect2DSelection();
+    void licenseValidationCoversSignatureMachineAndExpiry();
+    void licenseIssuerParsesXmlAndSignsCompatibleKey();
+    void licenseIssuerRejectsInvalidInput();
+    void machineCodeGenerationIsStable();
+    void languageManagerSwitchesAvailableLanguages();
     void invalidTelecentricCsvFails();
     void invalidLightCsvFails();
     void pdfReportWrites();
@@ -46,6 +54,11 @@ private:
     QTemporaryDir m_catalogStorage;
     CatalogRepository m_catalog;
 };
+
+namespace {
+const char *kTestPrivateKeyXml =
+    "<RSAKeyValue><Modulus>5hzYFnHq3/1l3dpJFHV8XBnUejhF6oIE5lVzrDcKm1rq5bLIOTKmRgJmjaa9had4v8w1W3jIX1E/OU5y50KE2YDqHJvAPkiOT7Zpka5U7+pypzLEH5zQfyeaKKgQsXxgoGq3z6DtKv/1mfz5xq0jv5Nr4Ouv/Xep5LNuk8eG7nE=</Modulus><Exponent>AQAB</Exponent><P>9Ml93yaFiAybA4/iVgWhudDbZRLiE9tO042H97yuw5oXeEBF4KNFrsPXT5hjAutCaiMpxXeFbDZlwtleEiLm6w==</P><Q>8KdFsZm6HVMz2nkuB1UHAjhoVwlfQeUvJbZbVjsSTF9Rh5+BeloVC+U/K9C8/C0o1odg5fa3IBxl6gueUaKhEw==</Q><DP>4dmiVCijnWIcCA5SQxIRJHNqaXghtTZsJU55O/8PtBNRQjbzAg9CtLumxZ6RA9lyPqFQ4gujw7Lw8vVBETS4nw==</DP><DQ>0AYYJaSYED9a5HC5zBbA3zd5Yjs0v5ZoQfY3T/vyHliK9mx4FRaHeOfqymo+4tH6qi8OINs6gyRpKH5wlWq6Rw==</DQ><InverseQ>xbFUUJeQ4X+QFiIQCq/YmJcCgbj5Qz/+5gbH1sz1Food2SipieeYQojiMERCAmD8VgSOKVXdKHmzEjeikvBPbA==</InverseQ><D>g3HejZOtEx3wXnYeYK1ryECI+vfCGF8E5X3SgYE/cdbRbzxc2y9vg3ZDlo60m/A6LXU81W99JdWHQ/jn8eoxb+fDvXVnHdGg8sCm/7d9/8MnOEXDRllZbxNE/ICm1k9V9nX1yWQJxPKQ7l3Ify3UEurivZ4e8VB9hDITzoKRKzE=</D></RSAKeyValue>";
+}
 
 void SelectionEngineTest::initTestCase()
 {
@@ -869,6 +882,114 @@ void SelectionEngineTest::threeDCameraDataDoesNotAffect2DSelection()
         QCOMPARE(after.first().lens.model, before.first().lens.model);
         QCOMPARE(after.first().light.model, before.first().light.model);
     }
+}
+
+void SelectionEngineTest::licenseValidationCoversSignatureMachineAndExpiry()
+{
+    LicenseManager manager;
+    manager.setPublicKeyForTesting(
+        QByteArray::fromBase64("rEp37pqaNzBLvrsO4nbwg0qe7RV26vXC877GLtSbovngzNhrMKAViHCfYWxh2UMJvAKy/Kh7A9MHcyklhAKi3z3LGQo3G2ha2Siww497ECFEo/kaTpGMNQ/d5F2nY96e3teM6fi2hNddwbFKCQQ3GyYwcBIi3XzKamglLBfl5bLQxeZ9zC5jTRqD19b1La+KZxACFPAWsWUBFG2da8N/5DGjo8DTSG51d5yxWFbKz9A5SaOim+bfLW2Rp8zVhg2W5OU5lcc0Tn6nm/CmrA5XJHtQ3fYVRfw2fOm/oexQdXYwcgTCspOFrlgQJFjkEGU86oFS9KOJDzIduvzHQ+9yXQ=="),
+        QByteArray::fromBase64("AQAB"));
+    const QString key = QStringLiteral("VS1-eyJwcm9kdWN0SWQiOiJWaXNpb25TZWxlY3QiLCJsaWNlbnNlZSI6IlVuaXQgVGVzdCIsInNlcmlhbCI6IlVULTAwMSIsIm1hY2hpbmVDb2RlIjoiQUJDRC1FRkdILUlKS0wtTU5PUCIsImlzc3VlZEF0IjoiMjAyNi0wMS0wMSIsImV4cGlyZXNBdCI6IjIwOTktMTItMzEiLCJmZWF0dXJlcyI6WyJzdGFuZGFyZCJdfQ==-ZIDJ4aU7bVs3mAFTiJUivtS+xcmM/xOSZh3BHrbh28lhTIw/p0wk2OVJKMJemq6sPcyBjSNwTq/3+9WwSTfh8D76EbYl44TpDgdIWCqFUfBKOM2u+mg8+Yvp2Rf85mUaDphOxpSVxFoPO5PZ8d8odVmUiw92bBYtje7vdxmG5rHKkhKr7r2rlKKE2cbuGrozDKjAfjVJSV3Q8SDnc6vbahBQeHKQLT0gYJI2bHSVokH+cV6UyzObSXmSS7U5jQjtTKIuL8qUvfWP306SGb/89EO+kb7dVqQB+0hQLmqhYmimow3nFY2KlWpmlDOHzIAVgny6mezxg+JDoFWT/2dkJQ==");
+
+    LicenseStatus status = manager.validateKeyForMachine(key, QStringLiteral("ABCD-EFGH-IJKL-MNOP"), QDate(2026, 5, 31));
+    QCOMPARE(status.code, LicenseStatusCode::Valid);
+    QCOMPARE(status.info.licensee, QStringLiteral("Unit Test"));
+
+    status = manager.validateKeyForMachine(key, QStringLiteral("0000-0000-0000-0000"), QDate(2026, 5, 31));
+    QCOMPARE(status.code, LicenseStatusCode::MachineMismatch);
+
+    status = manager.validateKeyForMachine(key, QStringLiteral("ABCD-EFGH-IJKL-MNOP"), QDate(2100, 1, 1));
+    QCOMPARE(status.code, LicenseStatusCode::Expired);
+
+    QString tampered = key;
+    tampered.replace(QStringLiteral("VGVzdC"), QStringLiteral("VGVzdA"));
+    status = manager.validateKeyForMachine(tampered, QStringLiteral("ABCD-EFGH-IJKL-MNOP"), QDate(2026, 5, 31));
+    QVERIFY(status.code == LicenseStatusCode::InvalidFormat || status.code == LicenseStatusCode::BadSignature);
+}
+
+void SelectionEngineTest::licenseIssuerParsesXmlAndSignsCompatibleKey()
+{
+    LicenseIssuer issuer;
+    QString error;
+    QVERIFY2(issuer.loadPrivateKeyXml(QByteArray(kTestPrivateKeyXml), &error), qPrintable(error));
+    QCOMPARE(issuer.publicModulus(), QByteArray::fromBase64("5hzYFnHq3/1l3dpJFHV8XBnUejhF6oIE5lVzrDcKm1rq5bLIOTKmRgJmjaa9had4v8w1W3jIX1E/OU5y50KE2YDqHJvAPkiOT7Zpka5U7+pypzLEH5zQfyeaKKgQsXxgoGq3z6DtKv/1mfz5xq0jv5Nr4Ouv/Xep5LNuk8eG7nE="));
+    QCOMPARE(issuer.publicExponent(), QByteArray::fromBase64("AQAB"));
+
+    LicenseIssueRequest request;
+    request.licensee = QStringLiteral("Issuer Test");
+    request.serial = QStringLiteral("VS-UNIT-001");
+    request.machineCode = QStringLiteral(" abcd-efgh-ijkl-mnop ");
+    request.issuedAt = QDate::currentDate();
+    request.expiresAt = QDate::currentDate().addDays(30);
+    request.features = QStringList() << QStringLiteral("standard") << QStringLiteral("pro");
+
+    LicenseIssueResult result;
+    QVERIFY2(issuer.issue(request, &result, &error), qPrintable(error));
+    QVERIFY(result.licenseKey.startsWith(QStringLiteral("VS1-")));
+    QCOMPARE(result.normalizedMachineCode, QStringLiteral("ABCD-EFGH-IJKL-MNOP"));
+    QVERIFY(result.payloadJson.contains("\"licensee\":\"Issuer Test\""));
+    QVERIFY(result.payloadJson.contains("\"features\":[\"standard\",\"pro\"]"));
+
+    LicenseManager manager;
+    manager.setPublicKeyForTesting(issuer.publicModulus(), issuer.publicExponent());
+    LicenseStatus status = manager.validateKeyForMachine(result.licenseKey, result.normalizedMachineCode, QDate::currentDate());
+    QCOMPARE(status.code, LicenseStatusCode::Valid);
+    QCOMPARE(status.info.serial, request.serial);
+
+    status = manager.validateKeyForMachine(result.licenseKey, QStringLiteral("0000-0000-0000-0000"), QDate::currentDate());
+    QCOMPARE(status.code, LicenseStatusCode::MachineMismatch);
+
+    status = manager.validateKeyForMachine(result.licenseKey, result.normalizedMachineCode, request.expiresAt.addDays(1));
+    QCOMPARE(status.code, LicenseStatusCode::Expired);
+
+    QString tampered = result.licenseKey;
+    tampered[tampered.size() - 1] = tampered.endsWith(QLatin1Char('A')) ? QLatin1Char('B') : QLatin1Char('A');
+    status = manager.validateKeyForMachine(tampered, result.normalizedMachineCode, QDate::currentDate());
+    QVERIFY(status.code == LicenseStatusCode::InvalidFormat || status.code == LicenseStatusCode::BadSignature);
+}
+
+void SelectionEngineTest::licenseIssuerRejectsInvalidInput()
+{
+    LicenseIssuer issuer;
+    QString error;
+    LicenseIssueRequest request;
+    LicenseIssueResult result;
+    QVERIFY(!issuer.issue(request, &result, &error));
+    QVERIFY(!error.isEmpty());
+
+    QVERIFY(!issuer.loadPrivateKeyXml(QByteArray("<RSAKeyValue><Modulus>bad</Modulus></RSAKeyValue>"), &error));
+    QVERIFY(!error.isEmpty());
+
+    QVERIFY2(issuer.loadPrivateKeyXml(QByteArray(kTestPrivateKeyXml), &error), qPrintable(error));
+    request.licensee = QStringLiteral("Issuer Test");
+    request.serial = QStringLiteral("VS-UNIT-002");
+    request.machineCode = QStringLiteral("ABCD-EFGH-IJKL-MNOP");
+    request.expiresAt = QDate::currentDate().addDays(-1);
+    QVERIFY(!issuer.issue(request, &result, &error));
+    QVERIFY(error.contains(QStringLiteral("Expiration")));
+}
+
+void SelectionEngineTest::machineCodeGenerationIsStable()
+{
+    const QString codeA = LicenseManager::machineCodeForSeeds({QStringLiteral("machine-guid"), QStringLiteral("host")});
+    const QString codeB = LicenseManager::machineCodeForSeeds({QStringLiteral("host"), QStringLiteral("machine-guid")});
+    QCOMPARE(codeA, codeB);
+    QCOMPARE(codeA.size(), 19);
+    QVERIFY(codeA.contains(QLatin1Char('-')));
+}
+
+void SelectionEngineTest::languageManagerSwitchesAvailableLanguages()
+{
+    LanguageManager &manager = LanguageManager::instance();
+    const QString previous = manager.currentLanguage();
+    QVERIFY(manager.availableLanguages().contains(QStringLiteral("zh_CN")));
+    QVERIFY(manager.availableLanguages().contains(QStringLiteral("en_US")));
+    QVERIFY(manager.setLanguage(QStringLiteral("en_US")));
+    QCOMPARE(manager.currentLanguage(), QStringLiteral("en_US"));
+    QVERIFY(manager.setLanguage(QStringLiteral("zh_CN")));
+    QCOMPARE(manager.currentLanguage(), QStringLiteral("zh_CN"));
+    manager.setLanguage(previous);
 }
 
 void SelectionEngineTest::invalidTelecentricCsvFails()
