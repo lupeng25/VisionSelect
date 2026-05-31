@@ -77,8 +77,13 @@ void SelectionEngineTest::defaultCatalogManufacturersAreLoaded()
         QVERIFY2(!camera.manufacturer.trimmed().isEmpty(), qPrintable(camera.model));
     for (const LensSpec &lens : m_catalog.lenses())
         QVERIFY2(!lens.manufacturer.trimmed().isEmpty(), qPrintable(lens.model));
-    for (const LightSpec &light : m_catalog.lights())
+    int mvotemLightCount = 0;
+    for (const LightSpec &light : m_catalog.lights()) {
         QVERIFY2(!light.manufacturer.trimmed().isEmpty(), qPrintable(light.model));
+        if (light.manufacturer == QString::fromUtf8("慕藤光"))
+            ++mvotemLightCount;
+    }
+    QVERIFY(mvotemLightCount >= 180);
 }
 
 void SelectionEngineTest::calculationAssistantEstimatesRequirements()
@@ -810,11 +815,11 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
     }
 
     QVERIFY(brands.contains(QStringLiteral("LMI")));
-    QVERIFY(lmiCount >= 60);
+    QVERIFY(lmiCount >= 63);
     QVERIFY(brands.contains(QString::fromUtf8("深视智能")));
     QVERIFY(sinceVisionCount >= 50);
     QVERIFY(brands.contains(QString::fromUtf8("基恩士")));
-    QVERIFY(keyenceCount >= 27);
+    QVERIFY(keyenceCount >= 32);
     QVERIFY(brands.contains(QString::fromUtf8("海康机器人")));
 }
 
