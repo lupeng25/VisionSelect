@@ -4,7 +4,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QIODevice>
+#include <QRegularExpression>
 #include <QStandardPaths>
+#include <QSet>
 #include <QTextStream>
 
 void CatalogRepository::setStorageDirectory(const QString &directory)
@@ -83,7 +85,9 @@ bool CatalogRepository::ensureLocalCatalogs(QString *errorMessage)
         && !copyResourceToFile(QStringLiteral(":/data/lights.csv"), lightStoragePath(), false, errorMessage)) {
         return false;
     }
-    return true;
+    return appendMissingResourceRows(QStringLiteral(":/data/cameras.csv"), cameraStoragePath(), QStringLiteral("model"), errorMessage)
+        && appendMissingResourceRows(QStringLiteral(":/data/lenses.csv"), lensStoragePath(), QStringLiteral("model"), errorMessage)
+        && appendMissingResourceRows(QStringLiteral(":/data/lights.csv"), lightStoragePath(), QStringLiteral("model"), errorMessage);
 }
 
 bool CatalogRepository::copyResourceToFile(const QString &resourcePath, const QString &filePath, bool overwrite, QString *errorMessage) const
@@ -110,6 +114,101 @@ bool CatalogRepository::copyResourceToFile(const QString &resourcePath, const QS
                           QFileDevice::ReadOwner | QFileDevice::WriteOwner
                               | QFileDevice::ReadUser | QFileDevice::WriteUser
                               | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+    return true;
+}
+
+bool CatalogRepository::appendMissingResourceRows(const QString &resourcePath, const QString &filePath, const QString &keyColumn, QString *errorMessage) const
+{
+    QVector<Row> localRows;
+    QVector<Row> resourceRows;
+    if (!readCsvRows(filePath, &localRows, errorMessage)
+        || !readCsvRows(resourcePath, &resourceRows, errorMessage)) {
+        return false;
+    }
+
+    QSet<QString> existingKeys;
+    for (const Row &row : localRows) {
+        const QString key = row.value(keyColumn).trimmed().toLower();
+        if (!key.isEmpty())
+            existingKeys.insert(key);
+    }
+
+    QFile resourceFile(resourcePath);
+    if (!resourceFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("无法打开内置产品库：%1").arg(resourcePath);
+        return false;
+    }
+
+    QTextStream in(&resourceFile);
+    in.setCodec("UTF-8");
+    QStringList headers;
+    int keyIndex = -1;
+    int lineNumber = 0;
+    QStringList rowsToAppend;
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        ++lineNumber;
+        if (lineNumber == 1 && line.startsWith(QChar(0xFEFF)))
+            line.remove(0, 1);
+        if (line.trimmed().isEmpty())
+            continue;
+
+        const QStringList values = parseCsvLine(line);
+        if (headers.isEmpty()) {
+            headers = values;
+            for (QString &header : headers)
+                header = header.trimmed().toLower();
+            keyIndex = headers.indexOf(keyColumn);
+            if (keyIndex < 0) {
+                if (errorMessage)
+                    *errorMessage = QString::fromUtf8("%1 缺少合并键字段：%2").arg(resourcePath, keyColumn);
+                return false;
+            }
+            continue;
+        }
+
+        if (values.size() != headers.size()) {
+            if (errorMessage)
+                *errorMessage = QString::fromUtf8("%1 第 %2 行字段数量不匹配：期望 %3，实际 %4")
+                    .arg(resourcePath)
+                    .arg(lineNumber)
+                    .arg(headers.size())
+                    .arg(values.size());
+            return false;
+        }
+
+        const QString key = values.at(keyIndex).trimmed().toLower();
+        if (!key.isEmpty() && !existingKeys.contains(key)) {
+            rowsToAppend.append(line);
+            existingKeys.insert(key);
+        }
+    }
+
+    if (rowsToAppend.isEmpty())
+        return true;
+
+    bool endsWithNewline = true;
+    QFile existingFile(filePath);
+    if (existingFile.open(QIODevice::ReadOnly) && existingFile.size() > 0) {
+        existingFile.seek(existingFile.size() - 1);
+        const QByteArray last = existingFile.read(1);
+        endsWithNewline = last == "\n" || last == "\r";
+    }
+
+    QFile outputFile(filePath);
+    if (!outputFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        if (errorMessage)
+            *errorMessage = QString::fromUtf8("无法更新本地产品库文件：%1").arg(filePath);
+        return false;
+    }
+
+    QTextStream out(&outputFile);
+    out.setCodec("UTF-8");
+    if (!endsWithNewline)
+        out << "\n";
+    for (const QString &line : rowsToAppend)
+        out << line << "\n";
     return true;
 }
 
@@ -579,6 +678,88 @@ bool CatalogRepository::validateLight(const LightSpec &light, const QString &sou
     return true;
 }
 
+QString CatalogRepository::normalizeCameraSensorFormat(const QString &value, int resolutionX, int resolutionY, double pixelSizeUm)
+{
+    QString normalized = value.trimmed();
+    normalized.replace(QString::fromUtf8("Ã"), QStringLiteral("x"));
+    normalized.replace(QString::fromUtf8("脳"), QStringLiteral("x"));
+    normalized.replace(QString::fromUtf8("×"), QStringLiteral("x"));
+    normalized.replace(QString::fromUtf8("â"), QStringLiteral("\""));
+    normalized.replace(QChar(0x201C), QStringLiteral("\""));
+    normalized.replace(QChar(0x201D), QStringLiteral("\""));
+    normalized.replace(QChar(0x2033), QStringLiteral("\""));
+    normalized.replace(QChar(0xFF02), QStringLiteral("\""));
+    normalized.replace(QStringLiteral("''"), QStringLiteral("\""));
+    normalized.remove(QRegularExpression(QStringLiteral("\\bInGaAs\\s*,\\s*"), QRegularExpression::CaseInsensitiveOption));
+    normalized.remove(QRegularExpression(QStringLiteral("\\bCMOS\\b"), QRegularExpression::CaseInsensitiveOption));
+    normalized = normalized.trimmed();
+
+    if (normalized.isEmpty()
+        || QRegularExpression(QStringLiteral("^IMX\\d+"), QRegularExpression::CaseInsensitiveOption).match(normalized).hasMatch()) {
+        if (resolutionX > 0 && resolutionY > 0 && pixelSizeUm > 0.0) {
+            return QStringLiteral("%1 mm x %2 mm")
+                .arg(resolutionX * pixelSizeUm / 1000.0, 0, 'f', 2)
+                .arg(resolutionY * pixelSizeUm / 1000.0, 0, 'f', 2);
+        }
+        return QString();
+    }
+
+    normalized.replace(QRegularExpression(QString::fromUtf8("\\s*[xX×脳]\\s*")), QStringLiteral(" x "));
+    normalized.replace(QRegularExpression(QStringLiteral("(\\d)\\s*mm\\b"), QRegularExpression::CaseInsensitiveOption), QStringLiteral("\\1 mm"));
+    normalized.replace(QRegularExpression(QStringLiteral("\\s+")), QStringLiteral(" "));
+    normalized.replace(QRegularExpression(QStringLiteral("\\s+\"")), QStringLiteral("\""));
+    normalized = normalized.trimmed();
+
+    if (QRegularExpression(QStringLiteral("^(?:\\d+(?:\\.\\d+)?|\\d+/\\d+(?:\\.\\d+)?)$")).match(normalized).hasMatch())
+        normalized.append(QLatin1Char('"'));
+    return normalized;
+}
+
+QString CatalogRepository::normalizeCameraColorMode(const QString &value)
+{
+    const QString normalized = value.trimmed();
+    const QString lower = normalized.toLower();
+    if (normalized.isEmpty())
+        return normalized;
+    if (lower.contains(QStringLiteral("mono"))
+        || normalized.contains(QString::fromUtf8("黑白"))
+        || normalized.contains(QString::fromUtf8("单色"))) {
+        return QStringLiteral("Mono");
+    }
+    if (lower.contains(QStringLiteral("color"))
+        || lower.contains(QStringLiteral("colour"))
+        || normalized.contains(QString::fromUtf8("彩色"))) {
+        return QStringLiteral("Color");
+    }
+    return normalized;
+}
+
+QString CatalogRepository::normalizeCameraInterface(const QString &value)
+{
+    QString normalized = value.trimmed();
+    normalized.replace(QString::fromUtf8("Ã"), QStringLiteral("x"));
+    normalized.replace(QString::fromUtf8("脳"), QStringLiteral("x"));
+    normalized.replace(QString::fromUtf8("×"), QStringLiteral("x"));
+    normalized.replace(QString::fromUtf8("â"), QStringLiteral("\""));
+    normalized.replace(QChar(0x201C), QStringLiteral("\""));
+    normalized.replace(QChar(0x201D), QStringLiteral("\""));
+    return normalized;
+}
+
+QString CatalogRepository::normalizeLensMount(const QString &value)
+{
+    QString normalized = value.trimmed();
+    QString mojibakeTimes;
+    mojibakeTimes.append(QChar(0x00C3));
+    mojibakeTimes.append(QChar(0x0097));
+    normalized.replace(mojibakeTimes, QStringLiteral("x"));
+    normalized.replace(QChar(0x00D7), QStringLiteral("x"));
+    normalized.replace(QChar(0x8133), QStringLiteral("x"));
+    normalized.replace(QRegularExpression(QStringLiteral("\\s*x\\s*"), QRegularExpression::CaseInsensitiveOption), QStringLiteral(" x "));
+    normalized.replace(QRegularExpression(QStringLiteral("\\s+")), QStringLiteral(" "));
+    return normalized.trimmed();
+}
+
 bool CatalogRepository::readCsvRows(const QString &filePath, QVector<Row> *rows, QString *errorMessage)
 {
     QFile file(filePath);
@@ -740,15 +921,15 @@ bool CatalogRepository::loadCameraRows(const QVector<Row> &rows, const QString &
         spec.resolutionX = integer(row, QStringLiteral("resolution_x"));
         spec.resolutionY = integer(row, QStringLiteral("resolution_y"));
         spec.pixelSizeUm = number(row, QStringLiteral("pixel_size_um"));
-        spec.sensorFormat = text(row, QStringLiteral("sensor_format"));
-        spec.colorMode = text(row, QStringLiteral("color_mode"));
+        spec.sensorFormat = normalizeCameraSensorFormat(text(row, QStringLiteral("sensor_format")), spec.resolutionX, spec.resolutionY, spec.pixelSizeUm);
+        spec.colorMode = normalizeCameraColorMode(text(row, QStringLiteral("color_mode")));
         spec.shutterType = text(row, QStringLiteral("shutter_type"));
         spec.maxFps = number(row, QStringLiteral("max_fps"));
-        spec.interfaceType = text(row, QStringLiteral("interface"));
+        spec.interfaceType = normalizeCameraInterface(text(row, QStringLiteral("interface")));
         spec.bandwidthMBps = number(row, QStringLiteral("bandwidth_mbps"));
         spec.bitDepth = number(row, QStringLiteral("bit_depth"), 8.0);
         spec.dynamicRangeDb = number(row, QStringLiteral("dynamic_range_db"));
-        spec.lensMount = text(row, QStringLiteral("lens_mount"));
+        spec.lensMount = normalizeLensMount(text(row, QStringLiteral("lens_mount")));
 
         if (spec.model.isEmpty() || spec.resolutionX <= 0 || spec.resolutionY <= 0 || spec.pixelSizeUm <= 0.0) {
             if (errorMessage)
@@ -782,7 +963,7 @@ bool CatalogRepository::loadLensRows(const QVector<Row> &rows, const QString &so
                                             QString::fromUtf8("\345\216\202\345\256\266"), QString::fromUtf8("\345\216\202\345\225\206"),
                                             QString::fromUtf8("\345\210\266\351\200\240\345\225\206")});
         spec.lensType = lensTypeFromString(text(row, QStringLiteral("lens_type")));
-        spec.lensMount = text(row, QStringLiteral("lens_mount"));
+        spec.lensMount = normalizeLensMount(text(row, QStringLiteral("lens_mount")));
         spec.focalLengthMm = number(row, QStringLiteral("focal_length_mm"));
         spec.minWorkingDistanceMm = number(row, QStringLiteral("min_wd_mm"));
         spec.distortionPercent = number(row, QStringLiteral("distortion_percent"));

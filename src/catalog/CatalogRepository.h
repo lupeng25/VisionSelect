@@ -59,6 +59,7 @@ private:
     QString lightStoragePath() const;
     bool ensureLocalCatalogs(QString *errorMessage);
     bool copyResourceToFile(const QString &resourcePath, const QString &filePath, bool overwrite, QString *errorMessage) const;
+    bool appendMissingResourceRows(const QString &resourcePath, const QString &filePath, const QString &keyColumn, QString *errorMessage) const;
     bool saveCameras(QString *errorMessage) const;
     bool saveLenses(QString *errorMessage) const;
     bool saveLights(QString *errorMessage) const;
@@ -73,6 +74,10 @@ private:
     static bool validateCamera(const CameraSpec &camera, const QString &sourceName, QString *errorMessage);
     static bool validateLens(const LensSpec &lens, const QString &sourceName, QString *errorMessage);
     static bool validateLight(const LightSpec &light, const QString &sourceName, QString *errorMessage);
+    static QString normalizeCameraSensorFormat(const QString &value, int resolutionX, int resolutionY, double pixelSizeUm);
+    static QString normalizeCameraColorMode(const QString &value);
+    static QString normalizeCameraInterface(const QString &value);
+    static QString normalizeLensMount(const QString &value);
 
     static double number(const Row &row, const QString &key, double defaultValue = 0.0);
     static int integer(const Row &row, const QString &key, int defaultValue = 0);

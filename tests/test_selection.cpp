@@ -9,10 +9,12 @@
 #include "three_d/ThreeDCameraRepository.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QSet>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
+#include <QTextStream>
 #include <QtTest/QtTest>
 
 class SelectionEngineTest : public QObject
@@ -27,6 +29,7 @@ private slots:
     void pureCalculationFixedLens();
     void pureCalculationTelecentric();
     void catalogPersistenceRoundTrip();
+    void sampleOnlyLightCatalogIsUpgraded();
     void motionExposureAndStrobePreference();
     void dataThroughputAndInterfaceRisk();
     void hardConstraintsPreferCompatibleResults();
@@ -75,8 +78,28 @@ void SelectionEngineTest::defaultCatalogManufacturersAreLoaded()
 {
     for (const CameraSpec &camera : m_catalog.cameras())
         QVERIFY2(!camera.manufacturer.trimmed().isEmpty(), qPrintable(camera.model));
-    for (const LensSpec &lens : m_catalog.lenses())
+    for (const CameraSpec &camera : m_catalog.cameras()) {
+        QVERIFY2(!camera.sensorFormat.contains(QStringLiteral("CMOS")), qPrintable(camera.model + QStringLiteral(": ") + camera.sensorFormat));
+        QVERIFY2(!camera.sensorFormat.contains(QString::fromUtf8("Ã")), qPrintable(camera.model + QStringLiteral(": ") + camera.sensorFormat));
+        QVERIFY2(!camera.sensorFormat.contains(QString::fromUtf8("â")), qPrintable(camera.model + QStringLiteral(": ") + camera.sensorFormat));
+        QVERIFY2(!camera.sensorFormat.contains(QString::fromUtf8("脳")), qPrintable(camera.model + QStringLiteral(": ") + camera.sensorFormat));
+        QVERIFY2(!camera.interfaceType.contains(QString::fromUtf8("Ã")), qPrintable(camera.model + QStringLiteral(": ") + camera.interfaceType));
+        QVERIFY2(!camera.interfaceType.contains(QString::fromUtf8("â")), qPrintable(camera.model + QStringLiteral(": ") + camera.interfaceType));
+        QVERIFY2(!camera.interfaceType.contains(QString::fromUtf8("脳")), qPrintable(camera.model + QStringLiteral(": ") + camera.interfaceType));
+        QVERIFY2(!camera.lensMount.contains(QChar(0x00C3)), qPrintable(camera.model + QStringLiteral(": ") + camera.lensMount));
+        QVERIFY2(!camera.lensMount.contains(QChar(0x0097)), qPrintable(camera.model + QStringLiteral(": ") + camera.lensMount));
+        QVERIFY2(!camera.lensMount.contains(QChar(0x00D7)), qPrintable(camera.model + QStringLiteral(": ") + camera.lensMount));
+        QVERIFY2(!camera.lensMount.contains(QChar(0x8133)), qPrintable(camera.model + QStringLiteral(": ") + camera.lensMount));
+        QVERIFY2(!camera.sensorFormat.contains(QStringLiteral("''")), qPrintable(camera.model + QStringLiteral(": ") + camera.sensorFormat));
+        QVERIFY2(camera.colorMode != QString::fromUtf8("黑白"), qPrintable(camera.model));
+    }
+    for (const LensSpec &lens : m_catalog.lenses()) {
         QVERIFY2(!lens.manufacturer.trimmed().isEmpty(), qPrintable(lens.model));
+        QVERIFY2(!lens.lensMount.contains(QChar(0x00C3)), qPrintable(lens.model + QStringLiteral(": ") + lens.lensMount));
+        QVERIFY2(!lens.lensMount.contains(QChar(0x0097)), qPrintable(lens.model + QStringLiteral(": ") + lens.lensMount));
+        QVERIFY2(!lens.lensMount.contains(QChar(0x00D7)), qPrintable(lens.model + QStringLiteral(": ") + lens.lensMount));
+        QVERIFY2(!lens.lensMount.contains(QChar(0x8133)), qPrintable(lens.model + QStringLiteral(": ") + lens.lensMount));
+    }
     int mvotemLightCount = 0;
     for (const LightSpec &light : m_catalog.lights()) {
         QVERIFY2(!light.manufacturer.trimmed().isEmpty(), qPrintable(light.model));
@@ -328,6 +351,31 @@ void SelectionEngineTest::catalogPersistenceRoundTrip()
     QCOMPARE(finalReload.cameras().size(), originalCameraCount);
     QCOMPARE(finalReload.lenses().size(), originalLensCount);
     QCOMPARE(finalReload.lights().size(), originalLightCount);
+}
+
+void SelectionEngineTest::sampleOnlyLightCatalogIsUpgraded()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    QFile source(QStringLiteral(":/data/lights.csv"));
+    QVERIFY2(source.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(source.errorString()));
+    QFile target(QDir(storage.path()).filePath(QStringLiteral("lights.csv")));
+    QVERIFY2(target.open(QIODevice::WriteOnly | QIODevice::Text), qPrintable(target.errorString()));
+
+    QTextStream in(&source);
+    in.setCodec("UTF-8");
+    QTextStream out(&target);
+    out.setCodec("UTF-8");
+    for (int i = 0; i < 7 && !in.atEnd(); ++i)
+        out << in.readLine() << "\n";
+    target.close();
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.loadDefaults(&error), qPrintable(error));
+    QVERIFY(repo.lights().size() >= 180);
 }
 
 void SelectionEngineTest::motionExposureAndStrobePreference()
