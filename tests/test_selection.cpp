@@ -788,6 +788,9 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
     QVERIFY(repository.cameras().size() >= 40);
 
     QSet<QString> brands;
+    int lmiCount = 0;
+    int keyenceCount = 0;
+    int sinceVisionCount = 0;
     for (const ThreeDCameraSpec &camera : repository.cameras()) {
         QVERIFY2(!camera.manufacturer.trimmed().isEmpty(), qPrintable(camera.model));
         QVERIFY2(!camera.series.trimmed().isEmpty(), qPrintable(camera.model));
@@ -798,11 +801,20 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
         QVERIFY2(!camera.sourceDate.trimmed().isEmpty(), qPrintable(camera.model));
         QVERIFY2(!camera.rawSpecs.isEmpty(), qPrintable(camera.model));
         brands.insert(camera.manufacturer);
+        if (camera.manufacturer == QStringLiteral("LMI"))
+            ++lmiCount;
+        if (camera.manufacturer == QString::fromUtf8("基恩士"))
+            ++keyenceCount;
+        if (camera.manufacturer == QString::fromUtf8("深视智能"))
+            ++sinceVisionCount;
     }
 
     QVERIFY(brands.contains(QStringLiteral("LMI")));
+    QVERIFY(lmiCount >= 60);
     QVERIFY(brands.contains(QString::fromUtf8("深视智能")));
+    QVERIFY(sinceVisionCount >= 50);
     QVERIFY(brands.contains(QString::fromUtf8("基恩士")));
+    QVERIFY(keyenceCount >= 27);
     QVERIFY(brands.contains(QString::fromUtf8("海康机器人")));
 }
 
