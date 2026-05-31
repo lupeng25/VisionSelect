@@ -147,6 +147,8 @@ struct SelectionResult {
     double distortionErrorUm = 0.0;
     double lightCoverageMarginPercent = 0.0;
     double lensMegapixelUtilizationPercent = 0.0;
+    bool hardConstraintsPassed = true;
+    QStringList hardFailures;
     CandidateScore score;
     QString schemeTitle;
     QString formulaSummary;

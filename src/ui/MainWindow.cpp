@@ -87,6 +87,18 @@ QString csvCell(QString value)
     value.replace(QLatin1Char('"'), QStringLiteral("\"\""));
     return QLatin1Char('"') + value + QLatin1Char('"');
 }
+
+void replaceStackPage(QStackedWidget *pages, int index, QWidget *page)
+{
+    if (!pages || !page || index < 0 || index >= pages->count())
+        return;
+
+    QWidget *placeholder = pages->widget(index);
+    pages->removeWidget(placeholder);
+    if (placeholder)
+        placeholder->deleteLater();
+    pages->insertWidget(index, page);
+}
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -116,55 +128,8 @@ void MainWindow::buildUi()
         setActivePage(kResultsPageIndex);
     });
     m_pages->addWidget(m_inputPage);
-    m_pureCalculationPage = new PureCalculationPage;
-    m_pages->addWidget(m_pureCalculationPage);
-    m_calculationPage = new CalculationPage;
-    connect(m_calculationPage, &CalculationPage::recalculateRequested, this, [this]() {
-        m_request = m_inputPage->request();
-        refreshCalculationAssistant();
-    });
-    connect(m_calculationPage, &CalculationPage::inputRequested, this, [this]() { setActivePage(0); });
-    connect(m_calculationPage, &CalculationPage::cameraSelectionChanged, this, [this](int row) {
-        m_assistantSelectedCameraRow = row;
-        refreshAssistantLensTable();
-    });
-    m_pages->addWidget(m_calculationPage);
-    m_pages->addWidget(new QWidget);
-    m_resultsPage = new ResultsPage;
-    connect(m_resultsPage, &ResultsPage::comparisonRequested, this, [this]() { setActivePage(kComparisonPageIndex); });
-    m_pages->addWidget(m_resultsPage);
-    m_comparisonPage = new ComparisonPage;
-    connect(m_comparisonPage, &ComparisonPage::recalculateRequested, this, &MainWindow::calculate);
-    connect(m_comparisonPage, &ComparisonPage::exportBomRequested, this, &MainWindow::exportBomCsv);
-    m_pages->addWidget(m_comparisonPage);
-    m_catalogPage = new CatalogPage;
-    connect(m_catalogPage, &CatalogPage::cameraAddRequested, this, &MainWindow::addCamera);
-    connect(m_catalogPage, &CatalogPage::cameraEditRequested, this, &MainWindow::editCamera);
-    connect(m_catalogPage, &CatalogPage::cameraRemoveRequested, this, &MainWindow::removeCamera);
-    connect(m_catalogPage, &CatalogPage::cameraImportRequested, this, &MainWindow::importCameras);
-    connect(m_catalogPage, &CatalogPage::cameraExportRequested, this, &MainWindow::exportCameras);
-    connect(m_catalogPage, &CatalogPage::cameraExportFilteredRequested, this, &MainWindow::exportFilteredCameras);
-    connect(m_catalogPage, &CatalogPage::cameraResetRequested, this, &MainWindow::resetCameras);
-    connect(m_catalogPage, &CatalogPage::lensAddRequested, this, &MainWindow::addLens);
-    connect(m_catalogPage, &CatalogPage::lensEditRequested, this, &MainWindow::editLens);
-    connect(m_catalogPage, &CatalogPage::lensRemoveRequested, this, &MainWindow::removeLens);
-    connect(m_catalogPage, &CatalogPage::lensImportRequested, this, &MainWindow::importLenses);
-    connect(m_catalogPage, &CatalogPage::lensExportRequested, this, &MainWindow::exportLenses);
-    connect(m_catalogPage, &CatalogPage::lensExportFilteredRequested, this, &MainWindow::exportFilteredLenses);
-    connect(m_catalogPage, &CatalogPage::lensResetRequested, this, &MainWindow::resetLenses);
-    connect(m_catalogPage, &CatalogPage::lightAddRequested, this, &MainWindow::addLight);
-    connect(m_catalogPage, &CatalogPage::lightEditRequested, this, &MainWindow::editLight);
-    connect(m_catalogPage, &CatalogPage::lightRemoveRequested, this, &MainWindow::removeLight);
-    connect(m_catalogPage, &CatalogPage::lightImportRequested, this, &MainWindow::importLights);
-    connect(m_catalogPage, &CatalogPage::lightExportRequested, this, &MainWindow::exportLights);
-    connect(m_catalogPage, &CatalogPage::lightExportFilteredRequested, this, &MainWindow::exportFilteredLights);
-    connect(m_catalogPage, &CatalogPage::lightResetRequested, this, &MainWindow::resetLights);
-    m_pages->addWidget(m_catalogPage);
-    m_reportPage = new ReportPage;
-    connect(m_reportPage, &ReportPage::exportPdfRequested, this, &MainWindow::exportReportPdf);
-    connect(m_reportPage, &ReportPage::exportBomRequested, this, &MainWindow::exportBomCsv);
-    connect(m_reportPage, &ReportPage::recalculateRequested, this, &MainWindow::calculate);
-    m_pages->addWidget(m_reportPage);
+    for (int i = 1; i <= kReportPageIndex; ++i)
+        m_pages->addWidget(new QWidget);
     rootLayout->addWidget(m_pages, 1);
 
     setCentralWidget(root);
@@ -260,9 +225,13 @@ void MainWindow::setActivePage(int index)
 {
     if (!m_pages || index < 0 || index >= m_pages->count())
         return;
-    if (index == kPureCalculationPageIndex && m_pureCalculationPage)
-        m_pureCalculationPage->refresh();
+    if (index == kPureCalculationPageIndex) {
+        ensurePureCalculationPage();
+        if (m_pureCalculationPage)
+            m_pureCalculationPage->refresh();
+    }
     if (index == kCalculationPageIndex) {
+        ensureCalculationPage();
         m_request = m_inputPage->request();
         refreshCalculationAssistant();
     }
@@ -271,8 +240,14 @@ void MainWindow::setActivePage(int index)
         if (m_threeDCameraPage)
             m_threeDCameraPage->activate();
     }
+    if (index == kResultsPageIndex)
+        ensureResultsPage();
+    if (index == kComparisonPageIndex)
+        ensureComparisonPage();
     if (index == kCatalogPageIndex)
         ensureCatalogPageInitialized();
+    if (index == kReportPageIndex)
+        ensureReportPage();
     if ((index == kResultsPageIndex || index == kComparisonPageIndex || index == kReportPageIndex)
         && m_results.isEmpty()) {
         calculate();
@@ -285,21 +260,114 @@ void MainWindow::setActivePage(int index)
     }
 }
 
+void MainWindow::ensurePureCalculationPage()
+{
+    if (m_pureCalculationPage || !m_pages)
+        return;
+
+    m_pureCalculationPage = new PureCalculationPage;
+    replaceStackPage(m_pages, kPureCalculationPageIndex, m_pureCalculationPage);
+}
+
+void MainWindow::ensureCalculationPage()
+{
+    if (m_calculationPage || !m_pages)
+        return;
+
+    m_calculationPage = new CalculationPage;
+    connect(m_calculationPage, &CalculationPage::recalculateRequested, this, [this]() {
+        m_request = m_inputPage->request();
+        refreshCalculationAssistant();
+    });
+    connect(m_calculationPage, &CalculationPage::inputRequested, this, [this]() { setActivePage(0); });
+    connect(m_calculationPage, &CalculationPage::cameraSelectionChanged, this, [this](int row) {
+        m_assistantSelectedCameraRow = row;
+        refreshAssistantLensTable();
+    });
+    replaceStackPage(m_pages, kCalculationPageIndex, m_calculationPage);
+}
+
+void MainWindow::ensureResultsPage()
+{
+    if (m_resultsPage || !m_pages)
+        return;
+
+    m_resultsPage = new ResultsPage;
+    connect(m_resultsPage, &ResultsPage::comparisonRequested, this, [this]() { setActivePage(kComparisonPageIndex); });
+    replaceStackPage(m_pages, kResultsPageIndex, m_resultsPage);
+    if (!m_results.isEmpty())
+        m_resultsPage->setResults(m_results, m_request);
+}
+
+void MainWindow::ensureComparisonPage()
+{
+    if (m_comparisonPage || !m_pages)
+        return;
+
+    m_comparisonPage = new ComparisonPage;
+    connect(m_comparisonPage, &ComparisonPage::recalculateRequested, this, &MainWindow::calculate);
+    connect(m_comparisonPage, &ComparisonPage::exportBomRequested, this, &MainWindow::exportBomCsv);
+    replaceStackPage(m_pages, kComparisonPageIndex, m_comparisonPage);
+    if (!m_results.isEmpty())
+        m_comparisonPage->setResults(m_results);
+}
+
+void MainWindow::ensureCatalogPage()
+{
+    if (m_catalogPage || !m_pages)
+        return;
+
+    m_catalogPage = new CatalogPage;
+    connect(m_catalogPage, &CatalogPage::cameraAddRequested, this, &MainWindow::addCamera);
+    connect(m_catalogPage, &CatalogPage::cameraEditRequested, this, &MainWindow::editCamera);
+    connect(m_catalogPage, &CatalogPage::cameraRemoveRequested, this, &MainWindow::removeCamera);
+    connect(m_catalogPage, &CatalogPage::cameraImportRequested, this, &MainWindow::importCameras);
+    connect(m_catalogPage, &CatalogPage::cameraExportRequested, this, &MainWindow::exportCameras);
+    connect(m_catalogPage, &CatalogPage::cameraExportFilteredRequested, this, &MainWindow::exportFilteredCameras);
+    connect(m_catalogPage, &CatalogPage::cameraResetRequested, this, &MainWindow::resetCameras);
+    connect(m_catalogPage, &CatalogPage::lensAddRequested, this, &MainWindow::addLens);
+    connect(m_catalogPage, &CatalogPage::lensEditRequested, this, &MainWindow::editLens);
+    connect(m_catalogPage, &CatalogPage::lensRemoveRequested, this, &MainWindow::removeLens);
+    connect(m_catalogPage, &CatalogPage::lensImportRequested, this, &MainWindow::importLenses);
+    connect(m_catalogPage, &CatalogPage::lensExportRequested, this, &MainWindow::exportLenses);
+    connect(m_catalogPage, &CatalogPage::lensExportFilteredRequested, this, &MainWindow::exportFilteredLenses);
+    connect(m_catalogPage, &CatalogPage::lensResetRequested, this, &MainWindow::resetLenses);
+    connect(m_catalogPage, &CatalogPage::lightAddRequested, this, &MainWindow::addLight);
+    connect(m_catalogPage, &CatalogPage::lightEditRequested, this, &MainWindow::editLight);
+    connect(m_catalogPage, &CatalogPage::lightRemoveRequested, this, &MainWindow::removeLight);
+    connect(m_catalogPage, &CatalogPage::lightImportRequested, this, &MainWindow::importLights);
+    connect(m_catalogPage, &CatalogPage::lightExportRequested, this, &MainWindow::exportLights);
+    connect(m_catalogPage, &CatalogPage::lightExportFilteredRequested, this, &MainWindow::exportFilteredLights);
+    connect(m_catalogPage, &CatalogPage::lightResetRequested, this, &MainWindow::resetLights);
+    replaceStackPage(m_pages, kCatalogPageIndex, m_catalogPage);
+}
+
+void MainWindow::ensureReportPage()
+{
+    if (m_reportPage || !m_pages)
+        return;
+
+    m_reportPage = new ReportPage;
+    connect(m_reportPage, &ReportPage::exportPdfRequested, this, &MainWindow::exportReportPdf);
+    connect(m_reportPage, &ReportPage::exportBomRequested, this, &MainWindow::exportBomCsv);
+    connect(m_reportPage, &ReportPage::recalculateRequested, this, &MainWindow::calculate);
+    replaceStackPage(m_pages, kReportPageIndex, m_reportPage);
+    if (!m_results.isEmpty())
+        m_reportPage->setReportData(m_request, m_results);
+}
+
 void MainWindow::ensureThreeDCameraPage()
 {
     if (m_threeDCameraPage || !m_pages)
         return;
 
-    QWidget *placeholder = m_pages->widget(kThreeDCameraPageIndex);
     m_threeDCameraPage = new ThreeDCameraPage;
-    m_pages->removeWidget(placeholder);
-    if (placeholder)
-        placeholder->deleteLater();
-    m_pages->insertWidget(kThreeDCameraPageIndex, m_threeDCameraPage);
+    replaceStackPage(m_pages, kThreeDCameraPageIndex, m_threeDCameraPage);
 }
 
 void MainWindow::ensureCatalogPageInitialized()
 {
+    ensureCatalogPage();
     if (m_catalogPageInitialized || !m_catalogPage)
         return;
 
@@ -312,11 +380,15 @@ void MainWindow::calculate()
     m_request = m_inputPage->request();
     SelectionEngine engine;
     m_results = engine.select(m_request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 20);
-    refreshCalculationAssistant();
-    m_resultsPage->setResults(m_results, m_request);
-    m_comparisonPage->setResults(m_results);
+    if (m_pages && m_pages->currentIndex() == kCalculationPageIndex)
+        refreshCalculationAssistant();
+    if (m_resultsPage)
+        m_resultsPage->setResults(m_results, m_request);
+    if (m_comparisonPage)
+        m_comparisonPage->setResults(m_results);
     refreshCatalogTables();
-    m_reportPage->setReportData(m_request, m_results);
+    if (m_reportPage)
+        m_reportPage->setReportData(m_request, m_results);
     if (m_summaryLabel)
         m_summaryLabel->setText(m_catalog.summary());
 }

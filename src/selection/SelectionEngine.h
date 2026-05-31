@@ -33,7 +33,8 @@ private:
     SelectionResult evaluatePair(const SelectionRequest &request,
                                  const CameraSpec &camera,
                                  const LensSpec &lens,
-                                 const LightSpec &light) const;
+                                 const LightSpec &light,
+                                 bool includeDetails = true) const;
 
     LightSpec chooseLight(const SelectionRequest &request,
                           const LensSpec &lens,
@@ -47,17 +48,20 @@ private:
 
     void scoreCamera(const SelectionRequest &request,
                      const CameraSpec &camera,
-                     SelectionResult *result) const;
+                     SelectionResult *result,
+                     bool includeDetails) const;
 
     void scoreFixedFocalLens(const SelectionRequest &request,
                              const CameraSpec &camera,
                              const LensSpec &lens,
-                             SelectionResult *result) const;
+                             SelectionResult *result,
+                             bool includeDetails) const;
 
     void scoreTelecentricLens(const SelectionRequest &request,
                               const CameraSpec &camera,
                               const LensSpec &lens,
-                              SelectionResult *result) const;
+                              SelectionResult *result,
+                              bool includeDetails) const;
 
     static bool measurementNeedsTelecentric(const SelectionRequest &request);
 };

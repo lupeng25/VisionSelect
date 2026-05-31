@@ -26,6 +26,8 @@ private slots:
     void catalogPersistenceRoundTrip();
     void motionExposureAndStrobePreference();
     void dataThroughputAndInterfaceRisk();
+    void hardConstraintsPreferCompatibleResults();
+    void hardConstraintFallbackKeepsDiagnosticResult();
     void fixedLensDofAndDistortionRisk();
     void lightCoverageAffectsScore();
     void telecentricMeasurementWins();
@@ -435,6 +437,121 @@ void SelectionEngineTest::dataThroughputAndInterfaceRisk()
     const QString risks = results.first().score.risks.join(QStringLiteral(";"));
     QVERIFY2(risks.contains(QString::fromUtf8("带宽")), qPrintable(risks));
     QVERIFY2(risks.contains(QStringLiteral("MP")), qPrintable(risks));
+    QVERIFY(!results.first().hardConstraintsPassed);
+    QVERIFY(results.first().hardFailures.join(QStringLiteral(";")).contains(QString::fromUtf8("接口带宽")));
+}
+
+void SelectionEngineTest::hardConstraintsPreferCompatibleResults()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 20.0;
+    request.objectHeightMm = 18.0;
+    request.placementMarginMm = 2.0;
+    request.minFeatureUm = 300.0;
+    request.measurementToleranceUm = 100.0;
+    request.workingDistanceMm = 120.0;
+    request.requiredFps = 10.0;
+    request.detectionType = DetectionType::DefectInspection;
+    request.heightVariationMm = 0.0;
+
+    CameraSpec camera;
+    camera.model = QStringLiteral("CAM");
+    camera.manufacturer = QStringLiteral("Test");
+    camera.resolutionX = 2448;
+    camera.resolutionY = 2048;
+    camera.pixelSizeUm = 3.45;
+    camera.colorMode = QStringLiteral("Mono");
+    camera.shutterType = QStringLiteral("Global");
+    camera.maxFps = 60.0;
+    camera.interfaceType = QStringLiteral("USB3");
+    camera.bandwidthMBps = 500.0;
+    camera.bitDepth = 8.0;
+    camera.lensMount = QStringLiteral("C");
+
+    LensSpec badLens;
+    badLens.model = QStringLiteral("BAD-FOV");
+    badLens.manufacturer = QStringLiteral("Test");
+    badLens.lensType = LensType::FixedFocal;
+    badLens.lensMount = QStringLiteral("C");
+    badLens.focalLengthMm = 100.0;
+    badLens.minWorkingDistanceMm = 50.0;
+    badLens.imageCircleMm = 12.0;
+    badLens.megapixelRating = 12.0;
+    badLens.recommendedMinPixelUm = 3.45;
+    badLens.fNumber = 4.0;
+
+    LensSpec goodLens = badLens;
+    goodLens.model = QStringLiteral("GOOD-FOV");
+    goodLens.focalLengthMm = 16.0;
+
+    LightSpec light;
+    light.model = QStringLiteral("LIGHT");
+    light.manufacturer = QStringLiteral("Test");
+    light.lightType = LightType::Bar;
+    light.mode = QStringLiteral("Strobe");
+    light.activeWidthMm = 80.0;
+    light.activeHeightMm = 80.0;
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, {camera}, {badLens, goodLens}, {light}, 1);
+    QVERIFY(!results.isEmpty());
+    QCOMPARE(results.first().lens.model, QStringLiteral("GOOD-FOV"));
+    QVERIFY(results.first().hardConstraintsPassed);
+}
+
+void SelectionEngineTest::hardConstraintFallbackKeepsDiagnosticResult()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 20.0;
+    request.objectHeightMm = 18.0;
+    request.placementMarginMm = 2.0;
+    request.minFeatureUm = 300.0;
+    request.measurementToleranceUm = 100.0;
+    request.workingDistanceMm = 120.0;
+    request.requiredFps = 10.0;
+    request.detectionType = DetectionType::DefectInspection;
+    request.heightVariationMm = 0.0;
+
+    CameraSpec camera;
+    camera.model = QStringLiteral("CAM");
+    camera.manufacturer = QStringLiteral("Test");
+    camera.resolutionX = 2448;
+    camera.resolutionY = 2048;
+    camera.pixelSizeUm = 3.45;
+    camera.colorMode = QStringLiteral("Mono");
+    camera.shutterType = QStringLiteral("Global");
+    camera.maxFps = 60.0;
+    camera.interfaceType = QStringLiteral("USB3");
+    camera.bandwidthMBps = 500.0;
+    camera.bitDepth = 8.0;
+    camera.lensMount = QStringLiteral("C");
+
+    LensSpec lens;
+    lens.model = QStringLiteral("BAD-FOV");
+    lens.manufacturer = QStringLiteral("Test");
+    lens.lensType = LensType::FixedFocal;
+    lens.lensMount = QStringLiteral("C");
+    lens.focalLengthMm = 100.0;
+    lens.minWorkingDistanceMm = 50.0;
+    lens.imageCircleMm = 12.0;
+    lens.megapixelRating = 12.0;
+    lens.recommendedMinPixelUm = 3.45;
+    lens.fNumber = 4.0;
+
+    LightSpec light;
+    light.model = QStringLiteral("LIGHT");
+    light.manufacturer = QStringLiteral("Test");
+    light.lightType = LightType::Bar;
+    light.mode = QStringLiteral("Strobe");
+    light.activeWidthMm = 80.0;
+    light.activeHeightMm = 80.0;
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, {camera}, {lens}, {light}, 1);
+    QVERIFY(!results.isEmpty());
+    QVERIFY(!results.first().hardConstraintsPassed);
+    QVERIFY(results.first().score.score <= 20.0);
+    QVERIFY(results.first().hardFailures.join(QStringLiteral(";")).contains(QStringLiteral("FOV")));
 }
 
 void SelectionEngineTest::fixedLensDofAndDistortionRisk()

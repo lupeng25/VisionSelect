@@ -112,11 +112,21 @@ QString productLabel(const QString &manufacturer, const QString &model)
     return manufacturer.trimmed() + QLatin1Char(' ') + model;
 }
 
+QString compatibilityText(const SelectionResult &result)
+{
+    return result.hardConstraintsPassed
+        ? QString::fromUtf8("可用")
+        : QString::fromUtf8("不适配");
+}
+
 QString riskSummary(const SelectionResult &result)
 {
-    return result.score.risks.isEmpty()
+    QStringList risks = result.score.risks;
+    if (!result.hardFailures.isEmpty())
+        risks.prepend(QString::fromUtf8("硬性不适配：") + result.hardFailures.join(QString::fromUtf8("；")));
+    return risks.isEmpty()
         ? QString::fromUtf8("无主要风险")
-        : result.score.risks.join(QString::fromUtf8("；"));
+        : risks.join(QString::fromUtf8("；"));
 }
 
 QString exposureText(double exposureUs)

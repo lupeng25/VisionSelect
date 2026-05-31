@@ -132,11 +132,21 @@ QString productLabel(const QString &manufacturer, const QString &model)
     return manufacturer.trimmed() + QLatin1Char(' ') + model;
 }
 
+QString compatibilityText(const SelectionResult &result)
+{
+    return result.hardConstraintsPassed
+        ? QString::fromUtf8("可用")
+        : QString::fromUtf8("不适配");
+}
+
 QString riskSummary(const SelectionResult &result)
 {
-    return result.score.risks.isEmpty()
+    QStringList risks = result.score.risks;
+    if (!result.hardFailures.isEmpty())
+        risks.prepend(QString::fromUtf8("硬性不适配：") + result.hardFailures.join(QString::fromUtf8("；")));
+    return risks.isEmpty()
         ? QString::fromUtf8("无主要风险")
-        : result.score.risks.join(QString::fromUtf8("；"));
+        : risks.join(QString::fromUtf8("；"));
 }
 
 QString exposureText(double exposureUs)
@@ -252,7 +262,7 @@ bool PdfReportWriter::write(const QString &filePath,
             productLabel(r.light.manufacturer, r.light.model),
             QStringLiteral("%1x%2").arg(r.effectiveFovWidthMm, 0, 'f', 1).arg(r.effectiveFovHeightMm, 0, 'f', 1),
             QStringLiteral("%1um").arg(r.objectPixelSizeUm, 0, 'f', 1),
-            r.score.risks.isEmpty() ? QString::fromUtf8("\346\227\240\344\270\273\350\246\201\351\243\216\351\231\251") : r.score.risks.join(QString::fromUtf8("\357\274\233")).left(42)
+            riskSummary(r).left(42)
         }, widths);
     }
 
@@ -286,6 +296,7 @@ bool PdfReportWriter::write(const QString &filePath,
                       + productLabel(top.camera.manufacturer, top.camera.model) + QStringLiteral(" + ")
                       + productLabel(top.lens.manufacturer, top.lens.model) + QStringLiteral(" + ")
                       + productLabel(top.light.manufacturer, top.light.model));
+        page.keyValue(QString::fromUtf8("适配状态"), compatibilityText(top));
         page.keyValue(QString::fromUtf8("\350\256\241\347\256\227\350\247\206\351\207\216"), QStringLiteral("%1 x %2 mm")
                       .arg(top.effectiveFovWidthMm, 0, 'f', 2)
                       .arg(top.effectiveFovHeightMm, 0, 'f', 2));
@@ -306,8 +317,8 @@ bool PdfReportWriter::write(const QString &filePath,
                       .arg(top.lensMegapixelUtilizationPercent, 0, 'f', 0)
                       .arg(top.lightCoverageMarginPercent, 0, 'f', 0));
         page.paragraph(top.score.reasons.join(QString::fromUtf8("\357\274\233")));
-        if (!top.score.risks.isEmpty())
-            page.paragraph(QString::fromUtf8("\351\243\216\351\231\251\346\217\220\347\244\272\357\274\232") + top.score.risks.join(QString::fromUtf8("\357\274\233")));
+        if (!top.score.risks.isEmpty() || !top.hardFailures.isEmpty())
+            page.paragraph(QString::fromUtf8("\351\243\216\351\231\251\346\217\220\347\244\272\357\274\232") + riskSummary(top));
 
         page.section(QStringLiteral("BOM"));
         const QVector<int> bomWidths = {58, 110, 130, 260, 112};

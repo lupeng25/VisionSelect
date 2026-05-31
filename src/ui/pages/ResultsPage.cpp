@@ -49,17 +49,17 @@ ResultsPage::ResultsPage(QWidget *parent)
 
     m_table = new QTableWidget;
     setupTable(m_table);
-    m_table->setColumnCount(10);
+    m_table->setColumnCount(11);
     m_table->setHorizontalHeaderLabels({
-        QString::fromUtf8("\347\261\273\345\236\213"), QString::fromUtf8("\345\276\227\345\210\206"), QString::fromUtf8("\347\233\270\346\234\272"),
+        QString::fromUtf8("\347\261\273\345\236\213"), QString::fromUtf8("状态"), QString::fromUtf8("\345\276\227\345\210\206"), QString::fromUtf8("\347\233\270\346\234\272"),
         QString::fromUtf8("\351\225\234\345\244\264"), QString::fromUtf8("\345\205\211\346\272\220"), QStringLiteral("FOV(mm)"),
         QString::fromUtf8("\347\211\251\346\226\271\345\203\217\347\264\240"), QString::fromUtf8("\345\200\215\347\216\207/\347\204\246\350\267\235"), QStringLiteral("WD/DOF"), QString::fromUtf8("\351\243\216\351\231\251")
     });
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-    const int resultColumnWidths[] = {46, 50, 150, 150, 145, 78, 74, 78, 85};
-    for (int column = 0; column < 9; ++column)
+    const int resultColumnWidths[] = {46, 56, 50, 150, 150, 145, 78, 74, 78, 85};
+    for (int column = 0; column < 10; ++column)
         m_table->setColumnWidth(column, resultColumnWidths[column]);
-    m_table->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Stretch);
+    m_table->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Stretch);
     connect(m_table, &QTableWidget::cellClicked, this, [this](int row, int) {
         const int sourceRow = rowSourceIndex(m_table, row);
         refreshDetails(sourceRow >= 0 ? sourceRow : row);
@@ -96,23 +96,22 @@ void ResultsPage::refreshTable(const SelectionRequest &request)
     for (int row = 0; row < m_results.size(); ++row) {
         const SelectionResult &r = m_results.at(row);
         m_table->setItem(row, 0, indexedItem(r.isTelecentric() ? QString::fromUtf8("\350\277\234\345\277\203") : QString::fromUtf8("\346\231\256\351\200\232"), row));
-        m_table->setItem(row, 1, item(number(r.score.score, 1)));
-        m_table->setItem(row, 2, item(productLabel(r.camera.manufacturer, r.camera.model)));
-        m_table->setItem(row, 3, item(productLabel(r.lens.manufacturer, r.lens.model)));
-        m_table->setItem(row, 4, item(productLabel(r.light.manufacturer, r.light.model)));
-        m_table->setItem(row, 5, item(QStringLiteral("%1 x %2")
+        m_table->setItem(row, 1, item(compatibilityText(r)));
+        m_table->setItem(row, 2, item(number(r.score.score, 1)));
+        m_table->setItem(row, 3, item(productLabel(r.camera.manufacturer, r.camera.model)));
+        m_table->setItem(row, 4, item(productLabel(r.lens.manufacturer, r.lens.model)));
+        m_table->setItem(row, 5, item(productLabel(r.light.manufacturer, r.light.model)));
+        m_table->setItem(row, 6, item(QStringLiteral("%1 x %2")
             .arg(r.effectiveFovWidthMm, 0, 'f', 1)
             .arg(r.effectiveFovHeightMm, 0, 'f', 1)));
-        m_table->setItem(row, 6, item(QStringLiteral("%1 um").arg(r.objectPixelSizeUm, 0, 'f', 2)));
-        m_table->setItem(row, 7, item(r.isTelecentric()
+        m_table->setItem(row, 7, item(QStringLiteral("%1 um").arg(r.objectPixelSizeUm, 0, 'f', 2)));
+        m_table->setItem(row, 8, item(r.isTelecentric()
             ? QStringLiteral("%1x").arg(r.magnification, 0, 'f', 3)
             : QStringLiteral("%1 mm").arg(r.lens.focalLengthMm, 0, 'f', 1)));
-        m_table->setItem(row, 8, item(r.isTelecentric()
+        m_table->setItem(row, 9, item(r.isTelecentric()
             ? QStringLiteral("WD %1 / DOF %2").arg(r.lens.nominalWorkingDistanceMm, 0, 'f', 0).arg(r.estimatedDofMm, 0, 'f', 1)
             : QStringLiteral("min WD %1 / DOF %2").arg(r.lens.minWorkingDistanceMm, 0, 'f', 0).arg(r.estimatedDofMm, 0, 'f', 1)));
-        m_table->setItem(row, 9, item(r.score.risks.isEmpty()
-            ? QString::fromUtf8("\346\227\240\344\270\273\350\246\201\351\243\216\351\231\251")
-            : r.score.risks.join(QString::fromUtf8("\357\274\233"))));
+        m_table->setItem(row, 10, item(riskSummary(r)));
     }
     m_table->setSortingEnabled(true);
     if (!m_results.isEmpty()) {
@@ -133,6 +132,7 @@ void ResultsPage::refreshDetails(int row)
         + productLabel(r.lens.manufacturer, r.lens.model) + QStringLiteral(" + ")
         + productLabel(r.light.manufacturer, r.light.model) + QStringLiteral("</h3>");
     text += QString::fromUtf8("<p><b>\345\205\254\345\274\217\357\274\232</b>%1</p>").arg(r.formulaSummary);
+    text += QString::fromUtf8("<p><b>适配状态：</b>%1</p>").arg(compatibilityText(r));
     text += QString::fromUtf8("<p><b>\346\234\211\346\225\210 FOV\357\274\232</b>%1 x %2 mm\357\274\233<b>\347\211\251\346\226\271\345\203\217\347\264\240\357\274\232</b>%3 um/px\357\274\233<b>\346\216\245\345\217\243\345\270\246\345\256\275\357\274\232</b>%4 MB/s\343\200\202</p>")
         .arg(r.effectiveFovWidthMm, 0, 'f', 2)
         .arg(r.effectiveFovHeightMm, 0, 'f', 2)
@@ -162,8 +162,9 @@ void ResultsPage::refreshDetails(int row)
             .arg(r.residualTelecentricErrorUm, 0, 'f', 2);
     }
     text += QString::fromUtf8("<p><b>\346\216\250\350\215\220\347\220\206\347\224\261\357\274\232</b>%1</p>").arg(r.score.reasons.join(QString::fromUtf8("\357\274\233")));
-    text += QString::fromUtf8("<p><b>\351\243\216\351\231\251\346\217\220\347\244\272\357\274\232</b>%1</p>").arg(r.score.risks.isEmpty()
+    const QString riskText = (r.score.risks.isEmpty() && r.hardFailures.isEmpty())
         ? QString::fromUtf8("\346\227\240\344\270\273\350\246\201\351\243\216\351\231\251\357\274\214\344\273\215\345\273\272\350\256\256\347\273\223\345\220\210\345\216\202\345\256\266 MTF/DOF \344\270\216\347\216\260\345\234\272\345\205\211\346\272\220\345\256\236\346\265\213\347\241\256\350\256\244\343\200\202")
-        : r.score.risks.join(QString::fromUtf8("\357\274\233")));
+        : riskSummary(r);
+    text += QString::fromUtf8("<p><b>\351\243\216\351\231\251\346\217\220\347\244\272\357\274\232</b>%1</p>").arg(riskText);
     m_details->setHtml(text);
 }

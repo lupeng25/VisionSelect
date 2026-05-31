@@ -24,6 +24,7 @@ void installTableCopyShortcut(QTableWidget *table);
 void setupTable(QTableWidget *table);
 QString number(double value, int decimals = 2);
 QString productLabel(const QString &manufacturer, const QString &model);
+QString compatibilityText(const SelectionResult &result);
 QString riskSummary(const SelectionResult &result);
 QString exposureText(double exposureUs);
 QDoubleSpinBox *makeSpin(double min, double max, double value, const QString &suffix, int decimals = 2);

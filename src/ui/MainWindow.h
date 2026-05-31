@@ -54,6 +54,12 @@ private:
     void buildUi();
     QWidget *createSidebar();
 
+    void ensurePureCalculationPage();
+    void ensureCalculationPage();
+    void ensureResultsPage();
+    void ensureComparisonPage();
+    void ensureCatalogPage();
+    void ensureReportPage();
     void ensureThreeDCameraPage();
     void ensureCatalogPageInitialized();
     void setActivePage(int index);
