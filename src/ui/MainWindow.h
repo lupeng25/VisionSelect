@@ -40,9 +40,15 @@ private:
     QLabel *m_brandSubtitleLabel = nullptr;
     QLabel *m_brandBadgeLabel = nullptr;
     QLabel *m_navTitleLabel = nullptr;
+    QVector<QLabel *> m_navSectionLabels;
     QLabel *m_summaryTitleLabel = nullptr;
     QComboBox *m_languageCombo = nullptr;
     QPushButton *m_licenseButton = nullptr;
+    QLabel *m_summaryStatusLabel = nullptr;
+    QLabel *m_cameraCountLabel = nullptr;
+    QLabel *m_lensCountLabel = nullptr;
+    QLabel *m_lightCountLabel = nullptr;
+    QLabel *m_languageLabel = nullptr;
     bool m_catalogPageInitialized = false;
 
     CalculationPage *m_calculationPage = nullptr;
@@ -65,6 +71,7 @@ private:
     void rebuildPagesForLanguage();
     void syncLanguageCombo();
     void showLicenseInfo();
+    void refreshSidebarSummary();
 
     void ensurePureCalculationPage();
     void ensureCalculationPage();

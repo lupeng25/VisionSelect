@@ -3,13 +3,16 @@
 #include "selection/SelectionEngine.h"
 #include "ui/UiHelpers.h"
 
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QLayoutItem>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QVBoxLayout>
+#include <QtGlobal>
 
 using namespace UiHelpers;
 
@@ -32,27 +35,44 @@ QString lensCategory(const SelectionResult &result)
         ? localizedText("远心", "Telecentric")
         : localizedText("普通", "Fixed-focal");
 }
+
+QString shortProduct(const QString &manufacturer, const QString &model)
+{
+    const QString label = productLabel(manufacturer, model);
+    return label.size() > 34 ? label.left(31) + QStringLiteral("...") : label;
+}
 }
 
 ResultsPage::ResultsPage(QWidget *parent)
     : QWidget(parent)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(28, 24, 28, 24);
+    layout->setContentsMargins(26, 22, 26, 22);
     layout->setSpacing(14);
 
-    layout->addWidget(pageTitle(localizedText("推荐结果", "Recommended Results")));
-    m_summaryLabel = new QLabel;
-    m_summaryLabel->setObjectName(QStringLiteral("SectionTitle"));
-    layout->addWidget(m_summaryLabel);
-
     QHBoxLayout *resultActions = new QHBoxLayout;
-    QPushButton *compareButton = new QPushButton(localizedText("查看方案对比", "View Plan Comparison"));
-    compareButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *compareButton = actionButton(localizedText("方案对比", "Plan Comparison"), QStringLiteral(":/icons/ui/compare.png"), true);
     connect(compareButton, &QPushButton::clicked, this, &ResultsPage::comparisonRequested);
     resultActions->addWidget(compareButton);
     resultActions->addStretch();
-    layout->addLayout(resultActions);
+    QWidget *actionsWidget = new QWidget;
+    actionsWidget->setLayout(resultActions);
+    layout->addWidget(pageHeader(localizedText("推荐结果", "Recommended Results"),
+        localizedText("优先展示可交付方案、主要风险和核心 BOM，保留完整明细用于工程复核。",
+                      "Prioritize deliverable plans, key risks, and core BOM while preserving full engineering detail."),
+        actionsWidget));
+
+    m_summaryLabel = new QLabel;
+    m_summaryLabel->setObjectName(QStringLiteral("SectionTitle"));
+    m_summaryLabel->setWordWrap(true);
+    layout->addWidget(m_summaryLabel);
+
+    QFrame *cards = new QFrame;
+    cards->setObjectName(QStringLiteral("SectionCard"));
+    m_cardsLayout = new QHBoxLayout(cards);
+    m_cardsLayout->setContentsMargins(12, 12, 12, 12);
+    m_cardsLayout->setSpacing(12);
+    layout->addWidget(cards);
 
     m_table = new QTableWidget;
     setupTable(m_table);
@@ -60,12 +80,12 @@ ResultsPage::ResultsPage(QWidget *parent)
     m_table->setHorizontalHeaderLabels({
         localizedText("类型", "Type"), localizedText("状态", "Status"), localizedText("得分", "Score"),
         localizedText("相机", "Camera"), localizedText("镜头", "Lens"), localizedText("光源", "Light"),
-        QStringLiteral("FOV(mm)"), localizedText("物方像素", "Object Pixel"),
-        localizedText("倍率/焦距", "Mag. / Focal"), QStringLiteral("WD/DOF"),
+        QStringLiteral("FOV(mm)"), localizedText("物方像素", "Obj Pixel"),
+        localizedText("倍率/焦距", "Mag/Focal"), QStringLiteral("WD/DOF"),
         localizedText("风险", "Risk")
     });
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-    const int resultColumnWidths[] = {70, 86, 50, 150, 150, 145, 78, 88, 92, 95};
+    const int resultColumnWidths[] = {70, 86, 54, 156, 156, 150, 88, 92, 96, 102};
     for (int column = 0; column < 10; ++column)
         m_table->setColumnWidth(column, resultColumnWidths[column]);
     m_table->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Stretch);
@@ -89,11 +109,76 @@ void ResultsPage::setResults(const QVector<SelectionResult> &results,
     refreshTable(request);
 }
 
+void ResultsPage::refreshCards(const SelectionRequest &request)
+{
+    Q_UNUSED(request)
+    if (!m_cardsLayout)
+        return;
+
+    while (QLayoutItem *child = m_cardsLayout->takeAt(0)) {
+        if (child->widget())
+            child->widget()->deleteLater();
+        delete child;
+    }
+
+    const int count = qMin(3, m_results.size());
+    if (count == 0) {
+        m_cardsLayout->addWidget(metricCard(localizedText("暂无推荐方案", "No Recommendations"),
+            localizedText("请先计算", "Calculate first"),
+            localizedText("返回需求建模页输入约束后生成候选方案。", "Return to requirements and generate candidate plans."),
+            QStringLiteral("warn")));
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        const SelectionResult &r = m_results.at(i);
+        QFrame *card = new QFrame;
+        card->setObjectName(QStringLiteral("PlanCard"));
+        setWidgetState(card, r.hardConstraintsPassed ? QStringLiteral("good") : QStringLiteral("bad"));
+        QVBoxLayout *cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(14, 12, 14, 12);
+        cardLayout->setSpacing(7);
+
+        QHBoxLayout *top = new QHBoxLayout;
+        QLabel *rank = new QLabel(QStringLiteral("#%1  %2").arg(i + 1).arg(lensCategory(r)));
+        rank->setObjectName(QStringLiteral("MetricLabel"));
+        top->addWidget(rank, 1);
+        top->addWidget(statusBadge(compatibilityText(r), r.hardConstraintsPassed ? QStringLiteral("good") : QStringLiteral("bad")));
+        cardLayout->addLayout(top);
+
+        QLabel *score = new QLabel(QStringLiteral("%1").arg(r.score.score, 0, 'f', 1));
+        score->setObjectName(QStringLiteral("MetricValue"));
+        cardLayout->addWidget(score);
+
+        QLabel *bom = new QLabel(QStringLiteral("%1\n%2\n%3")
+            .arg(shortProduct(r.camera.manufacturer, r.camera.model),
+                 shortProduct(r.lens.manufacturer, r.lens.model),
+                 shortProduct(r.light.manufacturer, r.light.model)));
+        bom->setObjectName(QStringLiteral("MetricDetail"));
+        bom->setWordWrap(true);
+        cardLayout->addWidget(bom);
+
+        QLabel *calculation = new QLabel(QStringLiteral("FOV %1 x %2 mm | %3 um/px")
+            .arg(r.effectiveFovWidthMm, 0, 'f', 1)
+            .arg(r.effectiveFovHeightMm, 0, 'f', 1)
+            .arg(r.objectPixelSizeUm, 0, 'f', 2));
+        calculation->setObjectName(QStringLiteral("MetricDetail"));
+        calculation->setWordWrap(true);
+        cardLayout->addWidget(calculation);
+
+        QLabel *risk = statusBadge(riskSummary(r), (r.score.risks.isEmpty() && r.hardFailures.isEmpty()) ? QStringLiteral("good") : QStringLiteral("warn"));
+        risk->setWordWrap(true);
+        cardLayout->addWidget(risk);
+        m_cardsLayout->addWidget(card, 1);
+    }
+}
+
 void ResultsPage::refreshTable(const SelectionRequest &request)
 {
     if (!m_table)
         return;
 
+    refreshCards(request);
     m_summaryLabel->setText(localizedText("需求 FOV：%1 x %2 mm，目标物方像素：%3 um/px，候选方案：%4 个",
                                           "Required FOV: %1 x %2 mm, target object pixel: %3 um/px, candidate plans: %4")
         .arg(SelectionEngine::requiredFovWidth(request), 0, 'f', 2)
@@ -145,8 +230,8 @@ void ResultsPage::refreshDetails(int row)
         + productLabel(r.light.manufacturer, r.light.model) + QStringLiteral("</h3>");
     text += localizedText("<p><b>公式：</b>%1</p>", "<p><b>Formula:</b> %1</p>").arg(r.formulaSummary);
     text += localizedText("<p><b>适配状态：</b>%1</p>", "<p><b>Compatibility:</b> %1</p>").arg(compatibilityText(r));
-    text += localizedText("<p><b>有效 FOV：</b>%1 x %2 mm；<b>物方像素：</b>%3 um/px；<b>接口带宽：</b>%4 MB/s。</p>",
-                          "<p><b>Effective FOV:</b> %1 x %2 mm; <b>object pixel:</b> %3 um/px; <b>interface bandwidth:</b> %4 MB/s.</p>")
+    text += localizedText("<p><b>有效 FOV：</b>%1 x %2 mm；<b>物方像素：</b>%3 um/px；<b>接口带宽需求：</b>%4 MB/s。</p>",
+                          "<p><b>Effective FOV:</b> %1 x %2 mm; <b>object pixel:</b> %3 um/px; <b>required bandwidth:</b> %4 MB/s.</p>")
         .arg(r.effectiveFovWidthMm, 0, 'f', 2)
         .arg(r.effectiveFovHeightMm, 0, 'f', 2)
         .arg(r.objectPixelSizeUm, 0, 'f', 2)

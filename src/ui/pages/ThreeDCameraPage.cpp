@@ -6,15 +6,18 @@
 #include <QColor>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFrame>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
+#include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
 #include <QList>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QStringList>
@@ -194,7 +197,8 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(28, 24, 28, 24);
     layout->setSpacing(14);
-    layout->addWidget(pageTitle(localizedText("3D 相机助手", "3D Camera Assistant")));
+    layout->addWidget(pageHeader(localizedText("3D 相机助手", "3D Camera Assistant"),
+        localizedText("按几何范围、精度、速度和集成条件筛选 3D 相机资料库。", "Filter the 3D camera library by geometry, accuracy, speed, and integration constraints.")));
 
     m_summaryLabel = new QLabel;
     m_summaryLabel->setObjectName(QStringLiteral("SectionTitle"));
@@ -259,10 +263,34 @@ void ThreeDCameraPage::activate()
 
 void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
 {
-    QGroupBox *box = new QGroupBox(localizedText("需求过滤", "Requirement Filters"));
-    QGridLayout *grid = new QGridLayout(box);
-    grid->setHorizontalSpacing(10);
-    grid->setVerticalSpacing(8);
+    QFrame *panel = new QFrame;
+    panel->setObjectName(QStringLiteral("FilterPanel"));
+    QVBoxLayout *panelLayout = new QVBoxLayout(panel);
+    panelLayout->setContentsMargins(18, 16, 18, 18);
+    panelLayout->setSpacing(14);
+
+    QHBoxLayout *headerLayout = new QHBoxLayout;
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->setSpacing(12);
+    QWidget *headerText = new QWidget(panel);
+    headerText->setObjectName(QStringLiteral("FilterHeaderText"));
+    QVBoxLayout *headerTextLayout = new QVBoxLayout(headerText);
+    headerTextLayout->setContentsMargins(0, 0, 0, 0);
+    headerTextLayout->setSpacing(3);
+    QLabel *titleLabel = new QLabel(localizedText("需求过滤", "Requirement Filters"));
+    titleLabel->setObjectName(QStringLiteral("FilterPanelTitle"));
+    QLabel *subtitleLabel = new QLabel(localizedText(
+        "按型号属性、空间范围、精度速度和集成条件筛选 3D 相机。",
+        "Filter 3D cameras by model attributes, working range, accuracy, speed, and integration constraints."));
+    subtitleLabel->setObjectName(QStringLiteral("FilterPanelSubtitle"));
+    subtitleLabel->setWordWrap(true);
+    subtitleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    headerTextLayout->addWidget(titleLabel);
+    headerTextLayout->addWidget(subtitleLabel);
+    headerLayout->addWidget(headerText, 1);
+    headerLayout->addWidget(statusBadge(localizedText("独立 3D 查询", "Standalone 3D Query"), QStringLiteral("info")),
+        0, Qt::AlignRight | Qt::AlignTop);
+    panelLayout->addLayout(headerLayout);
 
     m_brandCombo = new QComboBox;
     m_technologyCombo = new QComboBox;
@@ -278,43 +306,106 @@ void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
     m_noMotionCheck = new QCheckBox(localizedText("无需运动平台", "No motion platform"));
     m_encoderCheck = new QCheckBox(localizedText("需要编码器接口", "Encoder interface required"));
 
-    grid->addWidget(new QLabel(localizedText("品牌", "Brand")), 0, 0);
-    grid->addWidget(m_brandCombo, 0, 1);
-    grid->addWidget(new QLabel(localizedText("技术路线", "Technology")), 0, 2);
-    grid->addWidget(m_technologyCombo, 0, 3);
-    grid->addWidget(new QLabel(localizedText("接口", "Interface")), 0, 4);
-    grid->addWidget(m_interfaceCombo, 0, 5);
+    const auto prepareControl = [](QWidget *control) {
+        control->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        control->setMinimumWidth(0);
+        if (QComboBox *combo = qobject_cast<QComboBox *>(control)) {
+            combo->setMinimumContentsLength(0);
+            combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        }
+    };
+    const auto field = [prepareControl](const QString &labelText, QWidget *control) {
+        QWidget *holder = new QWidget;
+        holder->setObjectName(QStringLiteral("FilterField"));
+        QVBoxLayout *layout = new QVBoxLayout(holder);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(5);
+        QLabel *label = new QLabel(labelText);
+        label->setObjectName(QStringLiteral("FilterFieldLabel"));
+        label->setWordWrap(false);
+        label->setToolTip(labelText);
+        prepareControl(control);
+        layout->addWidget(label);
+        layout->addWidget(control);
+        return holder;
+    };
 
-    grid->addWidget(new QLabel(localizedText("目标 X 覆盖", "Target X Coverage")), 1, 0);
-    grid->addWidget(m_xCoverageSpin, 1, 1);
-    grid->addWidget(new QLabel(localizedText("目标 Y 覆盖", "Target Y Coverage")), 1, 2);
-    grid->addWidget(m_yCoverageSpin, 1, 3);
-    grid->addWidget(new QLabel(localizedText("Z 量程", "Z Range")), 1, 4);
-    grid->addWidget(m_zRangeSpin, 1, 5);
+    struct FilterGroup {
+        QFrame *frame;
+        QGridLayout *grid;
+    };
+    const auto makeGroup = [](const QString &title) -> FilterGroup {
+        QFrame *group = new QFrame;
+        group->setObjectName(QStringLiteral("FilterGroup"));
+        group->setMinimumWidth(0);
+        group->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        QVBoxLayout *layout = new QVBoxLayout(group);
+        layout->setContentsMargins(12, 11, 12, 12);
+        layout->setSpacing(10);
+        QLabel *titleLabel = new QLabel(title);
+        titleLabel->setObjectName(QStringLiteral("FilterGroupTitle"));
+        layout->addWidget(titleLabel);
+        QGridLayout *grid = new QGridLayout;
+        grid->setContentsMargins(0, 0, 0, 0);
+        grid->setHorizontalSpacing(10);
+        grid->setVerticalSpacing(9);
+        grid->setColumnStretch(0, 1);
+        grid->setColumnStretch(1, 1);
+        layout->addLayout(grid);
+        return FilterGroup{group, grid};
+    };
 
-    grid->addWidget(new QLabel(localizedText("工作/参考距离", "Working / Reference Distance")), 2, 0);
-    grid->addWidget(m_workingDistanceSpin, 2, 1);
-    grid->addWidget(new QLabel(localizedText("最大 Z 重复精度", "Max Z Repeatability")), 2, 2);
-    grid->addWidget(m_zRepeatabilitySpin, 2, 3);
-    grid->addWidget(new QLabel(localizedText("最小速度", "Minimum Speed")), 2, 4);
-    grid->addWidget(m_speedSpin, 2, 5);
+    FilterGroup attributes = makeGroup(localizedText("型号属性", "Model Attributes"));
+    attributes.grid->addWidget(field(localizedText("品牌", "Brand"), m_brandCombo), 0, 0);
+    attributes.grid->addWidget(field(localizedText("技术路线", "Technology"), m_technologyCombo), 0, 1);
+    attributes.grid->addWidget(field(localizedText("接口", "Interface"), m_interfaceCombo), 1, 0);
+    attributes.grid->addWidget(field(localizedText("材质场景", "Material Scenario"), m_materialCombo), 1, 1);
 
-    grid->addWidget(new QLabel(QStringLiteral("IP")), 3, 0);
-    grid->addWidget(m_ipCombo, 3, 1);
-    grid->addWidget(new QLabel(localizedText("材质场景", "Material Scenario")), 3, 2);
-    grid->addWidget(m_materialCombo, 3, 3);
-    grid->addWidget(m_noMotionCheck, 3, 4);
-    grid->addWidget(m_encoderCheck, 3, 5);
+    FilterGroup geometry = makeGroup(localizedText("空间范围", "Working Range"));
+    geometry.grid->addWidget(field(localizedText("目标 X 覆盖", "Target X Coverage"), m_xCoverageSpin), 0, 0);
+    geometry.grid->addWidget(field(localizedText("目标 Y 覆盖", "Target Y Coverage"), m_yCoverageSpin), 0, 1);
+    geometry.grid->addWidget(field(localizedText("Z 量程", "Z Range"), m_zRangeSpin), 1, 0);
+    geometry.grid->addWidget(field(localizedText("工作/参考距离", "Working / Reference Distance"), m_workingDistanceSpin), 1, 1);
 
-    QPushButton *applyButton = new QPushButton(localizedText("应用筛选", "Apply Filters"));
-    QPushButton *clearButton = new QPushButton(localizedText("清空条件", "Clear"));
-    clearButton->setObjectName(QStringLiteral("SecondaryButton"));
-    grid->addWidget(applyButton, 4, 4);
-    grid->addWidget(clearButton, 4, 5);
+    QWidget *integrationBox = new QWidget;
+    integrationBox->setObjectName(QStringLiteral("FilterCheckGroup"));
+    QVBoxLayout *integrationLayout = new QVBoxLayout(integrationBox);
+    integrationLayout->setContentsMargins(0, 0, 0, 0);
+    integrationLayout->setSpacing(6);
+    integrationLayout->addWidget(m_noMotionCheck);
+    integrationLayout->addWidget(m_encoderCheck);
+    integrationLayout->addStretch();
+
+    FilterGroup performance = makeGroup(localizedText("性能与集成", "Performance and Integration"));
+    performance.grid->addWidget(field(localizedText("最大 Z 重复精度", "Max Z Repeatability"), m_zRepeatabilitySpin), 0, 0);
+    performance.grid->addWidget(field(localizedText("最小速度", "Minimum Speed"), m_speedSpin), 0, 1);
+    performance.grid->addWidget(field(localizedText("防护等级", "IP Rating"), m_ipCombo), 1, 0);
+    performance.grid->addWidget(field(localizedText("集成要求", "Integration"), integrationBox), 1, 1);
+
+    QHBoxLayout *groupsLayout = new QHBoxLayout;
+    groupsLayout->setContentsMargins(0, 0, 0, 0);
+    groupsLayout->setSpacing(12);
+    groupsLayout->addWidget(attributes.frame, 1);
+    groupsLayout->addWidget(geometry.frame, 1);
+    groupsLayout->addWidget(performance.frame, 1);
+    panelLayout->addLayout(groupsLayout);
+
+    QPushButton *applyButton = actionButton(localizedText("应用筛选", "Apply Filters"), QStringLiteral(":/icons/ui/calculate.png"));
+    QPushButton *clearButton = actionButton(localizedText("清空条件", "Clear"), QStringLiteral(":/icons/ui/info.png"), true);
+
+    QHBoxLayout *actionLayout = new QHBoxLayout;
+    actionLayout->setContentsMargins(0, 0, 0, 0);
+    actionLayout->setSpacing(10);
+    QLabel *hintLabel = new QLabel(localizedText("数值为“不限”时不会参与过滤。", "Numeric fields set to Any are ignored."));
+    hintLabel->setObjectName(QStringLiteral("FilterHint"));
+    actionLayout->addWidget(hintLabel, 1);
+    actionLayout->addWidget(clearButton);
+    actionLayout->addWidget(applyButton);
+    panelLayout->addLayout(actionLayout);
 
     connect(applyButton, &QPushButton::clicked, this, &ThreeDCameraPage::refresh);
     connect(clearButton, &QPushButton::clicked, this, &ThreeDCameraPage::clearFilters);
-    parentLayout->addWidget(box);
+    parentLayout->addWidget(panel);
 }
 
 void ThreeDCameraPage::populateFilterOptions()

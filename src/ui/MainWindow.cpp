@@ -23,11 +23,14 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSize>
+#include <QSizePolicy>
 #include <QStackedWidget>
 #include <QStyle>
 #include <QTextStream>
@@ -145,16 +148,16 @@ QWidget *MainWindow::createSidebar()
 {
     QFrame *sidebar = new QFrame;
     sidebar->setObjectName(QStringLiteral("Sidebar"));
-    sidebar->setFixedWidth(248);
+    sidebar->setFixedWidth(266);
 
     QVBoxLayout *layout = new QVBoxLayout(sidebar);
-    layout->setContentsMargins(18, 18, 18, 18);
-    layout->setSpacing(10);
+    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(8);
 
     QFrame *brand = new QFrame(sidebar);
     brand->setObjectName(QStringLiteral("SidebarBrand"));
     QVBoxLayout *brandLayout = new QVBoxLayout(brand);
-    brandLayout->setContentsMargins(14, 14, 14, 14);
+    brandLayout->setContentsMargins(14, 13, 14, 13);
     brandLayout->setSpacing(6);
     QLabel *title = new QLabel(QStringLiteral("VisionSelect"));
     title->setObjectName(QStringLiteral("AppTitle"));
@@ -169,6 +172,7 @@ QWidget *MainWindow::createSidebar()
     layout->addWidget(brand);
 
     m_languageCombo = new QComboBox(sidebar);
+    m_languageCombo->setObjectName(QStringLiteral("SidebarLanguage"));
     for (const QString &language : LanguageManager::instance().availableLanguages())
         m_languageCombo->addItem(LanguageManager::instance().displayName(language), language);
     connect(m_languageCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
@@ -176,53 +180,100 @@ QWidget *MainWindow::createSidebar()
         if (!language.isEmpty() && language != LanguageManager::instance().currentLanguage())
             LanguageManager::instance().setLanguage(language);
     });
-    layout->addWidget(m_languageCombo);
 
     m_navTitleLabel = new QLabel;
     m_navTitleLabel->setObjectName(QStringLiteral("SidebarSectionLabel"));
     layout->addWidget(m_navTitleLabel);
 
-    const QStringList navPages = navigationLabels();
-    const QVector<QStyle::StandardPixmap> icons = {
-        QStyle::SP_FileDialogContentsView,
-        QStyle::SP_FileDialogDetailedView,
-        QStyle::SP_FileDialogInfoView,
-        QStyle::SP_ComputerIcon,
-        QStyle::SP_DialogApplyButton,
-        QStyle::SP_ArrowRight,
-        QStyle::SP_DirIcon,
-        QStyle::SP_FileIcon
+    m_navButtons.clear();
+    m_navButtons.resize(kReportPageIndex + 1);
+    m_navSectionLabels.clear();
+    const auto addSection = [this, layout](const QString &text) {
+        QLabel *label = new QLabel(text);
+        label->setObjectName(QStringLiteral("SidebarSectionLabel"));
+        m_navSectionLabels.append(label);
+        layout->addWidget(label);
     };
-    for (int i = 0; i < navPages.size(); ++i) {
-        QPushButton *button = new QPushButton(navPages.at(i));
+    const auto addNav = [this, layout](int pageIndex, const QString &text, const QString &iconPath) {
+        QPushButton *button = new QPushButton(text);
         button->setObjectName(QStringLiteral("NavButton"));
         button->setCursor(Qt::PointingHandCursor);
-        button->setMinimumHeight(44);
-        button->setIcon(style()->standardIcon(icons.value(i, QStyle::SP_FileIcon)));
+        button->setMinimumHeight(38);
+        button->setIcon(QIcon(iconPath));
         button->setIconSize(QSize(16, 16));
         button->setFocusPolicy(Qt::NoFocus);
-        connect(button, &QPushButton::clicked, this, [this, i]() { setActivePage(i); });
-        m_navButtons.append(button);
+        connect(button, &QPushButton::clicked, this, [this, pageIndex]() { setActivePage(pageIndex); });
+        m_navButtons[pageIndex] = button;
         layout->addWidget(button);
-    }
+    };
+
+    addSection(localizedText("工作流", "Workflow"));
+    addNav(0, navigationLabels().at(0), QStringLiteral(":/icons/ui/requirement.png"));
+    addNav(kCalculationPageIndex, navigationLabels().at(kCalculationPageIndex), QStringLiteral(":/icons/ui/assistant.png"));
+    addNav(kResultsPageIndex, navigationLabels().at(kResultsPageIndex), QStringLiteral(":/icons/ui/results.png"));
+    addNav(kComparisonPageIndex, navigationLabels().at(kComparisonPageIndex), QStringLiteral(":/icons/ui/compare.png"));
+    addNav(kReportPageIndex, navigationLabels().at(kReportPageIndex), QStringLiteral(":/icons/ui/report.png"));
+
+    addSection(localizedText("工程工具", "Engineering Tools"));
+    addNav(kPureCalculationPageIndex, navigationLabels().at(kPureCalculationPageIndex), QStringLiteral(":/icons/ui/calculate.png"));
+    addNav(kThreeDCameraPageIndex, navigationLabels().at(kThreeDCameraPageIndex), QStringLiteral(":/icons/ui/camera3d.png"));
+
+    addSection(localizedText("数据与系统", "Data and System"));
+    addNav(kCatalogPageIndex, navigationLabels().at(kCatalogPageIndex), QStringLiteral(":/icons/ui/catalog.png"));
 
     layout->addStretch();
     QFrame *summaryBox = new QFrame(sidebar);
     summaryBox->setObjectName(QStringLiteral("SidebarSummary"));
     QVBoxLayout *summaryLayout = new QVBoxLayout(summaryBox);
-    summaryLayout->setContentsMargins(12, 12, 12, 12);
-    summaryLayout->setSpacing(5);
+    summaryLayout->setContentsMargins(12, 11, 12, 12);
+    summaryLayout->setSpacing(7);
+
+    QHBoxLayout *summaryHeader = new QHBoxLayout;
+    summaryHeader->setContentsMargins(0, 0, 0, 0);
+    summaryHeader->setSpacing(8);
     m_summaryTitleLabel = new QLabel;
     m_summaryTitleLabel->setObjectName(QStringLiteral("SidebarSummaryTitle"));
-    m_summaryLabel = new QLabel(m_catalog.summary());
+    m_summaryStatusLabel = new QLabel;
+    m_summaryStatusLabel->setObjectName(QStringLiteral("SidebarStatusPill"));
+    summaryHeader->addWidget(m_summaryTitleLabel, 1);
+    summaryHeader->addWidget(m_summaryStatusLabel, 0, Qt::AlignRight);
+    summaryLayout->addLayout(summaryHeader);
+
+    m_summaryLabel = new QLabel;
     m_summaryLabel->setObjectName(QStringLiteral("SidebarSummaryValue"));
     m_summaryLabel->setWordWrap(true);
-    summaryLayout->addWidget(m_summaryTitleLabel);
     summaryLayout->addWidget(m_summaryLabel);
+
+    QGridLayout *statsLayout = new QGridLayout;
+    statsLayout->setContentsMargins(0, 0, 0, 0);
+    statsLayout->setHorizontalSpacing(6);
+    statsLayout->setVerticalSpacing(6);
+    const auto addStat = [statsLayout](int column, QLabel **label) {
+        *label = new QLabel;
+        (*label)->setObjectName(QStringLiteral("SidebarStat"));
+        (*label)->setAlignment(Qt::AlignCenter);
+        (*label)->setMinimumHeight(44);
+        (*label)->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        (*label)->setWordWrap(true);
+        statsLayout->addWidget(*label, 0, column);
+    };
+    addStat(0, &m_cameraCountLabel);
+    addStat(1, &m_lensCountLabel);
+    addStat(2, &m_lightCountLabel);
+    summaryLayout->addLayout(statsLayout);
+
     m_licenseButton = new QPushButton(summaryBox);
-    m_licenseButton->setObjectName(QStringLiteral("SecondaryButton"));
+    m_licenseButton->setObjectName(QStringLiteral("SidebarLicenseButton"));
+    m_licenseButton->setIcon(QIcon(QStringLiteral(":/icons/ui/info.png")));
+    m_licenseButton->setIconSize(QSize(15, 15));
+    m_licenseButton->setCursor(Qt::PointingHandCursor);
     connect(m_licenseButton, &QPushButton::clicked, this, &MainWindow::showLicenseInfo);
     summaryLayout->addWidget(m_licenseButton);
+
+    m_languageLabel = new QLabel(summaryBox);
+    m_languageLabel->setObjectName(QStringLiteral("SidebarFieldLabel"));
+    summaryLayout->addWidget(m_languageLabel);
+    summaryLayout->addWidget(m_languageCombo);
     layout->addWidget(summaryBox);
 
     return sidebar;
@@ -231,14 +282,14 @@ QWidget *MainWindow::createSidebar()
 QStringList MainWindow::navigationLabels() const
 {
     return {
-        tr("Requirement Input"),
-        tr("Pure Calculation"),
-        tr("Product Calculation Assistant"),
-        tr("3D Camera Assistant"),
-        tr("Recommended Results"),
-        tr("Plan Comparison"),
-        tr("Catalog"),
-        tr("PDF Report")
+        localizedText("需求输入", "Requirement Input"),
+        localizedText("纯计算", "Pure Calculation"),
+        localizedText("产品计算", "Calculation Assistant"),
+        localizedText("3D 相机", "3D Camera"),
+        localizedText("推荐结果", "Recommended Results"),
+        localizedText("方案对比", "Plan Comparison"),
+        localizedText("参数库", "Catalog"),
+        localizedText("PDF 报告", "PDF Report")
     };
 }
 
@@ -257,24 +308,54 @@ void MainWindow::syncLanguageCombo()
     }
 }
 
+void MainWindow::refreshSidebarSummary()
+{
+    if (m_summaryTitleLabel)
+        m_summaryTitleLabel->setText(localizedText("参数库", "Catalog"));
+    if (m_summaryStatusLabel)
+        m_summaryStatusLabel->setText(localizedText("就绪", "Ready"));
+    if (m_summaryLabel)
+        m_summaryLabel->setText(localizedText("推荐、对比和报告可用。",
+                                             "Ready for recommendations, comparison, and reports."));
+
+    const auto statText = [](const QString &label, int value) {
+        return QStringLiteral("<span style=\"color:#9fb0c7; font-size:10px;\">%1</span><br>"
+                              "<span style=\"color:#ffffff; font-size:15px; font-weight:800;\">%2</span>")
+            .arg(label, QString::number(value));
+    };
+    if (m_cameraCountLabel)
+        m_cameraCountLabel->setText(statText(localizedText("相机", "Cameras"), m_catalog.cameras().size()));
+    if (m_lensCountLabel)
+        m_lensCountLabel->setText(statText(localizedText("镜头", "Lenses"), m_catalog.lenses().size()));
+    if (m_lightCountLabel)
+        m_lightCountLabel->setText(statText(localizedText("光源", "Lights"), m_catalog.lights().size()));
+    if (m_languageLabel)
+        m_languageLabel->setText(localizedText("界面语言", "Language"));
+}
+
 void MainWindow::retranslateUi()
 {
     setWindowTitle(tr("VisionSelect - Industrial Machine Vision Selection Assistant"));
     if (m_brandSubtitleLabel)
         m_brandSubtitleLabel->setText(tr("Industrial Machine Vision Selection Assistant"));
     if (m_brandBadgeLabel)
-        m_brandBadgeLabel->setText(tr("Requirements · Calculation · Selection"));
+        m_brandBadgeLabel->setText(localizedText("需求 · 计算 · 选型", "Selection Workflow"));
     if (m_navTitleLabel)
-        m_navTitleLabel->setText(tr("Workspace"));
+        m_navTitleLabel->setText(localizedText("工作台", "Workbench"));
+    const QStringList sections = {
+        localizedText("工作流", "Workflow"),
+        localizedText("工程工具", "Engineering Tools"),
+        localizedText("数据与系统", "Data and System")
+    };
+    for (int i = 0; i < m_navSectionLabels.size() && i < sections.size(); ++i)
+        m_navSectionLabels.at(i)->setText(sections.at(i));
     const QStringList labels = navigationLabels();
     for (int i = 0; i < m_navButtons.size() && i < labels.size(); ++i)
-        m_navButtons.at(i)->setText(labels.at(i));
-    if (m_summaryTitleLabel)
-        m_summaryTitleLabel->setText(tr("Catalog"));
-    if (m_summaryLabel)
-        m_summaryLabel->setText(m_catalog.summary());
+        if (m_navButtons.at(i))
+            m_navButtons.at(i)->setText(labels.at(i));
+    refreshSidebarSummary();
     if (m_licenseButton)
-        m_licenseButton->setText(tr("License Info"));
+        m_licenseButton->setText(localizedText("授权信息", "License Info"));
     syncLanguageCombo();
 }
 
@@ -399,6 +480,8 @@ void MainWindow::setActivePage(int index)
     }
     m_pages->setCurrentIndex(index);
     for (int i = 0; i < m_navButtons.size(); ++i) {
+        if (!m_navButtons.at(i))
+            continue;
         m_navButtons.at(i)->setProperty("active", i == index);
         m_navButtons.at(i)->style()->unpolish(m_navButtons.at(i));
         m_navButtons.at(i)->style()->polish(m_navButtons.at(i));
@@ -534,8 +617,7 @@ void MainWindow::calculate()
     refreshCatalogTables();
     if (m_reportPage)
         m_reportPage->setReportData(m_request, m_results);
-    if (m_summaryLabel)
-        m_summaryLabel->setText(m_catalog.summary());
+    refreshSidebarSummary();
 }
 
 void MainWindow::refreshCalculationAssistant()
@@ -625,6 +707,7 @@ void MainWindow::refreshCatalogTables()
 {
     if (m_catalogPageInitialized && m_catalogPage)
         m_catalogPage->setCatalog(&m_catalog);
+    refreshSidebarSummary();
 }
 
 void MainWindow::importCameras()

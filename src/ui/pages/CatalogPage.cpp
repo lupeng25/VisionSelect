@@ -128,7 +128,8 @@ CatalogPage::CatalogPage(QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(28, 24, 28, 24);
     layout->setSpacing(14);
-    layout->addWidget(pageTitle(localizedText("参数库", "Catalog")));
+    layout->addWidget(pageHeader(localizedText("参数库", "Catalog"),
+        localizedText("维护相机、镜头和光源目录；筛选、导入、导出均保持原有数据格式。", "Maintain camera, lens, and light catalogs while preserving existing import and export formats.")));
 
     QTabWidget *tabs = new QTabWidget;
 

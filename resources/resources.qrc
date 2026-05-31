@@ -9,5 +9,22 @@
         <file>i18n/visionselect_en_US.qm</file>
         <file>license/public_key.json</file>
         <file>icons/visionselect_icon_256.png</file>
+        <file>icons/ui/assistant.png</file>
+        <file>icons/ui/calculate.png</file>
+        <file>icons/ui/camera3d.png</file>
+        <file>icons/ui/catalog.png</file>
+        <file>icons/ui/chevron-down-light.png</file>
+        <file>icons/ui/chevron-down.png</file>
+        <file>icons/ui/chevron-up-light.png</file>
+        <file>icons/ui/chevron-up.png</file>
+        <file>icons/ui/compare.png</file>
+        <file>icons/ui/error.png</file>
+        <file>icons/ui/export.png</file>
+        <file>icons/ui/info.png</file>
+        <file>icons/ui/report.png</file>
+        <file>icons/ui/requirement.png</file>
+        <file>icons/ui/results.png</file>
+        <file>icons/ui/success.png</file>
+        <file>icons/ui/warning.png</file>
     </qresource>
 </RCC>

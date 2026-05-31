@@ -6,13 +6,13 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
-#include <QFormLayout>
 #include <QFrame>
-#include <QGroupBox>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QSpinBox>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -25,24 +25,79 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     QVBoxLayout *outer = new QVBoxLayout(this);
     outer->setContentsMargins(28, 24, 28, 24);
     outer->setSpacing(14);
-    outer->addWidget(pageTitle(localizedText("纯计算", "Pure Calculation")));
+    outer->addWidget(pageHeader(localizedText("纯计算", "Pure Calculation"),
+        localizedText("手动输入相机、镜头和光源参数，用于快速工程校核。", "Manually enter camera, lens, and light parameters for quick engineering checks.")));
 
     QHBoxLayout *body = new QHBoxLayout;
     body->setSpacing(14);
 
     QScrollArea *inputScroll = new QScrollArea;
+    inputScroll->setObjectName(QStringLiteral("ParameterScroll"));
     inputScroll->setWidgetResizable(true);
     inputScroll->setFrameShape(QFrame::NoFrame);
-    inputScroll->setMinimumWidth(380);
-    inputScroll->setMaximumWidth(470);
+    inputScroll->setMinimumWidth(430);
+    inputScroll->setMaximumWidth(520);
     QWidget *inputPanel = new QWidget;
+    inputPanel->setObjectName(QStringLiteral("ParameterInputPanel"));
     QVBoxLayout *inputLayout = new QVBoxLayout(inputPanel);
     inputLayout->setContentsMargins(0, 0, 8, 0);
-    inputLayout->setSpacing(10);
+    inputLayout->setSpacing(12);
 
-    QGroupBox *requestBox = new QGroupBox(localizedText("需求", "Requirements"));
-    QFormLayout *requestLayout = new QFormLayout(requestBox);
-    requestLayout->setLabelAlignment(Qt::AlignLeft);
+    const auto prepareControl = [](QWidget *control) {
+        control->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        control->setMinimumWidth(0);
+        if (QComboBox *combo = qobject_cast<QComboBox *>(control)) {
+            combo->setMinimumContentsLength(0);
+            combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        }
+    };
+    const auto field = [prepareControl](const QString &labelText, QWidget *control) {
+        QWidget *holder = new QWidget;
+        holder->setObjectName(QStringLiteral("ParameterField"));
+        QVBoxLayout *layout = new QVBoxLayout(holder);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(5);
+        QLabel *label = new QLabel(labelText);
+        label->setObjectName(QStringLiteral("ParameterFieldLabel"));
+        label->setToolTip(labelText);
+        prepareControl(control);
+        layout->addWidget(label);
+        layout->addWidget(control);
+        return holder;
+    };
+
+    struct ParameterGroup {
+        QFrame *frame;
+        QGridLayout *grid;
+    };
+    const auto makeGroup = [](const QString &title, const QString &subtitle) -> ParameterGroup {
+        QFrame *group = new QFrame;
+        group->setObjectName(QStringLiteral("ParameterGroup"));
+        QVBoxLayout *layout = new QVBoxLayout(group);
+        layout->setContentsMargins(14, 12, 14, 14);
+        layout->setSpacing(9);
+        QLabel *titleLabel = new QLabel(title);
+        titleLabel->setObjectName(QStringLiteral("ParameterGroupTitle"));
+        layout->addWidget(titleLabel);
+        if (!subtitle.isEmpty()) {
+            QLabel *subtitleLabel = new QLabel(subtitle);
+            subtitleLabel->setObjectName(QStringLiteral("ParameterGroupSubtitle"));
+            subtitleLabel->setWordWrap(true);
+            layout->addWidget(subtitleLabel);
+        }
+        QGridLayout *grid = new QGridLayout;
+        grid->setContentsMargins(0, 0, 0, 0);
+        grid->setHorizontalSpacing(10);
+        grid->setVerticalSpacing(9);
+        grid->setColumnStretch(0, 1);
+        grid->setColumnStretch(1, 1);
+        layout->addLayout(grid);
+        return ParameterGroup{group, grid};
+    };
+
+    ParameterGroup requestGroup = makeGroup(
+        localizedText("需求", "Requirements"),
+        localizedText("定义工件、精度、节拍和工艺约束。", "Define part size, accuracy, takt, and process constraints."));
     m_widthSpin = makeSpin(0.1, 2000.0, 20.0, QStringLiteral(" mm"));
     m_heightSpin = makeSpin(0.1, 2000.0, 20.0, QStringLiteral(" mm"));
     m_marginSpin = makeSpin(0.0, 200.0, 2.0, QStringLiteral(" mm"));
@@ -67,22 +122,22 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     m_surfaceCombo->setCurrentIndex(1);
     m_reflectiveCheck = new QCheckBox(localizedText("反光/高光表面", "Reflective / glossy surface"));
     m_reflectiveCheck->setChecked(true);
-    requestLayout->addRow(localizedText("工件宽度", "Part width"), m_widthSpin);
-    requestLayout->addRow(localizedText("工件高度", "Part height"), m_heightSpin);
-    requestLayout->addRow(localizedText("定位/装夹余量", "Positioning / fixture margin"), m_marginSpin);
-    requestLayout->addRow(localizedText("最小特征", "Minimum feature"), m_minFeatureSpin);
-    requestLayout->addRow(localizedText("允许测量误差", "Allowed measurement error"), m_toleranceSpin);
-    requestLayout->addRow(localizedText("工作距离", "Working distance"), m_wdSpin);
-    requestLayout->addRow(localizedText("高度波动", "Height variation"), m_heightVariationSpin);
-    requestLayout->addRow(localizedText("运动速度", "Motion speed"), m_speedSpin);
-    requestLayout->addRow(localizedText("节拍/帧率", "Cycle / frame rate"), m_fpsSpin);
-    requestLayout->addRow(localizedText("检测类型", "Inspection type"), m_detectionCombo);
-    requestLayout->addRow(localizedText("表面材质", "Surface material"), m_surfaceCombo);
-    requestLayout->addRow(QString(), m_reflectiveCheck);
+    requestGroup.grid->addWidget(field(localizedText("工件宽度", "Part width"), m_widthSpin), 0, 0);
+    requestGroup.grid->addWidget(field(localizedText("工件高度", "Part height"), m_heightSpin), 0, 1);
+    requestGroup.grid->addWidget(field(localizedText("定位/装夹余量", "Positioning / fixture margin"), m_marginSpin), 1, 0);
+    requestGroup.grid->addWidget(field(localizedText("最小特征", "Minimum feature"), m_minFeatureSpin), 1, 1);
+    requestGroup.grid->addWidget(field(localizedText("允许测量误差", "Allowed measurement error"), m_toleranceSpin), 2, 0);
+    requestGroup.grid->addWidget(field(localizedText("工作距离", "Working distance"), m_wdSpin), 2, 1);
+    requestGroup.grid->addWidget(field(localizedText("高度波动", "Height variation"), m_heightVariationSpin), 3, 0);
+    requestGroup.grid->addWidget(field(localizedText("运动速度", "Motion speed"), m_speedSpin), 3, 1);
+    requestGroup.grid->addWidget(field(localizedText("节拍/帧率", "Cycle / frame rate"), m_fpsSpin), 4, 0);
+    requestGroup.grid->addWidget(field(localizedText("检测类型", "Inspection type"), m_detectionCombo), 4, 1);
+    requestGroup.grid->addWidget(field(localizedText("表面材质", "Surface material"), m_surfaceCombo), 5, 0);
+    requestGroup.grid->addWidget(field(localizedText("表面条件", "Surface condition"), m_reflectiveCheck), 5, 1);
 
-    QGroupBox *cameraBox = new QGroupBox(localizedText("手动相机参数", "Manual Camera Parameters"));
-    QFormLayout *cameraLayout = new QFormLayout(cameraBox);
-    cameraLayout->setLabelAlignment(Qt::AlignLeft);
+    ParameterGroup cameraGroup = makeGroup(
+        localizedText("手动相机参数", "Manual Camera Parameters"),
+        localizedText("输入分辨率、像元、位深和接口能力。", "Enter resolution, pixel size, bit depth, and interface capacity."));
     m_resolutionXSpin = dialogIntSpin(1, 200000, 2448);
     m_resolutionYSpin = dialogIntSpin(1, 200000, 2048);
     m_pixelSizeSpin = makeSpin(0.01, 1000.0, 3.45, QStringLiteral(" um"));
@@ -90,16 +145,16 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     m_interfaceBandwidthSpin = makeSpin(0.0, 100000.0, 380.0, QStringLiteral(" MB/s"), 1);
     m_shutterCombo = new QComboBox;
     m_shutterCombo->addItems({QStringLiteral("Global"), QStringLiteral("Rolling")});
-    cameraLayout->addRow(localizedText("分辨率 X", "Resolution X"), m_resolutionXSpin);
-    cameraLayout->addRow(localizedText("分辨率 Y", "Resolution Y"), m_resolutionYSpin);
-    cameraLayout->addRow(localizedText("像元", "Pixel size"), m_pixelSizeSpin);
-    cameraLayout->addRow(QStringLiteral("bit depth"), m_bitDepthSpin);
-    cameraLayout->addRow(localizedText("接口带宽", "Interface bandwidth"), m_interfaceBandwidthSpin);
-    cameraLayout->addRow(localizedText("快门", "Shutter"), m_shutterCombo);
+    cameraGroup.grid->addWidget(field(localizedText("分辨率 X", "Resolution X"), m_resolutionXSpin), 0, 0);
+    cameraGroup.grid->addWidget(field(localizedText("分辨率 Y", "Resolution Y"), m_resolutionYSpin), 0, 1);
+    cameraGroup.grid->addWidget(field(localizedText("像元", "Pixel size"), m_pixelSizeSpin), 1, 0);
+    cameraGroup.grid->addWidget(field(QStringLiteral("bit depth"), m_bitDepthSpin), 1, 1);
+    cameraGroup.grid->addWidget(field(localizedText("接口带宽", "Interface bandwidth"), m_interfaceBandwidthSpin), 2, 0);
+    cameraGroup.grid->addWidget(field(localizedText("快门", "Shutter"), m_shutterCombo), 2, 1);
 
-    QGroupBox *lensBox = new QGroupBox(localizedText("手动镜头参数", "Manual Lens Parameters"));
-    QFormLayout *lensLayout = new QFormLayout(lensBox);
-    lensLayout->setLabelAlignment(Qt::AlignLeft);
+    ParameterGroup lensGroup = makeGroup(
+        localizedText("手动镜头参数", "Manual Lens Parameters"),
+        localizedText("普通镜头与远心镜头参数共用，按模式参与计算。", "Fixed-focal and telecentric parameters are used according to the selected mode."));
     m_lensModeCombo = new QComboBox;
     m_lensModeCombo->addItems({localizedText("普通镜头", "Fixed-focal Lens"), localizedText("远心镜头", "Telecentric Lens")});
     m_focalSpin = makeSpin(0.1, 10000.0, 25.0, QStringLiteral(" mm"), 2);
@@ -113,22 +168,22 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     m_wdToleranceSpin = makeSpin(0.0, 10000.0, 5.0, QStringLiteral(" mm"), 2);
     m_dofSpin = makeSpin(0.0, 100000.0, 5.0, QStringLiteral(" mm"), 2);
     m_telecentricitySpin = makeSpin(0.0, 90.0, 0.1, QStringLiteral(" deg"), 3);
-    lensLayout->addRow(localizedText("模式", "Mode"), m_lensModeCombo);
-    lensLayout->addRow(localizedText("普通焦距", "Fixed focal length"), m_focalSpin);
-    lensLayout->addRow(QStringLiteral("F/#"), m_fNumberSpin);
-    lensLayout->addRow(localizedText("普通最小 WD", "Fixed-lens min WD"), m_minWdSpin);
-    lensLayout->addRow(localizedText("畸变", "Distortion"), m_distortionSpin);
-    lensLayout->addRow(localizedText("像面", "Image circle"), m_imageCircleSpin);
-    lensLayout->addRow(localizedText("镜头 MP", "Lens MP"), m_lensMpSpin);
-    lensLayout->addRow(QStringLiteral("PMAG"), m_pmagSpin);
-    lensLayout->addRow(localizedText("远心标称 WD", "Telecentric nominal WD"), m_nominalWdSpin);
-    lensLayout->addRow(localizedText("WD 容差", "WD tolerance"), m_wdToleranceSpin);
-    lensLayout->addRow(QStringLiteral("DOF"), m_dofSpin);
-    lensLayout->addRow(localizedText("远心度", "Telecentricity"), m_telecentricitySpin);
+    lensGroup.grid->addWidget(field(localizedText("模式", "Mode"), m_lensModeCombo), 0, 0);
+    lensGroup.grid->addWidget(field(localizedText("普通焦距", "Fixed focal length"), m_focalSpin), 0, 1);
+    lensGroup.grid->addWidget(field(QStringLiteral("F/#"), m_fNumberSpin), 1, 0);
+    lensGroup.grid->addWidget(field(localizedText("普通最小 WD", "Fixed-lens min WD"), m_minWdSpin), 1, 1);
+    lensGroup.grid->addWidget(field(localizedText("畸变", "Distortion"), m_distortionSpin), 2, 0);
+    lensGroup.grid->addWidget(field(localizedText("像面", "Image circle"), m_imageCircleSpin), 2, 1);
+    lensGroup.grid->addWidget(field(localizedText("镜头 MP", "Lens MP"), m_lensMpSpin), 3, 0);
+    lensGroup.grid->addWidget(field(QStringLiteral("PMAG"), m_pmagSpin), 3, 1);
+    lensGroup.grid->addWidget(field(localizedText("远心标称 WD", "Telecentric nominal WD"), m_nominalWdSpin), 4, 0);
+    lensGroup.grid->addWidget(field(localizedText("WD 容差", "WD tolerance"), m_wdToleranceSpin), 4, 1);
+    lensGroup.grid->addWidget(field(QStringLiteral("DOF"), m_dofSpin), 5, 0);
+    lensGroup.grid->addWidget(field(localizedText("远心度", "Telecentricity"), m_telecentricitySpin), 5, 1);
 
-    QGroupBox *lightBox = new QGroupBox(localizedText("光源约束", "Lighting Constraints"));
-    QFormLayout *lightLayout = new QFormLayout(lightBox);
-    lightLayout->setLabelAlignment(Qt::AlignLeft);
+    ParameterGroup lightGroup = makeGroup(
+        localizedText("光源约束", "Lighting Constraints"),
+        localizedText("输入照明类型、触发模式和有效照明范围。", "Enter light type, trigger mode, and active lighting area."));
     m_lightTypeCombo = new QComboBox;
     m_lightTypeCombo->addItems({lightTypeLabel(LightType::Backlight),
                                 lightTypeLabel(LightType::Ring),
@@ -141,34 +196,53 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     m_lightModeCombo->addItems({QStringLiteral("Continuous"), QStringLiteral("Strobe"), QStringLiteral("Trigger")});
     m_lightWidthSpin = makeSpin(0.0, 100000.0, 100.0, QStringLiteral(" mm"), 1);
     m_lightHeightSpin = makeSpin(0.0, 100000.0, 100.0, QStringLiteral(" mm"), 1);
-    lightLayout->addRow(localizedText("光型", "Light type"), m_lightTypeCombo);
-    lightLayout->addRow(localizedText("模式", "Mode"), m_lightModeCombo);
-    lightLayout->addRow(localizedText("有效宽度", "Active width"), m_lightWidthSpin);
-    lightLayout->addRow(localizedText("有效高度", "Active height"), m_lightHeightSpin);
+    lightGroup.grid->addWidget(field(localizedText("光型", "Light type"), m_lightTypeCombo), 0, 0);
+    lightGroup.grid->addWidget(field(localizedText("模式", "Mode"), m_lightModeCombo), 0, 1);
+    lightGroup.grid->addWidget(field(localizedText("有效宽度", "Active width"), m_lightWidthSpin), 1, 0);
+    lightGroup.grid->addWidget(field(localizedText("有效高度", "Active height"), m_lightHeightSpin), 1, 1);
 
-    inputLayout->addWidget(requestBox);
-    inputLayout->addWidget(cameraBox);
-    inputLayout->addWidget(lensBox);
-    inputLayout->addWidget(lightBox);
+    inputLayout->addWidget(requestGroup.frame);
+    inputLayout->addWidget(cameraGroup.frame);
+    inputLayout->addWidget(lensGroup.frame);
+    inputLayout->addWidget(lightGroup.frame);
     inputLayout->addStretch();
     inputScroll->setWidget(inputPanel);
 
-    QVBoxLayout *outputLayout = new QVBoxLayout;
+    QFrame *outputPanel = new QFrame;
+    outputPanel->setObjectName(QStringLiteral("CalculationResultPanel"));
+    QVBoxLayout *outputLayout = new QVBoxLayout(outputPanel);
+    outputLayout->setContentsMargins(16, 14, 16, 16);
+    outputLayout->setSpacing(12);
     QHBoxLayout *actions = new QHBoxLayout;
-    QPushButton *calculateButton = new QPushButton(localizedText("计算", "Calculate"));
-    QPushButton *resetButton = new QPushButton(localizedText("恢复默认", "Reset Defaults"));
-    resetButton->setObjectName(QStringLiteral("SecondaryButton"));
-    actions->addWidget(calculateButton);
+    actions->setContentsMargins(0, 0, 0, 0);
+    QWidget *resultHeader = new QWidget(outputPanel);
+    resultHeader->setObjectName(QStringLiteral("CalculationResultHeader"));
+    QVBoxLayout *resultHeaderLayout = new QVBoxLayout(resultHeader);
+    resultHeaderLayout->setContentsMargins(0, 0, 0, 0);
+    resultHeaderLayout->setSpacing(3);
+    QLabel *resultTitle = new QLabel(localizedText("计算结果", "Calculation Result"));
+    resultTitle->setObjectName(QStringLiteral("CalculationResultTitle"));
+    QLabel *resultSubtitle = new QLabel(localizedText(
+        "根据当前手动参数输出需求、相机、镜头和光源校核结论。",
+        "Review requirement, camera, lens, and lighting estimates from the current manual parameters."));
+    resultSubtitle->setObjectName(QStringLiteral("CalculationResultSubtitle"));
+    resultSubtitle->setWordWrap(true);
+    resultHeaderLayout->addWidget(resultTitle);
+    resultHeaderLayout->addWidget(resultSubtitle);
+    actions->addWidget(resultHeader, 1);
+    QPushButton *calculateButton = actionButton(localizedText("计算", "Calculate"), QStringLiteral(":/icons/ui/calculate.png"));
+    QPushButton *resetButton = actionButton(localizedText("恢复默认", "Reset Defaults"), QStringLiteral(":/icons/ui/info.png"), true);
     actions->addWidget(resetButton);
-    actions->addStretch();
+    actions->addWidget(calculateButton);
     outputLayout->addLayout(actions);
 
     m_output = new QTextEdit;
+    m_output->setObjectName(QStringLiteral("CalculationResultText"));
     m_output->setReadOnly(true);
     outputLayout->addWidget(m_output, 1);
 
     body->addWidget(inputScroll);
-    body->addLayout(outputLayout, 1);
+    body->addWidget(outputPanel, 1);
     outer->addLayout(body, 1);
 
     connect(calculateButton, &QPushButton::clicked, this, &PureCalculationPage::refresh);

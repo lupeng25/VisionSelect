@@ -7,21 +7,29 @@
 
 class QComboBox;
 class QDoubleSpinBox;
+class QFrame;
 class QLabel;
+class QPushButton;
 class QSpinBox;
 class QTableWidget;
 class QTableWidgetItem;
 class QStringList;
+class QWidget;
 
 namespace UiHelpers {
 
 QLabel *pageTitle(const QString &text, const QString &subtitle = QString());
+QWidget *pageHeader(const QString &title, const QString &subtitle = QString(), QWidget *actions = nullptr);
+QFrame *metricCard(const QString &label, const QString &value, const QString &detail = QString(), const QString &state = QString());
+QLabel *statusBadge(const QString &text, const QString &state = QString());
+QPushButton *actionButton(const QString &text, const QString &iconPath = QString(), bool secondary = false);
 QTableWidgetItem *item(const QString &text);
 QTableWidgetItem *indexedItem(const QString &text, int sourceIndex);
 int rowSourceIndex(const QTableWidget *table, int row);
 void copySelectionToClipboard(QTableWidget *table);
 void installTableCopyShortcut(QTableWidget *table);
 void setupTable(QTableWidget *table);
+void setWidgetState(QWidget *widget, const QString &state);
 QString number(double value, int decimals = 2);
 QString productLabel(const QString &manufacturer, const QString &model);
 QString compatibilityText(const SelectionResult &result);

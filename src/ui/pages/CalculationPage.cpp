@@ -2,6 +2,7 @@
 
 #include "ui/UiHelpers.h"
 
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -31,26 +32,32 @@ CalculationPage::CalculationPage(QWidget *parent)
     : QWidget(parent)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(28, 24, 28, 24);
+    layout->setContentsMargins(26, 22, 26, 22);
     layout->setSpacing(14);
 
-    layout->addWidget(pageTitle(localizedText("产品计算助手", "Product Calculation Assistant")));
-
     QHBoxLayout *buttons = new QHBoxLayout;
-    QPushButton *refreshButton = new QPushButton(localizedText("根据当前需求计算", "Calculate From Current Requirements"));
-    QPushButton *inputButton = new QPushButton(localizedText("返回需求输入", "Back to Requirements"));
-    inputButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *refreshButton = actionButton(localizedText("按当前需求计算", "Calculate From Current Requirements"), QStringLiteral(":/icons/ui/calculate.png"));
+    QPushButton *inputButton = actionButton(localizedText("返回需求", "Back to Requirements"), QStringLiteral(":/icons/ui/requirement.png"), true);
     connect(refreshButton, &QPushButton::clicked, this, &CalculationPage::recalculateRequested);
     connect(inputButton, &QPushButton::clicked, this, &CalculationPage::inputRequested);
     buttons->addWidget(refreshButton);
     buttons->addWidget(inputButton);
     buttons->addStretch();
-    layout->addLayout(buttons);
+    QWidget *actions = new QWidget;
+    actions->setLayout(buttons);
+    layout->addWidget(pageHeader(localizedText("产品计算助手", "Product Calculation Assistant"),
+        localizedText("从当前需求估算相机下限、镜头候选和关键工程余量。", "Estimate camera floor, lens candidates, and engineering margins from current requirements."),
+        actions));
 
+    QFrame *summaryCard = new QFrame;
+    summaryCard->setObjectName(QStringLiteral("SectionCard"));
+    QVBoxLayout *summaryLayout = new QVBoxLayout(summaryCard);
+    summaryLayout->setContentsMargins(14, 12, 14, 12);
     m_summaryLabel = new QLabel;
     m_summaryLabel->setObjectName(QStringLiteral("SectionTitle"));
     m_summaryLabel->setWordWrap(true);
-    layout->addWidget(m_summaryLabel);
+    summaryLayout->addWidget(m_summaryLabel);
+    layout->addWidget(summaryCard);
 
     QLabel *cameraTitle = new QLabel(localizedText("相机估算", "Camera Estimates"));
     cameraTitle->setObjectName(QStringLiteral("SectionTitle"));

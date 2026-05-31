@@ -8,6 +8,7 @@
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QLabel;
 
 class InputPage : public QWidget
 {
@@ -23,6 +24,8 @@ signals:
     void resultsRequested();
 
 private:
+    void refreshSummary();
+
     QDoubleSpinBox *m_widthSpin = nullptr;
     QDoubleSpinBox *m_heightSpin = nullptr;
     QDoubleSpinBox *m_marginSpin = nullptr;
@@ -37,6 +40,10 @@ private:
     QCheckBox *m_reflectiveCheck = nullptr;
     QCheckBox *m_monoCheck = nullptr;
     QCheckBox *m_allowTelecentricCheck = nullptr;
+    QLabel *m_fovSummaryLabel = nullptr;
+    QLabel *m_pixelSummaryLabel = nullptr;
+    QLabel *m_resolutionSummaryLabel = nullptr;
+    QLabel *m_processSummaryLabel = nullptr;
 };
 
 #endif

@@ -1,6 +1,7 @@
 #include "ui/LicenseDialog.h"
 
 #include "i18n/LanguageManager.h"
+#include "ui/UiHelpers.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -15,37 +16,54 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+using namespace UiHelpers;
+
 LicenseDialog::LicenseDialog(LicenseManager *licenseManager, QWidget *parent)
     : QDialog(parent),
       m_licenseManager(licenseManager)
 {
     setModal(true);
-    setMinimumWidth(560);
+    setMinimumWidth(620);
 
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(22, 22, 22, 22);
+    layout->setContentsMargins(24, 22, 24, 22);
     layout->setSpacing(14);
 
-    QHBoxLayout *topLayout = new QHBoxLayout;
-    m_titleLabel = new QLabel(this);
-    m_titleLabel->setObjectName(QStringLiteral("PageTitle"));
-    topLayout->addWidget(m_titleLabel, 1);
+    QHBoxLayout *topActions = new QHBoxLayout;
     m_languageCombo = new QComboBox(this);
-    topLayout->addWidget(m_languageCombo);
-    layout->addLayout(topLayout);
+    topActions->addWidget(m_languageCombo);
+    QWidget *topActionsWidget = new QWidget(this);
+    topActionsWidget->setLayout(topActions);
+
+    QWidget *header = new QWidget(this);
+    header->setObjectName(QStringLiteral("PageHeader"));
+    QHBoxLayout *headerLayout = new QHBoxLayout(header);
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->setSpacing(12);
+    m_titleLabel = new QLabel(header);
+    m_titleLabel->setObjectName(QStringLiteral("PageTitle"));
+    m_titleLabel->setWordWrap(true);
+    headerLayout->addWidget(m_titleLabel, 1);
+    headerLayout->addWidget(topActionsWidget, 0, Qt::AlignRight | Qt::AlignVCenter);
+    layout->addWidget(header);
 
     m_statusLabel = new QLabel(this);
+    m_statusLabel->setObjectName(QStringLiteral("PageSubtitle"));
     m_statusLabel->setWordWrap(true);
     layout->addWidget(m_statusLabel);
 
     QFrame *machineBox = new QFrame(this);
-    machineBox->setObjectName(QStringLiteral("SidebarSummary"));
+    machineBox->setObjectName(QStringLiteral("SectionCard"));
     QVBoxLayout *machineLayout = new QVBoxLayout(machineBox);
+    machineLayout->setContentsMargins(14, 12, 14, 12);
+    machineLayout->setSpacing(8);
     m_machineTitleLabel = new QLabel(machineBox);
+    m_machineTitleLabel->setObjectName(QStringLiteral("SectionTitle"));
     m_machineCodeLabel = new QLabel(machineBox);
+    m_machineCodeLabel->setObjectName(QStringLiteral("MetricValue"));
+    m_machineCodeLabel->setWordWrap(true);
     m_machineCodeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_copyMachineButton = new QPushButton(machineBox);
-    m_copyMachineButton->setObjectName(QStringLiteral("SecondaryButton"));
+    m_copyMachineButton = actionButton(QString(), QStringLiteral(":/icons/ui/info.png"), true);
     connect(m_copyMachineButton, &QPushButton::clicked, this, [this]() {
         QApplication::clipboard()->setText(m_machineCodeLabel->text());
     });
@@ -55,9 +73,10 @@ LicenseDialog::LicenseDialog(LicenseManager *licenseManager, QWidget *parent)
     layout->addWidget(machineBox);
 
     m_keyTitleLabel = new QLabel(this);
+    m_keyTitleLabel->setObjectName(QStringLiteral("SectionTitle"));
     layout->addWidget(m_keyTitleLabel);
     m_keyEdit = new QPlainTextEdit(this);
-    m_keyEdit->setMinimumHeight(120);
+    m_keyEdit->setMinimumHeight(128);
     m_keyEdit->setPlaceholderText(QStringLiteral("VS1-..."));
     layout->addWidget(m_keyEdit);
 
@@ -119,9 +138,11 @@ void LicenseDialog::syncLanguageCombo()
 
 void LicenseDialog::retranslateUi()
 {
-    setWindowTitle(tr("VisionSelect License"));
-    m_titleLabel->setText(tr("VisionSelect License"));
-    m_statusLabel->setText(tr("Enter a valid offline license key to continue."));
+    const QString title = localizedText("VisionSelect 授权注册", "VisionSelect License");
+    setWindowTitle(title);
+    if (m_titleLabel)
+        m_titleLabel->setText(title);
+    m_statusLabel->setText(localizedText("请输入有效的离线注册码后继续使用。", "Enter a valid offline license key to continue."));
     m_machineTitleLabel->setText(tr("Machine code"));
     m_machineCodeLabel->setText(m_licenseManager ? m_licenseManager->machineCode() : QString());
     m_keyTitleLabel->setText(tr("License key"));

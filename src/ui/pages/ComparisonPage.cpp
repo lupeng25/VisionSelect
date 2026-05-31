@@ -2,6 +2,7 @@
 
 #include "ui/UiHelpers.h"
 
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -38,21 +39,22 @@ ComparisonPage::ComparisonPage(QWidget *parent)
     : QWidget(parent)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(28, 24, 28, 24);
+    layout->setContentsMargins(26, 22, 26, 22);
     layout->setSpacing(14);
 
-    layout->addWidget(pageTitle(localizedText("方案对比", "Plan Comparison")));
-
     QHBoxLayout *actions = new QHBoxLayout;
-    QPushButton *recalculateButton = new QPushButton(localizedText("重新计算", "Recalculate"));
-    QPushButton *exportBomButton = new QPushButton(localizedText("导出 BOM CSV", "Export BOM CSV"));
-    exportBomButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *recalculateButton = actionButton(localizedText("重新计算", "Recalculate"), QStringLiteral(":/icons/ui/calculate.png"));
+    QPushButton *exportBomButton = actionButton(localizedText("导出 BOM CSV", "Export BOM CSV"), QStringLiteral(":/icons/ui/export.png"), true);
     connect(recalculateButton, &QPushButton::clicked, this, &ComparisonPage::recalculateRequested);
     connect(exportBomButton, &QPushButton::clicked, this, &ComparisonPage::exportBomRequested);
     actions->addWidget(recalculateButton);
     actions->addWidget(exportBomButton);
     actions->addStretch();
-    layout->addLayout(actions);
+    QWidget *actionsWidget = new QWidget;
+    actionsWidget->setLayout(actions);
+    layout->addWidget(pageHeader(localizedText("方案对比", "Plan Comparison"),
+        localizedText("横向比较前五个候选方案的 BOM、余量、风险和交付判断。", "Compare BOM, margins, risks, and delivery verdicts across the top five plans."),
+        actionsWidget));
 
     m_table = new QTableWidget;
     setupTable(m_table);
@@ -65,7 +67,7 @@ ComparisonPage::ComparisonPage(QWidget *parent)
         localizedText("光源余量", "Light Margin"), localizedText("主要风险", "Main Risk")
     });
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-    const int compareWidths[] = {70, 86, 50, 112, 112, 110, 75, 88, 88, 100, 88, 78};
+    const int compareWidths[] = {80, 92, 56, 122, 122, 118, 82, 92, 92, 108, 92, 82};
     for (int column = 0; column < 12; ++column)
         m_table->setColumnWidth(column, compareWidths[column]);
     m_table->horizontalHeader()->setSectionResizeMode(12, QHeaderView::Stretch);

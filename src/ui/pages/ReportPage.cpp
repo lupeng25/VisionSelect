@@ -2,6 +2,7 @@
 
 #include "ui/UiHelpers.h"
 
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -14,16 +15,13 @@ ReportPage::ReportPage(QWidget *parent)
     : QWidget(parent)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(28, 24, 28, 24);
+    layout->setContentsMargins(26, 22, 26, 22);
     layout->setSpacing(14);
-    layout->addWidget(pageTitle(localizedText("PDF 报告", "PDF Report")));
 
     QHBoxLayout *buttons = new QHBoxLayout;
-    QPushButton *exportButton = new QPushButton(localizedText("导出 PDF", "Export PDF"));
-    QPushButton *exportBomButton = new QPushButton(localizedText("导出 BOM CSV", "Export BOM CSV"));
-    QPushButton *recalculateButton = new QPushButton(localizedText("重新计算", "Recalculate"));
-    exportBomButton->setObjectName(QStringLiteral("SecondaryButton"));
-    recalculateButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *exportButton = actionButton(localizedText("导出 PDF", "Export PDF"), QStringLiteral(":/icons/ui/export.png"));
+    QPushButton *exportBomButton = actionButton(localizedText("导出 BOM CSV", "Export BOM CSV"), QStringLiteral(":/icons/ui/export.png"), true);
+    QPushButton *recalculateButton = actionButton(localizedText("重新计算", "Recalculate"), QStringLiteral(":/icons/ui/calculate.png"), true);
     connect(exportButton, &QPushButton::clicked, this, &ReportPage::exportPdfRequested);
     connect(exportBomButton, &QPushButton::clicked, this, &ReportPage::exportBomRequested);
     connect(recalculateButton, &QPushButton::clicked, this, &ReportPage::recalculateRequested);
@@ -31,11 +29,25 @@ ReportPage::ReportPage(QWidget *parent)
     buttons->addWidget(exportBomButton);
     buttons->addWidget(recalculateButton);
     buttons->addStretch();
-    layout->addLayout(buttons);
+    QWidget *actions = new QWidget;
+    actions->setLayout(buttons);
+    layout->addWidget(pageHeader(localizedText("PDF 报告", "PDF Report"),
+        localizedText("预览报告将包含的核心交付信息，并从这里导出 PDF 或 BOM。", "Preview deliverable report content and export PDF or BOM from one place."),
+        actions));
+
+    QFrame *previewCard = new QFrame;
+    previewCard->setObjectName(QStringLiteral("SectionCard"));
+    QVBoxLayout *previewLayout = new QVBoxLayout(previewCard);
+    previewLayout->setContentsMargins(14, 14, 14, 14);
+    previewLayout->setSpacing(10);
+    QLabel *previewTitle = new QLabel(localizedText("交付预览", "Delivery Preview"));
+    previewTitle->setObjectName(QStringLiteral("SectionTitle"));
+    previewLayout->addWidget(previewTitle);
 
     m_reportPreview = new QTextEdit;
     m_reportPreview->setReadOnly(true);
-    layout->addWidget(m_reportPreview, 1);
+    previewLayout->addWidget(m_reportPreview, 1);
+    layout->addWidget(previewCard, 1);
 }
 
 void ReportPage::setReportData(const SelectionRequest &request,
@@ -70,6 +82,8 @@ void ReportPage::refreshPreview()
                 .arg(top.storagePerHourGB, 0, 'f', 0)
             + localizedText("\nBOM：相机、镜头、光源 3 项", "\nBOM: camera, lens, and light")
             + QStringLiteral("\n");
+    } else {
+        text += localizedText("当前暂无推荐方案，请先完成计算。", "No recommendation is available yet. Calculate first.");
     }
     m_reportPreview->setPlainText(text);
 }

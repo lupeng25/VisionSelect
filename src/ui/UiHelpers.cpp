@@ -8,15 +8,23 @@
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDoubleSpinBox>
+#include <QFrame>
+#include <QHBoxLayout>
 #include <QHeaderView>
+#include <QIcon>
 #include <QKeySequence>
 #include <QLabel>
 #include <QList>
+#include <QPushButton>
+#include <QSize>
+#include <QSizePolicy>
 #include <QShortcut>
 #include <QSpinBox>
 #include <QStringList>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QVBoxLayout>
+#include <QWidget>
 
 namespace UiHelpers {
 
@@ -29,6 +37,84 @@ QLabel *pageTitle(const QString &text, const QString &subtitle)
     if (!subtitle.isEmpty())
         label->setToolTip(subtitle);
     return label;
+}
+
+QWidget *pageHeader(const QString &title, const QString &subtitle, QWidget *actions)
+{
+    QWidget *header = new QWidget;
+    header->setObjectName(QStringLiteral("PageHeader"));
+    QHBoxLayout *layout = new QHBoxLayout(header);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(12);
+
+    QWidget *copy = new QWidget(header);
+    QVBoxLayout *copyLayout = new QVBoxLayout(copy);
+    copyLayout->setContentsMargins(0, 0, 0, 0);
+    copyLayout->setSpacing(4);
+    QLabel *titleLabel = pageTitle(title);
+    copyLayout->addWidget(titleLabel);
+    if (!subtitle.isEmpty()) {
+        QLabel *subtitleLabel = new QLabel(subtitle);
+        subtitleLabel->setObjectName(QStringLiteral("PageSubtitle"));
+        subtitleLabel->setWordWrap(true);
+        subtitleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        copyLayout->addWidget(subtitleLabel);
+    }
+    layout->addWidget(copy, 1);
+    if (actions)
+        layout->addWidget(actions, 0, Qt::AlignRight | Qt::AlignVCenter);
+    return header;
+}
+
+QFrame *metricCard(const QString &label, const QString &value, const QString &detail, const QString &state)
+{
+    QFrame *card = new QFrame;
+    card->setObjectName(QStringLiteral("MetricCard"));
+    setWidgetState(card, state);
+    QVBoxLayout *layout = new QVBoxLayout(card);
+    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setSpacing(4);
+
+    QLabel *labelWidget = new QLabel(label);
+    labelWidget->setObjectName(QStringLiteral("MetricLabel"));
+    labelWidget->setWordWrap(true);
+    QLabel *valueWidget = new QLabel(value);
+    valueWidget->setObjectName(QStringLiteral("MetricValue"));
+    valueWidget->setWordWrap(true);
+    valueWidget->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(labelWidget);
+    layout->addWidget(valueWidget);
+    if (!detail.isEmpty()) {
+        QLabel *detailWidget = new QLabel(detail);
+        detailWidget->setObjectName(QStringLiteral("MetricDetail"));
+        detailWidget->setWordWrap(true);
+        detailWidget->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        layout->addWidget(detailWidget);
+    }
+    return card;
+}
+
+QLabel *statusBadge(const QString &text, const QString &state)
+{
+    QLabel *badge = new QLabel(text);
+    badge->setObjectName(QStringLiteral("StatusBadge"));
+    badge->setAlignment(Qt::AlignCenter);
+    badge->setWordWrap(false);
+    badge->setToolTip(text);
+    setWidgetState(badge, state);
+    return badge;
+}
+
+QPushButton *actionButton(const QString &text, const QString &iconPath, bool secondary)
+{
+    QPushButton *button = new QPushButton(text);
+    button->setObjectName(secondary ? QStringLiteral("SecondaryButton") : QStringLiteral("PrimaryButton"));
+    button->setCursor(Qt::PointingHandCursor);
+    if (!iconPath.isEmpty()) {
+        button->setIcon(QIcon(iconPath));
+        button->setIconSize(QSize(16, 16));
+    }
+    return button;
 }
 
 QTableWidgetItem *item(const QString &text)
@@ -97,10 +183,22 @@ void setupTable(QTableWidget *table)
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::SingleSelection);
     table->verticalHeader()->setVisible(false);
+    table->verticalHeader()->setDefaultSectionSize(34);
     table->horizontalHeader()->setStretchLastSection(true);
     table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    table->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    table->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    table->setTextElideMode(Qt::ElideRight);
+    table->setWordWrap(false);
     table->setSortingEnabled(true);
     installTableCopyShortcut(table);
+}
+
+void setWidgetState(QWidget *widget, const QString &state)
+{
+    if (!widget)
+        return;
+    widget->setProperty("state", state);
 }
 
 QString number(double value, int decimals)

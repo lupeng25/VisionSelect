@@ -1,5 +1,6 @@
 #include "ui/pages/InputPage.h"
 
+#include "selection/CalculationAssistant.h"
 #include "ui/UiHelpers.h"
 
 #include <QCheckBox>
@@ -10,8 +11,10 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QList>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QStringList>
 #include <QVBoxLayout>
 
 using namespace UiHelpers;
@@ -20,16 +23,22 @@ InputPage::InputPage(QWidget *parent)
     : QWidget(parent)
 {
     QVBoxLayout *outer = new QVBoxLayout(this);
-    outer->setContentsMargins(28, 24, 28, 24);
+    outer->setContentsMargins(26, 22, 26, 22);
     outer->setSpacing(16);
-    outer->addWidget(pageTitle(localizedText("需求输入", "Requirement Input")));
+    outer->addWidget(pageHeader(localizedText("需求建模", "Requirement Modeling"),
+        localizedText("录入工件、节拍和安装约束，形成后续选型与报告的统一输入。",
+                      "Capture part, cycle, and installation constraints for downstream selection and reporting.")));
+
+    QHBoxLayout *body = new QHBoxLayout;
+    body->setSpacing(16);
 
     QScrollArea *scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setMinimumWidth(520);
     QWidget *content = new QWidget;
     QVBoxLayout *layout = new QVBoxLayout(content);
-    layout->setContentsMargins(0, 0, 12, 0);
+    layout->setContentsMargins(0, 0, 8, 0);
     layout->setSpacing(14);
 
     QGroupBox *objectBox = new QGroupBox(localizedText("工件与精度", "Part and Accuracy"));
@@ -48,6 +57,7 @@ InputPage::InputPage(QWidget *parent)
 
     QGroupBox *processBox = new QGroupBox(localizedText("工艺与安装", "Process and Installation"));
     QFormLayout *processLayout = new QFormLayout(processBox);
+    processLayout->setLabelAlignment(Qt::AlignLeft);
     m_detectionCombo = new QComboBox;
     m_detectionCombo->addItems({detectionTypeLabel(DetectionType::Measurement),
                                 detectionTypeLabel(DetectionType::Positioning),
@@ -82,9 +92,8 @@ InputPage::InputPage(QWidget *parent)
     processLayout->addRow(QString(), m_allowTelecentricCheck);
 
     QHBoxLayout *buttonLayout = new QHBoxLayout;
-    QPushButton *calculateButton = new QPushButton(localizedText("计算推荐", "Calculate Recommendations"));
-    QPushButton *resultButton = new QPushButton(localizedText("查看结果", "View Results"));
-    resultButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *calculateButton = actionButton(localizedText("计算推荐", "Calculate Recommendations"), QStringLiteral(":/icons/ui/calculate.png"));
+    QPushButton *resultButton = actionButton(localizedText("查看结果", "View Results"), QStringLiteral(":/icons/ui/results.png"), true);
     connect(calculateButton, &QPushButton::clicked, this, &InputPage::calculateRequested);
     connect(resultButton, &QPushButton::clicked, this, &InputPage::resultsRequested);
     buttonLayout->addWidget(calculateButton);
@@ -96,7 +105,87 @@ InputPage::InputPage(QWidget *parent)
     layout->addLayout(buttonLayout);
     layout->addStretch();
     scroll->setWidget(content);
-    outer->addWidget(scroll, 1);
+    body->addWidget(scroll, 3);
+
+    QFrame *summaryPanel = new QFrame;
+    summaryPanel->setObjectName(QStringLiteral("SectionCard"));
+    summaryPanel->setMinimumWidth(300);
+    summaryPanel->setMaximumWidth(360);
+    QVBoxLayout *summaryLayout = new QVBoxLayout(summaryPanel);
+    summaryLayout->setContentsMargins(16, 16, 16, 16);
+    summaryLayout->setSpacing(12);
+    QLabel *summaryTitle = new QLabel(localizedText("需求摘要", "Requirement Summary"));
+    summaryTitle->setObjectName(QStringLiteral("SectionTitle"));
+    QLabel *summaryHint = new QLabel(localizedText("摘要会随左侧输入实时更新，便于在计算前确认约束量级。",
+                                                   "This summary updates with the form so constraints can be checked before calculation."));
+    summaryHint->setObjectName(QStringLiteral("PageSubtitle"));
+    summaryHint->setWordWrap(true);
+    summaryLayout->addWidget(summaryTitle);
+    summaryLayout->addWidget(summaryHint);
+
+    const auto addSummaryMetric = [summaryLayout](const QString &label, QLabel **valueLabel, const QString &state) {
+        QFrame *card = new QFrame;
+        card->setObjectName(QStringLiteral("MetricCard"));
+        setWidgetState(card, state);
+        QVBoxLayout *cardLayout = new QVBoxLayout(card);
+        cardLayout->setContentsMargins(12, 10, 12, 10);
+        cardLayout->setSpacing(4);
+        QLabel *metricLabel = new QLabel(label);
+        metricLabel->setObjectName(QStringLiteral("MetricLabel"));
+        *valueLabel = new QLabel;
+        (*valueLabel)->setObjectName(QStringLiteral("MetricValue"));
+        (*valueLabel)->setWordWrap(true);
+        cardLayout->addWidget(metricLabel);
+        cardLayout->addWidget(*valueLabel);
+        summaryLayout->addWidget(card);
+    };
+    addSummaryMetric(localizedText("目标 FOV", "Target FOV"), &m_fovSummaryLabel, QStringLiteral("info"));
+    addSummaryMetric(localizedText("目标物方像素", "Target Object Pixel"), &m_pixelSummaryLabel, QStringLiteral("good"));
+    addSummaryMetric(localizedText("最低相机建议", "Minimum Camera"), &m_resolutionSummaryLabel, QString());
+    addSummaryMetric(localizedText("工艺判断", "Process Verdict"), &m_processSummaryLabel, QStringLiteral("warn"));
+    summaryLayout->addStretch();
+    body->addWidget(summaryPanel, 1);
+    outer->addLayout(body, 1);
+
+    const QList<QDoubleSpinBox *> spins = {
+        m_widthSpin, m_heightSpin, m_marginSpin, m_minFeatureSpin, m_toleranceSpin,
+        m_wdSpin, m_heightVariationSpin, m_speedSpin, m_fpsSpin
+    };
+    for (QDoubleSpinBox *spin : spins)
+        connect(spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &InputPage::refreshSummary);
+    connect(m_detectionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &InputPage::refreshSummary);
+    connect(m_surfaceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &InputPage::refreshSummary);
+    connect(m_reflectiveCheck, &QCheckBox::toggled, this, &InputPage::refreshSummary);
+    connect(m_monoCheck, &QCheckBox::toggled, this, &InputPage::refreshSummary);
+    connect(m_allowTelecentricCheck, &QCheckBox::toggled, this, &InputPage::refreshSummary);
+    refreshSummary();
+}
+
+void InputPage::refreshSummary()
+{
+    if (!m_fovSummaryLabel || !m_widthSpin)
+        return;
+
+    const SelectionRequest current = request();
+    const RequirementEstimate estimate = CalculationAssistant::estimateRequirement(current);
+    m_fovSummaryLabel->setText(QStringLiteral("%1 x %2 mm")
+        .arg(estimate.requiredFovWidthMm, 0, 'f', 2)
+        .arg(estimate.requiredFovHeightMm, 0, 'f', 2));
+    m_pixelSummaryLabel->setText(QStringLiteral("%1 um/px")
+        .arg(estimate.targetObjectPixelUm, 0, 'f', 2));
+    m_resolutionSummaryLabel->setText(QStringLiteral("%1 x %2 (%3 MP)")
+        .arg(estimate.requiredResolutionX)
+        .arg(estimate.requiredResolutionY)
+        .arg(estimate.requiredMegapixels, 0, 'f', 2));
+
+    QStringList process;
+    process.append(detectionTypeLabel(current.detectionType));
+    process.append(surfaceTypeLabel(current.surfaceType));
+    if (estimate.telecentricPreferred)
+        process.append(localizedText("优先评估远心镜头", "Evaluate telecentric lenses"));
+    if (estimate.hasMotionConstraint)
+        process.append(QStringLiteral("%1 us").arg(estimate.maxExposureUsForOnePixelBlur, 0, 'f', 1));
+    m_processSummaryLabel->setText(process.join(localizedText("；", "; ")));
 }
 
 SelectionRequest InputPage::request() const
@@ -135,4 +224,5 @@ void InputPage::setRequest(const SelectionRequest &request)
     m_reflectiveCheck->setChecked(request.reflective);
     m_monoCheck->setChecked(request.preferMono);
     m_allowTelecentricCheck->setChecked(request.allowTelecentric);
+    refreshSummary();
 }
