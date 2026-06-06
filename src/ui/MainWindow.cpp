@@ -948,7 +948,7 @@ void MainWindow::addLight()
 {
     LightSpec light;
     light.model = QStringLiteral("NEW-LIGHT");
-    light.manufacturer = QStringLiteral("VisionSelect Sample");
+    light.manufacturer = QStringLiteral("Manual");
     light.lightType = LightType::Ring;
     light.color = QStringLiteral("White");
     light.mode = QStringLiteral("Continuous");

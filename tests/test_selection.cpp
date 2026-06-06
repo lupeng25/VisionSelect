@@ -814,23 +814,23 @@ void SelectionEngineTest::chineseTextIsUnicode()
 {
     const QString measurementText = QString::fromUtf8("\345\260\272\345\257\270\346\265\213\351\207\217");
     const QString biTelecentricText = QString::fromUtf8("\345\217\214\350\277\234\345\277\203\351\225\234\345\244\264");
-    const QString telecentricWord = QString::fromUtf8("\350\277\234\345\277\203\351\225\234\345\244\264");
+    const QString officialWord = QString::fromUtf8("\345\256\230\347\275\221");
 
     QCOMPARE(detectionTypeLabel(DetectionType::Measurement), measurementText);
     QCOMPARE(lensTypeLabel(LensType::BiTelecentric), biTelecentricText);
 
-    bool hasDecodedTelecentricUseCase = false;
+    bool hasDecodedOfficialUseCase = false;
     QStringList decodedLightUseCases;
     for (const LightSpec &light : m_catalog.lights())
     {
-        hasDecodedTelecentricUseCase = hasDecodedTelecentricUseCase
-            || light.bestFor.contains(telecentricWord);
+        hasDecodedOfficialUseCase = hasDecodedOfficialUseCase
+            || light.bestFor.contains(officialWord);
         QStringList codepoints;
         for (const QChar ch : light.bestFor)
             codepoints.append(QString::number(ch.unicode(), 16));
         decodedLightUseCases.append(light.model + QStringLiteral("=") + codepoints.join(QLatin1Char(' ')));
     }
-    QVERIFY2(hasDecodedTelecentricUseCase, qPrintable(decodedLightUseCases.join(QStringLiteral(" | "))));
+    QVERIFY2(hasDecodedOfficialUseCase, qPrintable(decodedLightUseCases.join(QStringLiteral(" | "))));
 }
 
 void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()

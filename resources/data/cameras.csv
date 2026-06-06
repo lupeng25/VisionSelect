@@ -961,8 +961,3 @@
 "OPT-CM500-LM-16","OPT","2432","2048","3.45","2/3""","Mono","Global","80.0","CameraLink","680","12","0","C"
 "OPT-CM6500-GM-04","OPT","9344","7000","3.2","APS-H","Mono","Global","1.7","GigE","120","12","0","M58"
 "OPT-CM6500-XM-1601","OPT","9344","7000","3.2","APS-H","Mono","Global","31.5","CoaXPress","2400","12","0","F"
-"VS-12M-GE-Color","VisionSelect Sample","4096","3000","3.45","1.1""","Color","Rolling","15","GigE","120","8","38","C"
-"VS-12M-USB3-Mono","VisionSelect Sample","4096","3000","3.45","1.1""","Mono","Global","30","USB3","380","8","41","C"
-"VS-20M-CXP-Mono","VisionSelect Sample","5472","3648","2.4","1""","Mono","Global","60","CoaXPress","1200","8","40","M42"
-"VS-2M-GE-Mono","VisionSelect Sample","1600","1200","4.5","1/1.8""","Mono","Global","60","GigE","120","8","40","C"
-"VS-5M-USB3-Mono","VisionSelect Sample","2448","2048","3.45","2/3""","Mono","Global","75","USB3","380","8","42","C"
