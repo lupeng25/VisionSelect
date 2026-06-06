@@ -64,7 +64,7 @@ function Parse-Resolution([string]$text) {
 function Normalize-Interface([string]$text) {
     $t = $text.ToLowerInvariant()
     if ($t -match 'cxp|coaxpress') { return "CoaXPress" }
-    if ($t -match '10g') { return "10GigE" }
+    if ($t -match '10\s*g|10\s*gigabit|10000\s*mbit') { return "10GigE" }
     if ($t -match 'usb') { return "USB3" }
     if ($t -match 'camera\s*link|cameralink') { return "CameraLink" }
     if ($t -match 'hcon') { return "HCON" }
@@ -76,7 +76,7 @@ function Interface-Bandwidth([string]$text) {
     $t = $text.ToLowerInvariant()
     if ($t -match 'cxp-12') { return 2400 }
     if ($t -match 'cxp|coaxpress') { return 1200 }
-    if ($t -match '10g|hcon|qsfp') { return 1000 }
+    if ($t -match '10\s*g|10\s*gigabit|10000\s*mbit|hcon|qsfp') { return 1000 }
     if ($t -match 'camera\s*link|cameralink') { return 680 }
     if ($t -match 'usb') { return 380 }
     if ($t -match 'gige|ethernet|poe') { return 120 }
@@ -144,7 +144,7 @@ function Infer-Mount([string]$model, [string]$mountText) {
 
 function Is-Yes([string]$text) {
     $t = Html-Decode $text
-    return $t -match '是|YES|TRUE|1'
+    return $t -match '(?i)^\s*(是|有|yes|true|1)\s*$'
 }
 
 function Invoke-Utf8Json([string]$uri) {
@@ -166,6 +166,21 @@ function Param-Map($groups) {
     return $m
 }
 
+function Normalize-ColorMode([string]$model, [string]$color, [string]$typeText, [string]$pixelFormat) {
+    $joined = "$typeText $pixelFormat"
+    if ($joined -match '(?i)\bcolor\b|bayer') { return "Color" }
+    if ($joined -match '(?i)\bmono\b') { return "Mono" }
+
+    $c = Clean-Field $color
+    if ($c -match '(?i)color|colour') { return "Color" }
+    if ($c -match '(?i)mono|monochrome') { return "Mono" }
+
+    $m = $model.ToUpperInvariant()
+    if ($m -match '(GC|UC|YC|VC|NC|CC|TC)(?:[-/\s(]|$)' -or $m -match 'Y1C') { return "Color" }
+    if ($m -match '(GM|UM|YM|VM|NM|XM|TM|CM|YN)(?:[-/\s(]|$)' -or $m -match 'Y1M') { return "Mono" }
+    return $c
+}
+
 function Add-Camera([hashtable]$map, [string]$model, [int]$rx, [int]$ry, [double]$pixel,
                     [string]$sensor, [string]$color, [string]$shutter, [double]$fps,
                     [string]$iface, [double]$bitDepth, [double]$dynamicRange, [string]$mount,
@@ -179,7 +194,7 @@ function Add-Camera([hashtable]$map, [string]$model, [int]$rx, [int]$ry, [double
         resolution_y = $ry
         pixel_size_um = $pixel
         sensor_format = $sensor
-        color_mode = $color
+        color_mode = (Normalize-ColorMode $model $color "" "")
         shutter_type = $shutter
         max_fps = $fps
         interface = $ifaceNorm
@@ -240,7 +255,12 @@ function Add-TeleLens([hashtable]$map, [string]$model, [string]$type, [double]$p
                       [double]$imageCircle, [double]$fno, [double]$resolutionUm,
                       [double]$wd, [double]$dof, [double]$distortion,
                       [double]$teleDeg, [string]$notes,
-                      [string]$manufacturer = "") {
+                      [string]$manufacturer = "", [string]$coaxial = "") {
+    $supportsCoax = if ([string]::IsNullOrWhiteSpace($coaxial)) {
+        ($model -match 'D$|DH$').ToString().ToLowerInvariant()
+    } else {
+        $coaxial.ToLowerInvariant()
+    }
     Add-ToMap $map (New-Row $lensHeaders @{
         model = $model
         manufacturer = $manufacturer
@@ -260,7 +280,7 @@ function Add-TeleLens([hashtable]$map, [string]$model, [string]$type, [double]$p
         dof_mm = $dof
         numerical_aperture = 0
         f_number = $fno
-        coaxial_illumination = ($model -match 'D$|DH$').ToString().ToLowerInvariant()
+        coaxial_illumination = $supportsCoax
         notes = $notes
     })
 }
@@ -361,16 +381,25 @@ $cstObjectTele = @(
     @("CST-TL6520D",2.14,11,14.4,4.5,65,0.34,0.039,0.11), @("CST-TL6520",2.14,11,14.4,4.5,65,0.34,0.039,0.11),
     @("CST-TL6530D",3.0,11,15.7,3.5,65,0.18,0.038,0.15), @("CST-TL6530",3.0,11,15.7,3.5,65,0.18,0.038,0.15),
     @("CST-TL6540D",4.0,11,17.7,3,65,0.1,0.064,0.11), @("CST-TL6540",4.0,11,17.7,3,65,0.1,0.064,0.11),
-    @("CST-TL6560D",6.0,11,26.8,3,65,0.07,0.03,0.15), @("CST-TL6560",6.0,11,26.8,3,65,0.07,0.03,0.15)
+    @("CST-TL6560D",6.0,11,26.8,3,65,0.07,0.03,0.15), @("CST-TL6560",6.0,11,26.8,3,65,0.07,0.03,0.15),
+    @("CST-TL4175-1M",0.4,17.6,6.8,11.3,175,4.4,0.122,0.1)
 )
 foreach ($l in $cstObjectTele) {
     Add-TeleLens $lensMap $l[0] "ObjectTelecentric" $l[1] $l[2] $l[3] $l[4] $l[5] $l[6] $l[7] $l[8] "CST standard object-side telecentric lens" "CST"
 }
+Add-TeleLens $lensMap "CST-TL25D90-H" "ObjectTelecentric" 1.25 17.6 8.4 4.5 90 0.6 0.059 0.1 "CST object-side telecentric lens from official standard telecentric table" "CST" "true"
 $cstBiTele = @(
     @("CST-TL6505DH",0.5,11,6,8,65,2.54,0.001,0.25), @("CST-TL6505H",0.5,11,6,8,65,2.54,0.001,0.25),
     @("CST-TL17805DH",0.5,11,7,9.2,178,2.9,0.001,0.11), @("CST-TL17805H",0.5,11,7,9.2,178,2.9,0.001,0.11),
     @("CST-TL11004DH",0.4,11,8,13.2,110,5.2,0.011,0.25), @("CST-TL11004H",0.4,11,8,13.2,110,5.2,0.020,0.25),
-    @("CST-TL184036H",0.367,22,5.9,18,184.4,6.2,0.010,0.08)
+    @("CST-TL184036H",0.367,22,5.9,18,184.4,6.2,0.010,0.08),
+    @("CST-TL6503DH",0.3,11,7.5,16.5,65,8.8,0.050,0.07), @("CST-TL6503H",0.3,11,7.5,16.5,65,8.8,0.043,0.044),
+    @("CST-TL11003DH",0.3,11,7.5,16.4,110,8.2,0.025,0.1), @("CST-TL11003H",0.3,11,7.5,16.4,110,8.7,0.065,0.1),
+    @("CST-TL150024H",0.24,11,8,22,150,14.6,0.030,0.031), @("CST-TL167022H",0.22,11,6.4,18,167,8.4,0.030,0.008),
+    @("CST-TL150022H",0.22,11,8,24.1,150,17.4,0.030,0.032), @("CST-TL15002H",0.2,11,8,26.4,150,21,0.030,0.039),
+    @("CST-TL178018H",0.18,11,8,30,178,26,0.055,0.031), @("CST-TL167018H",0.188,11,6.4,10.6,167,8.4,0.014,0.009),
+    @("CST-TL178016H",0.16,11,8,33,178,33,0.060,0.029), @("CST-TL178014H",0.14,11,8,37.9,178,43.2,0.060,0.031),
+    @("CST-TL250012H",0.12,11,8,43.7,250,58,0.040,0.036), @("CST-TL25001H",0.1,11,8,52.8,250,85,0.050,0.036)
 )
 foreach ($l in $cstBiTele) {
     Add-TeleLens $lensMap $l[0] "BiTelecentric" $l[1] $l[2] $l[3] $l[4] $l[5] $l[6] $l[7] $l[8] "CST high-resolution bi-telecentric lens" "CST"
@@ -410,6 +439,7 @@ if (!$SkipNetwork) {
             $shutter = if ($sensorType -match '(?i)rolling') { "Rolling" } elseif ($sensorType -match '(?i)global') { "Global" } else { $p["Shutter"] }
             $color = $p["Mono/color"]
             if (!$color) { $color = $p["Mono/Color"] }
+            $color = Normalize-ColorMode $p["Product Model"] $color $p["Type"] $p["Pixel format"]
             $iface = $p["Data interface"]
             if (!$iface) { $iface = $p["Port"] }
             Add-Camera $cameraMap $p["Product Model"] $r[0] $r[1] $pixel $sensor $color $shutter $fps $iface (First-Number $p["Bit depth"] 12) (First-Number $p["Dynamic range"] 0) $p["Lens mount"] "Hikrobot"
@@ -452,7 +482,8 @@ if (!$SkipNetwork) {
             $pixel = First-Number $p["Pixel Size"] 0
             $fps = First-Number $p["Frame Rate"] 0
             $sensor = $p["Image Sensor"]
-            Add-Camera $cameraMap $detail.data.model $r[0] $r[1] $pixel $sensor $p["Mono/Color"] $p["Shutter"] $fps $p["Port"] (First-Number $p["Bit Depth"] 12) (First-Number $p["Dynamic Range"] 0) $p["Lens Mount"] "iRAYPLE"
+            $color = Normalize-ColorMode $detail.data.model $p["Mono/Color"] "" $p["Image Format"]
+            Add-Camera $cameraMap $detail.data.model $r[0] $r[1] $pixel $sensor $color $p["Shutter"] $fps $p["Port"] (First-Number $p["Bit Depth"] 12) (First-Number $p["Dynamic Range"] 0) $p["Lens Mount"] "iRAYPLE"
         } catch {
             Write-Warning "Skipped iRAYPLE camera id=$($rec.id): $($_.Exception.Message)"
         }
