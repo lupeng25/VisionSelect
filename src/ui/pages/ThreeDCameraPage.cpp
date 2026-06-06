@@ -17,13 +17,17 @@
 #include <QLabel>
 #include <QList>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSizePolicy>
 #include <QSignalBlocker>
 #include <QSplitter>
+#include <QSpinBox>
 #include <QStringList>
+#include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTextBrowser>
+#include <QTextEdit>
 #include <QVBoxLayout>
 
 using namespace UiHelpers;
@@ -200,6 +204,17 @@ void setStatusColor(QTableWidgetItem *item, ThreeDMatchStatus status)
     else
         item->setBackground(QColor(254, 226, 226));
 }
+
+QString htmlList(const QStringList &items, const QString &fallback)
+{
+    if (items.isEmpty())
+        return QStringLiteral("<p>%1</p>").arg(htmlEscape(fallback));
+    QString html = QStringLiteral("<ul>");
+    for (const QString &entry : items)
+        html += QStringLiteral("<li>%1</li>").arg(htmlEscape(entry));
+    html += QStringLiteral("</ul>");
+    return html;
+}
 }
 
 ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
@@ -216,7 +231,13 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     m_summaryLabel->setWordWrap(true);
     layout->addWidget(m_summaryLabel);
 
-    buildFilters(layout);
+    QTabWidget *tabs = new QTabWidget;
+    QWidget *productTab = new QWidget;
+    QVBoxLayout *productLayout = new QVBoxLayout(productTab);
+    productLayout->setContentsMargins(0, 0, 0, 0);
+    productLayout->setSpacing(14);
+
+    buildFilters(productLayout);
 
     QSplitter *splitter = new QSplitter(Qt::Vertical);
     m_table = new QTableWidget;
@@ -258,7 +279,16 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     splitter->addWidget(m_details);
     splitter->setStretchFactor(0, 3);
     splitter->setStretchFactor(1, 1);
-    layout->addWidget(splitter, 1);
+    productLayout->addWidget(splitter, 1);
+    tabs->addTab(productTab, localizedText("产品筛选", "Product Filters"));
+
+    QWidget *samplingTab = new QWidget;
+    QVBoxLayout *samplingLayout = new QVBoxLayout(samplingTab);
+    samplingLayout->setContentsMargins(0, 0, 0, 0);
+    samplingLayout->setSpacing(14);
+    buildSamplingPanel(samplingLayout);
+    tabs->addTab(samplingTab, localizedText("参数设定", "Parameter Setup"));
+    layout->addWidget(tabs, 1);
 
     populateFilterOptions();
     m_summaryLabel->setText(localizedText(
@@ -419,6 +449,175 @@ void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
     parentLayout->addWidget(panel);
 }
 
+void ThreeDCameraPage::buildSamplingPanel(QLayout *parentLayout)
+{
+    QWidget *bodyWidget = new QWidget;
+    bodyWidget->setObjectName(QStringLiteral("ParameterInputPanel"));
+    QHBoxLayout *body = new QHBoxLayout(bodyWidget);
+    body->setContentsMargins(0, 0, 0, 0);
+    body->setSpacing(14);
+
+    QScrollArea *inputScroll = new QScrollArea;
+    inputScroll->setObjectName(QStringLiteral("ParameterScroll"));
+    inputScroll->setWidgetResizable(true);
+    inputScroll->setFrameShape(QFrame::NoFrame);
+    inputScroll->setMinimumWidth(390);
+    inputScroll->setMaximumWidth(500);
+    QWidget *inputPanel = new QWidget;
+    inputPanel->setObjectName(QStringLiteral("ParameterInputPanel"));
+    QVBoxLayout *inputLayout = new QVBoxLayout(inputPanel);
+    inputLayout->setContentsMargins(0, 0, 8, 0);
+    inputLayout->setSpacing(12);
+
+    const auto prepareControl = [](QWidget *control) {
+        control->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        control->setMinimumWidth(0);
+        if (QComboBox *combo = qobject_cast<QComboBox *>(control)) {
+            combo->setMinimumContentsLength(0);
+            combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        }
+    };
+    const auto field = [prepareControl](const QString &labelText, QWidget *control) {
+        QWidget *holder = new QWidget;
+        holder->setObjectName(QStringLiteral("ParameterField"));
+        QVBoxLayout *layout = new QVBoxLayout(holder);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(5);
+        QLabel *label = new QLabel(labelText);
+        label->setObjectName(QStringLiteral("ParameterFieldLabel"));
+        label->setToolTip(labelText);
+        prepareControl(control);
+        layout->addWidget(label);
+        layout->addWidget(control);
+        return holder;
+    };
+
+    struct ParameterGroup {
+        QFrame *frame;
+        QGridLayout *grid;
+        QVBoxLayout *layout;
+    };
+    const auto makeGroup = [](const QString &title, const QString &subtitle) -> ParameterGroup {
+        QFrame *group = new QFrame;
+        group->setObjectName(QStringLiteral("ParameterGroup"));
+        QVBoxLayout *layout = new QVBoxLayout(group);
+        layout->setContentsMargins(14, 12, 14, 14);
+        layout->setSpacing(9);
+        QLabel *titleLabel = new QLabel(title);
+        titleLabel->setObjectName(QStringLiteral("ParameterGroupTitle"));
+        layout->addWidget(titleLabel);
+        if (!subtitle.isEmpty()) {
+            QLabel *subtitleLabel = new QLabel(subtitle);
+            subtitleLabel->setObjectName(QStringLiteral("ParameterGroupSubtitle"));
+            subtitleLabel->setWordWrap(true);
+            layout->addWidget(subtitleLabel);
+        }
+        QGridLayout *grid = new QGridLayout;
+        grid->setContentsMargins(0, 0, 0, 0);
+        grid->setHorizontalSpacing(10);
+        grid->setVerticalSpacing(9);
+        grid->setColumnStretch(0, 1);
+        grid->setColumnStretch(1, 1);
+        layout->addLayout(grid);
+        return ParameterGroup{group, grid, layout};
+    };
+
+    ParameterGroup cameraGroup = makeGroup(
+        localizedText("当前 3D 相机", "Current 3D Camera"),
+        localizedText("从产品筛选页选中型号后，系统会自动读取公开的 X 轮廓数据间隔和速度上限。",
+                      "After selecting a model in Product Filters, published X interval and speed limit are applied automatically."));
+    m_samplingCameraLabel = new QLabel(localizedText("尚未选择 3D 相机。", "No 3D camera selected."));
+    m_samplingCameraLabel->setObjectName(QStringLiteral("CalculationResultSubtitle"));
+    m_samplingCameraLabel->setWordWrap(true);
+    cameraGroup.layout->addWidget(m_samplingCameraLabel);
+
+    ParameterGroup scanGroup = makeGroup(
+        localizedText("扫描与轮廓", "Scan and Profile"),
+        localizedText("对应 Excel 中固定工作距离内的采集帧数计算。",
+                      "Matches the spreadsheet's profile count calculation for a fixed scan distance."));
+    m_scanDistanceSpin = makeSpin(0.001, 100000.0, 300.0, QStringLiteral(" mm"), 3);
+    m_profileIntervalSpin = makeSpin(0.0001, 1000.0, 0.05, localizedText(" mm/轮廓", " mm/profile"), 4);
+    m_samplingRateSpin = makeSpin(0.1, 1000000.0, 1000.0, QStringLiteral(" Hz"), 1);
+    m_safetyFactorSpin = makeSpin(0.01, 1.0, 0.8, QString(), 2);
+    scanGroup.grid->addWidget(field(localizedText("扫描距离", "Scan distance"), m_scanDistanceSpin), 0, 0);
+    scanGroup.grid->addWidget(field(localizedText("轮廓采样间隔", "Profile interval"), m_profileIntervalSpin), 0, 1);
+    scanGroup.grid->addWidget(field(localizedText("采样频率", "Sampling rate"), m_samplingRateSpin), 1, 0);
+    scanGroup.grid->addWidget(field(localizedText("安全系数", "Safety factor"), m_safetyFactorSpin), 1, 1);
+
+    ParameterGroup encoderGroup = makeGroup(
+        localizedText("编码器与像素当量", "Encoder and Pixel Pitch"),
+        localizedText("对应 Excel 中脉冲采样间隔、Y 像素当量和 X 像素当量计算。",
+                      "Matches pulse interval, Y pitch, and X pitch calculations in the spreadsheet."));
+    m_axisTravelSpin = makeSpin(0.001, 100000.0, 10.0, QStringLiteral(" mm"), 3);
+    m_pulseCountSpin = dialogIntSpin(1, 1000000000, 10000);
+    m_refinementPointsSpin = dialogIntSpin(1, 1000000, 50);
+    m_xPitchOverrideSpin = makeSpin(0.0, 1000.0, 0.0, QStringLiteral(" mm"), 4);
+    m_xPitchOverrideSpin->setSpecialValueText(localizedText("自动", "Auto"));
+    encoderGroup.grid->addWidget(field(localizedText("轴移动距离", "Axis travel"), m_axisTravelSpin), 0, 0);
+    encoderGroup.grid->addWidget(field(localizedText("脉冲数量", "Pulse count"), m_pulseCountSpin), 0, 1);
+    encoderGroup.grid->addWidget(field(localizedText("细化点数", "Refinement points"), m_refinementPointsSpin), 1, 0);
+    encoderGroup.grid->addWidget(field(localizedText("手动 X 像素当量", "Manual X pitch"), m_xPitchOverrideSpin), 1, 1);
+
+    inputLayout->addWidget(cameraGroup.frame);
+    inputLayout->addWidget(scanGroup.frame);
+    inputLayout->addWidget(encoderGroup.frame);
+    inputLayout->addStretch();
+    inputScroll->setWidget(inputPanel);
+
+    QFrame *outputPanel = new QFrame;
+    outputPanel->setObjectName(QStringLiteral("CalculationResultPanel"));
+    QVBoxLayout *outputLayout = new QVBoxLayout(outputPanel);
+    outputLayout->setContentsMargins(16, 14, 16, 16);
+    outputLayout->setSpacing(12);
+    QHBoxLayout *actions = new QHBoxLayout;
+    actions->setContentsMargins(0, 0, 0, 0);
+    QWidget *resultHeader = new QWidget(outputPanel);
+    resultHeader->setObjectName(QStringLiteral("CalculationResultHeader"));
+    QVBoxLayout *resultHeaderLayout = new QVBoxLayout(resultHeader);
+    resultHeaderLayout->setContentsMargins(0, 0, 0, 0);
+    resultHeaderLayout->setSpacing(3);
+    QLabel *resultTitle = new QLabel(localizedText("3D 参数设定结果", "3D Parameter Result"));
+    resultTitle->setObjectName(QStringLiteral("CalculationResultTitle"));
+    QLabel *resultSubtitle = new QLabel(localizedText(
+        "按当前相机和现场参数计算轮廓数、脉冲间隔、X/Y 像素当量和允许轴速度。",
+        "Calculate profile count, pulse interval, X/Y pitch, and allowed axis speed from the selected camera and site parameters."));
+    resultSubtitle->setObjectName(QStringLiteral("CalculationResultSubtitle"));
+    resultSubtitle->setWordWrap(true);
+    resultHeaderLayout->addWidget(resultTitle);
+    resultHeaderLayout->addWidget(resultSubtitle);
+    actions->addWidget(resultHeader, 1);
+    QPushButton *resetButton = actionButton(localizedText("恢复示例", "Reset Example"), QStringLiteral(":/icons/ui/info.png"), true);
+    QPushButton *calculateButton = actionButton(localizedText("计算", "Calculate"), QStringLiteral(":/icons/ui/calculate.png"));
+    actions->addWidget(resetButton);
+    actions->addWidget(calculateButton);
+    outputLayout->addLayout(actions);
+
+    m_samplingOutput = new QTextEdit;
+    m_samplingOutput->setObjectName(QStringLiteral("CalculationResultText"));
+    m_samplingOutput->setReadOnly(true);
+    outputLayout->addWidget(m_samplingOutput, 1);
+
+    body->addWidget(inputScroll);
+    body->addWidget(outputPanel, 1);
+    parentLayout->addWidget(bodyWidget);
+
+    connect(calculateButton, &QPushButton::clicked, this, &ThreeDCameraPage::refreshSampling);
+    connect(resetButton, &QPushButton::clicked, this, &ThreeDCameraPage::resetSamplingDefaults);
+
+    const QList<QDoubleSpinBox *> doubleSpins = {
+        m_scanDistanceSpin, m_profileIntervalSpin, m_axisTravelSpin,
+        m_samplingRateSpin, m_safetyFactorSpin, m_xPitchOverrideSpin
+    };
+    for (QDoubleSpinBox *spin : doubleSpins)
+        connect(spin, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+            this, [this](double) { refreshSampling(); });
+    const QList<QSpinBox *> intSpins = {m_pulseCountSpin, m_refinementPointsSpin};
+    for (QSpinBox *spin : intSpins)
+        connect(spin, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
+            this, [this](int) { refreshSampling(); });
+    refreshSampling();
+}
+
 void ThreeDCameraPage::populateFilterOptions()
 {
     addComboValues(m_brandCombo, m_repository.manufacturers());
@@ -464,6 +663,31 @@ ThreeDCameraRequirement ThreeDCameraPage::requirement() const
     return req;
 }
 
+ThreeDMotionSamplingInput ThreeDCameraPage::samplingInput() const
+{
+    ThreeDMotionSamplingInput input;
+    if (!m_scanDistanceSpin)
+        return input;
+    input.scanDistanceMm = m_scanDistanceSpin->value();
+    input.profileIntervalMm = m_profileIntervalSpin->value();
+    input.axisTravelMm = m_axisTravelSpin->value();
+    input.pulseCount = m_pulseCountSpin->value();
+    input.refinementPoints = m_refinementPointsSpin->value();
+    input.samplingRateHz = m_samplingRateSpin->value();
+    input.safetyFactor = m_safetyFactorSpin->value();
+    input.overrideXPixelPitchMm = m_xPitchOverrideSpin->value() > 0.0
+        ? m_xPitchOverrideSpin->value()
+        : -1.0;
+    return input;
+}
+
+const ThreeDCameraSpec *ThreeDCameraPage::selectedCameraSpec() const
+{
+    if (m_selectedMatchIndex < 0 || m_selectedMatchIndex >= m_matches.size())
+        return nullptr;
+    return &m_matches.at(m_selectedMatchIndex).spec;
+}
+
 void ThreeDCameraPage::refresh()
 {
     if (!ensureLoaded())
@@ -473,6 +697,102 @@ void ThreeDCameraPage::refresh()
     m_matches = matcher.match(requirement(), m_repository.cameras());
     m_resultsInitialized = true;
     fillTable();
+}
+
+void ThreeDCameraPage::refreshSampling()
+{
+    if (!m_samplingOutput)
+        return;
+
+    const ThreeDCameraSpec *camera = selectedCameraSpec();
+    const ThreeDMotionSamplingInput input = samplingInput();
+    const ThreeDMotionSamplingResult result = ThreeDCalculation::estimateMotionSampling(input, camera);
+
+    if (m_samplingCameraLabel) {
+        if (camera) {
+            QStringList parts;
+            parts.append(localizedText("型号：%1 %2", "Model: %1 %2").arg(camera->manufacturer, camera->model));
+            parts.append(localizedText("技术路线：%1", "Technology: %1").arg(threeDTechnologyLabel(camera->technology)));
+            parts.append(localizedText("X 间隔：%1", "X interval: %1").arg(valueOrUnknown(camera->profileDataIntervalUm, QStringLiteral(" um"), 2)));
+            parts.append(localizedText("速度上限：%1", "Speed limit: %1").arg(valueOrUnknown(result.cameraSamplingRateLimitHz, QStringLiteral(" Hz"), 0)));
+            m_samplingCameraLabel->setText(parts.join(localizedText("；", "; ")));
+        } else {
+            m_samplingCameraLabel->setText(localizedText(
+                "尚未选择 3D 相机。可以先用手动 X 像素当量计算，或回到产品筛选页选择型号。",
+                "No 3D camera selected. You can calculate with a manual X pitch or select a model in Product Filters."));
+        }
+    }
+
+    const QString rateLimitText = result.samplingRateKnown
+        ? QStringLiteral("%1 Hz").arg(result.cameraSamplingRateLimitHz, 0, 'f', 0)
+        : localizedText("未公开", "Unpublished");
+    const QString xPitchText = result.xPixelPitchKnown
+        ? QStringLiteral("%1 mm").arg(result.xPixelPitchMm, 0, 'f', 4)
+        : localizedText("需确认", "Needs confirmation");
+    const QString ratioText = threeDHasValue(result.xyPitchRatio)
+        ? QStringLiteral("%1:1").arg(result.xyPitchRatio, 0, 'f', 2)
+        : localizedText("需确认", "Needs confirmation");
+    const QString stateText = result.valid && result.risks.isEmpty()
+        ? localizedText("参数正常", "Parameters OK")
+        : result.valid ? localizedText("需要确认", "Needs confirmation") : localizedText("输入无效", "Invalid input");
+
+    QString html;
+    html += QStringLiteral("<h3>%1</h3>").arg(htmlEscape(localizedText("3D 参数设定结果", "3D Parameter Setup Result")));
+    html += QStringLiteral("<p><b>%1</b>: %2</p>")
+        .arg(htmlEscape(localizedText("状态", "Status")), htmlEscape(stateText));
+    html += QStringLiteral("<table cellspacing=\"0\" cellpadding=\"5\">");
+    const auto row = [](const QString &label, const QString &value, const QString &formula) {
+        return QStringLiteral("<tr><td><b>%1</b></td><td>%2</td><td style=\"color:#667085;\">%3</td></tr>")
+            .arg(htmlEscape(label), htmlEscape(value), htmlEscape(formula));
+    };
+    html += row(localizedText("采集轮廓数", "Profile count"),
+                QStringLiteral("%1").arg(result.profileCount, 0, 'f', 0),
+                localizedText("扫描距离 / 轮廓采样间隔", "scan distance / profile interval"));
+    html += row(localizedText("脉冲采样间隔", "Pulse interval"),
+                QStringLiteral("%1 mm/pulse").arg(result.pulseIntervalMm, 0, 'f', 6),
+                localizedText("轴移动距离 / 脉冲数量", "axis travel / pulse count"));
+    html += row(localizedText("Y 像素当量", "Y pixel pitch"),
+                QStringLiteral("%1 mm").arg(result.yPixelPitchMm, 0, 'f', 4),
+                localizedText("脉冲采样间隔 × 细化点数", "pulse interval x refinement points"));
+    html += row(localizedText("X 像素当量", "X pixel pitch"),
+                xPitchText,
+                result.usesManualXPixelPitch
+                    ? localizedText("手动输入", "manual input")
+                    : localizedText("相机 X 轮廓数据间隔 / 1000", "camera X interval / 1000"));
+    html += row(localizedText("允许轴速度", "Allowed axis speed"),
+                QStringLiteral("%1 mm/s").arg(result.maxAxisSpeedMmS, 0, 'f', 2),
+                localizedText("采样频率 × 轮廓采样间隔 × 安全系数", "sampling rate x profile interval x safety factor"));
+    html += row(localizedText("X/Y 点距比例", "X/Y pitch ratio"),
+                ratioText,
+                localizedText("Y 像素当量 / X 像素当量", "Y pitch / X pitch"));
+    html += row(localizedText("相机速度上限", "Camera speed limit"),
+                rateLimitText,
+                localizedText("最大扫描频率或帧率", "max scan rate or frame rate"));
+    html += QStringLiteral("</table>");
+
+    html += QStringLiteral("<h4>%1</h4>%2")
+        .arg(htmlEscape(localizedText("依据", "Reasons")),
+             htmlList(result.reasons, localizedText("已按当前参数完成计算。", "Calculated from current parameters.")));
+    html += QStringLiteral("<h4>%1</h4>%2")
+        .arg(htmlEscape(localizedText("风险与确认项", "Risks and Confirmation Items")),
+             htmlList(result.risks, localizedText("无主要风险。", "No major risk.")));
+
+    m_samplingOutput->setHtml(html);
+}
+
+void ThreeDCameraPage::resetSamplingDefaults()
+{
+    if (!m_scanDistanceSpin)
+        return;
+    m_scanDistanceSpin->setValue(300.0);
+    m_profileIntervalSpin->setValue(0.05);
+    m_axisTravelSpin->setValue(10.0);
+    m_pulseCountSpin->setValue(10000);
+    m_refinementPointsSpin->setValue(50);
+    m_samplingRateSpin->setValue(1000.0);
+    m_safetyFactorSpin->setValue(0.8);
+    m_xPitchOverrideSpin->setValue(0.0);
+    refreshSampling();
 }
 
 void ThreeDCameraPage::clearFilters()
@@ -543,8 +863,22 @@ void ThreeDCameraPage::fillTable()
         m_table->selectRow(0);
         showDetailsForRow(0);
     } else if (m_details) {
+        m_selectedMatchIndex = -1;
         m_details->clear();
+        refreshSampling();
     }
+}
+
+void ThreeDCameraPage::updateSamplingFromSelected(int row)
+{
+    if (!m_table || row < 0 || row >= m_table->rowCount()) {
+        m_selectedMatchIndex = -1;
+        refreshSampling();
+        return;
+    }
+    const int sourceIndex = rowSourceIndex(m_table, row);
+    m_selectedMatchIndex = sourceIndex >= 0 ? sourceIndex : row;
+    refreshSampling();
 }
 
 void ThreeDCameraPage::showDetailsForRow(int row)
@@ -554,6 +888,8 @@ void ThreeDCameraPage::showDetailsForRow(int row)
     const int sourceIndex = rowSourceIndex(m_table, row);
     if (sourceIndex < 0 || sourceIndex >= m_matches.size())
         return;
+    m_selectedMatchIndex = sourceIndex;
+    refreshSampling();
 
     const ThreeDCameraMatch &match = m_matches.at(sourceIndex);
     const ThreeDCameraSpec &spec = match.spec;

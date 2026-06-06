@@ -20,6 +20,7 @@ SOURCES += \
     ../src/report/PdfReportWriter.cpp \
     ../src/selection/CalculationAssistant.cpp \
     ../src/selection/SelectionEngine.cpp \
+    ../src/three_d/ThreeDCalculation.cpp \
     ../src/three_d/ThreeDCameraMatcher.cpp \
     ../src/three_d/ThreeDCameraRepository.cpp \
     ../src/three_d/ThreeDCameraTypes.cpp \
@@ -34,6 +35,7 @@ HEADERS += \
     ../src/report/PdfReportWriter.h \
     ../src/selection/CalculationAssistant.h \
     ../src/selection/SelectionEngine.h \
+    ../src/three_d/ThreeDCalculation.h \
     ../src/three_d/ThreeDCameraMatcher.h \
     ../src/three_d/ThreeDCameraRepository.h \
     ../src/three_d/ThreeDCameraTypes.h \

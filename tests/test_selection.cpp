@@ -5,6 +5,7 @@
 #include "report/PdfReportWriter.h"
 #include "selection/CalculationAssistant.h"
 #include "selection/SelectionEngine.h"
+#include "three_d/ThreeDCalculation.h"
 #include "three_d/ThreeDCameraMatcher.h"
 #include "three_d/ThreeDCameraRepository.h"
 
@@ -43,6 +44,8 @@ private slots:
     void chineseTextIsUnicode();
     void threeDCameraCatalogLoadsFromResource();
     void threeDCameraMatcherClassifiesRequirements();
+    void threeDMotionSamplingMatchesSpreadsheetExample();
+    void threeDMotionSamplingUsesCameraDataAndFlagsRisks();
     void threeDCameraDataDoesNotAffect2DSelection();
     void licenseValidationCoversSignatureMachineAndExpiry();
     void licenseIssuerParsesXmlAndSignsCompatibleKey();
@@ -933,6 +936,60 @@ void SelectionEngineTest::threeDCameraMatcherClassifiesRequirements()
     const QVector<ThreeDCameraMatch> empty = matcher.match(ThreeDCameraRequirement(), repository.cameras());
     QVERIFY(!empty.isEmpty());
     QCOMPARE(empty.first().status, ThreeDMatchStatus::Match);
+}
+
+void SelectionEngineTest::threeDMotionSamplingMatchesSpreadsheetExample()
+{
+    ThreeDMotionSamplingInput input;
+    input.scanDistanceMm = 300.0;
+    input.profileIntervalMm = 0.05;
+    input.axisTravelMm = 10.0;
+    input.pulseCount = 10000;
+    input.refinementPoints = 50;
+    input.samplingRateHz = 1000.0;
+    input.safetyFactor = 0.8;
+    input.overrideXPixelPitchMm = 0.005;
+
+    const ThreeDMotionSamplingResult result = ThreeDCalculation::estimateMotionSampling(input);
+    QVERIFY(result.valid);
+    QCOMPARE(result.profileCount, 6000.0);
+    QCOMPARE(result.pulseIntervalMm, 0.001);
+    QCOMPARE(result.yPixelPitchMm, 0.05);
+    QCOMPARE(result.xPixelPitchMm, 0.005);
+    QCOMPARE(result.maxAxisSpeedMmS, 40.0);
+    QCOMPARE(result.xyPitchRatio, 10.0);
+    QVERIFY(result.usesManualXPixelPitch);
+}
+
+void SelectionEngineTest::threeDMotionSamplingUsesCameraDataAndFlagsRisks()
+{
+    ThreeDCameraSpec camera;
+    camera.model = QStringLiteral("TEST-3D");
+    camera.profileDataIntervalUm = 5.0;
+    camera.scanRateMaxHz = 800.0;
+
+    ThreeDMotionSamplingInput input;
+    input.scanDistanceMm = 300.0;
+    input.profileIntervalMm = 0.05;
+    input.axisTravelMm = 10.0;
+    input.pulseCount = 10000;
+    input.refinementPoints = 50;
+    input.samplingRateHz = 1000.0;
+    input.safetyFactor = 0.8;
+
+    const ThreeDMotionSamplingResult result = ThreeDCalculation::estimateMotionSampling(input, &camera);
+    QVERIFY(result.valid);
+    QCOMPARE(result.xPixelPitchMm, 0.005);
+    QVERIFY(!result.usesManualXPixelPitch);
+    QVERIFY(result.xPixelPitchKnown);
+    QVERIFY(result.samplingRateKnown);
+    QVERIFY(!result.samplingRateWithinCameraLimit);
+    QVERIFY(!result.risks.isEmpty());
+
+    input.profileIntervalMm = 0.0;
+    const ThreeDMotionSamplingResult invalid = ThreeDCalculation::estimateMotionSampling(input, &camera);
+    QVERIFY(!invalid.valid);
+    QVERIFY(!invalid.risks.isEmpty());
 }
 
 void SelectionEngineTest::threeDCameraDataDoesNotAffect2DSelection()
