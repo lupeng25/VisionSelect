@@ -844,6 +844,10 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
     int lmiCount = 0;
     int keyenceCount = 0;
     int sinceVisionCount = 0;
+    bool hasXRepeatability = false;
+    bool hasProfileDataInterval = false;
+    bool hasZLinearity = false;
+    bool hasReferenceDistance = false;
     for (const ThreeDCameraSpec &camera : repository.cameras()) {
         QVERIFY2(!camera.manufacturer.trimmed().isEmpty(), qPrintable(camera.model));
         QVERIFY2(!camera.series.trimmed().isEmpty(), qPrintable(camera.model));
@@ -860,6 +864,10 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
             ++keyenceCount;
         if (camera.manufacturer == QString::fromUtf8("深视智能"))
             ++sinceVisionCount;
+        hasXRepeatability = hasXRepeatability || threeDHasValue(camera.xRepeatabilityUm);
+        hasProfileDataInterval = hasProfileDataInterval || threeDHasValue(camera.profileDataIntervalUm);
+        hasZLinearity = hasZLinearity || threeDHasValue(camera.zLinearityPercentOfRange);
+        hasReferenceDistance = hasReferenceDistance || threeDHasValue(camera.referenceDistanceMm);
     }
 
     QVERIFY(brands.contains(QStringLiteral("LMI")));
@@ -869,6 +877,10 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
     QVERIFY(brands.contains(QString::fromUtf8("基恩士")));
     QVERIFY(keyenceCount >= 32);
     QVERIFY(brands.contains(QString::fromUtf8("海康机器人")));
+    QVERIFY2(hasXRepeatability, "Expected at least one camera with X repeatability.");
+    QVERIFY2(hasProfileDataInterval, "Expected at least one camera with X data interval.");
+    QVERIFY2(hasZLinearity, "Expected at least one camera with Z linearity.");
+    QVERIFY2(hasReferenceDistance, "Expected at least one camera with reference distance.");
 }
 
 void SelectionEngineTest::threeDCameraMatcherClassifiesRequirements()

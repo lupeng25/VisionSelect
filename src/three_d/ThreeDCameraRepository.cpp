@@ -112,6 +112,7 @@ bool ThreeDCameraRepository::loadFromResource(const QString &resourcePath, QStri
         spec.yFovReferenceMm = numberValue(object, "yFovReferenceMm");
         spec.yFovFarMm = numberValue(object, "yFovFarMm");
         spec.zRepeatabilityUm = numberValue(object, "zRepeatabilityUm");
+        spec.xRepeatabilityUm = numberValue(object, "xRepeatabilityUm");
         spec.zResolutionUm = numberValue(object, "zResolutionUm");
         spec.zLinearityPercentOfRange = numberValue(object, "zLinearityPercentOfRange");
         spec.measurementAccuracyUm = numberValue(object, "measurementAccuracyUm");

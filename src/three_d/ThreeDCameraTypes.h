@@ -47,6 +47,7 @@ struct ThreeDCameraSpec
     double yFovFarMm = -1.0;
 
     double zRepeatabilityUm = -1.0;
+    double xRepeatabilityUm = -1.0;
     double zResolutionUm = -1.0;
     double zLinearityPercentOfRange = -1.0;
     double measurementAccuracyUm = -1.0;

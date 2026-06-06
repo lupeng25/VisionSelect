@@ -79,6 +79,13 @@ QString valueOrUnknown(double value, const QString &unit, int decimals = 1)
         : localizedText("未公开", "Unpublished");
 }
 
+QString linearityOrUnknown(double value)
+{
+    return threeDHasValue(value)
+        ? QStringLiteral("+/- %1% F.S.").arg(value, 0, 'f', 3)
+        : localizedText("未公开", "Unpublished");
+}
+
 QString intOrUnknown(int value)
 {
     return value >= 0 ? QString::number(value) : localizedText("未公开", "Unpublished");
@@ -98,7 +105,7 @@ QString fovRange(double nearValue, double referenceValue, double farValue, const
 
 QString geometrySummary(const ThreeDCameraSpec &spec)
 {
-    return localizedText("X：%1；Y：%2；Z：%3；CD：%4", "X: %1; Y: %2; Z: %3; CD: %4")
+    return localizedText("X：%1；Y：%2；Z：%3；参考距离：%4", "X: %1; Y: %2; Z: %3; Reference: %4")
         .arg(fovRange(spec.xFovNearMm, spec.xFovReferenceMm, spec.xFovFarMm, QStringLiteral(" mm")))
         .arg(fovRange(spec.yFovNearMm, spec.yFovReferenceMm, spec.yFovFarMm, QStringLiteral(" mm")))
         .arg(valueOrUnknown(spec.zMeasurementRangeMm, QStringLiteral(" mm"), 1))
@@ -110,12 +117,16 @@ QString qualitySummary(const ThreeDCameraSpec &spec)
     QStringList parts;
     if (threeDHasValue(spec.zRepeatabilityUm))
         parts.append(localizedText("Z重复 %1 um", "Z repeatability %1 um").arg(spec.zRepeatabilityUm, 0, 'f', 2));
+    if (threeDHasValue(spec.xRepeatabilityUm))
+        parts.append(localizedText("X重复 %1 um", "X repeatability %1 um").arg(spec.xRepeatabilityUm, 0, 'f', 2));
+    if (threeDHasValue(spec.profileDataIntervalUm))
+        parts.append(localizedText("X间隔 %1 um", "X interval %1 um").arg(spec.profileDataIntervalUm, 0, 'f', 2));
+    if (threeDHasValue(spec.zLinearityPercentOfRange))
+        parts.append(localizedText("Z线性 %1", "Z linearity %1").arg(linearityOrUnknown(spec.zLinearityPercentOfRange)));
     if (threeDHasValue(spec.zResolutionUm))
         parts.append(localizedText("Z分辨 %1 um", "Z resolution %1 um").arg(spec.zResolutionUm, 0, 'f', 2));
     if (threeDHasValue(spec.measurementAccuracyUm))
         parts.append(localizedText("测量精度 %1 um", "Accuracy %1 um").arg(spec.measurementAccuracyUm, 0, 'f', 1));
-    if (threeDHasValue(spec.zLinearityPercentOfRange))
-        parts.append(localizedText("Z线性 +/- %1%MR", "Z linearity +/- %1%MR").arg(spec.zLinearityPercentOfRange, 0, 'f', 3));
     return parts.isEmpty() ? localizedText("未公开", "Unpublished") : parts.join(localizedText("；", "; "));
 }
 
@@ -233,7 +244,7 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     m_table->setColumnWidth(2, 120);
     m_table->setColumnWidth(3, 120);
     m_table->setColumnWidth(4, 140);
-    m_table->setColumnWidth(6, 180);
+    m_table->setColumnWidth(6, 240);
     m_table->setColumnWidth(7, 150);
     m_table->setColumnWidth(8, 180);
     m_table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
@@ -571,11 +582,27 @@ void ThreeDCameraPage::showDetailsForRow(int row)
     html += line(localizedText("不适配原因", "Mismatch Reasons"), htmlEscape(reasons));
     html += QStringLiteral("</p>");
 
+    QString geometryHtml;
+    geometryHtml += line(localizedText("X视场", "X FOV"), htmlEscape(fovRange(spec.xFovNearMm, spec.xFovReferenceMm, spec.xFovFarMm, QStringLiteral(" mm"))));
+    geometryHtml += line(localizedText("Y视场", "Y FOV"), htmlEscape(fovRange(spec.yFovNearMm, spec.yFovReferenceMm, spec.yFovFarMm, QStringLiteral(" mm"))));
+    geometryHtml += line(localizedText("Z测量范围", "Z Measurement Range"), htmlEscape(valueOrUnknown(spec.zMeasurementRangeMm, QStringLiteral(" mm"), 1)));
+    geometryHtml += line(localizedText("参考距离", "Reference Distance"), htmlEscape(valueOrUnknown(spec.referenceDistanceMm, QStringLiteral(" mm"), 1)));
     html += QStringLiteral("<h4>%1</h4><p>%2</p>")
-        .arg(htmlEscape(localizedText("几何覆盖", "Geometry Coverage")), htmlEscape(geometrySummary(spec)));
-    html += QStringLiteral("<h4>%1</h4><p>%2<br>%3</p>")
-        .arg(htmlEscape(localizedText("精度质量", "Accuracy / Quality")), htmlEscape(qualitySummary(spec)),
-            line(localizedText("测试条件", "Test Conditions"), htmlEscape(spec.accuracyCondition.isEmpty() ? localizedText("未公开", "Unpublished") : spec.accuracyCondition)));
+        .arg(htmlEscape(localizedText("几何覆盖", "Geometry Coverage")), geometryHtml);
+
+    const QString accuracyCondition = spec.accuracyCondition.isEmpty()
+        ? localizedText("未公开", "Unpublished")
+        : spec.accuracyCondition;
+    QString qualityHtml;
+    qualityHtml += line(localizedText("Z轴重复精度", "Z Repeatability"), htmlEscape(valueOrUnknown(spec.zRepeatabilityUm, QStringLiteral(" um"), 2)));
+    qualityHtml += line(localizedText("X轴重复精度", "X Repeatability"), htmlEscape(valueOrUnknown(spec.xRepeatabilityUm, QStringLiteral(" um"), 2)));
+    qualityHtml += line(localizedText("X轴数据间隔", "X Data Interval"), htmlEscape(valueOrUnknown(spec.profileDataIntervalUm, QStringLiteral(" um"), 2)));
+    qualityHtml += line(localizedText("Z轴线性度", "Z Linearity"), htmlEscape(linearityOrUnknown(spec.zLinearityPercentOfRange)));
+    qualityHtml += line(localizedText("Z轴分辨率", "Z Resolution"), htmlEscape(valueOrUnknown(spec.zResolutionUm, QStringLiteral(" um"), 2)));
+    qualityHtml += line(localizedText("测量精度", "Measurement Accuracy"), htmlEscape(valueOrUnknown(spec.measurementAccuracyUm, QStringLiteral(" um"), 1)));
+    qualityHtml += line(localizedText("测试条件", "Test Conditions"), htmlEscape(accuracyCondition));
+    html += QStringLiteral("<h4>%1</h4><p>%2</p>")
+        .arg(htmlEscape(localizedText("精度质量", "Accuracy / Quality")), qualityHtml);
     html += QStringLiteral("<h4>%1</h4><p>%2<br>%3%4</p>")
         .arg(htmlEscape(localizedText("速度采样", "Speed / Sampling")), htmlEscape(speedSummary(spec)),
             line(localizedText("需要外部运动", "External Motion Required"), htmlEscape(yesNoUnknown(spec.requiresExternalMotion))),
