@@ -51,9 +51,12 @@ ResultsPage::ResultsPage(QWidget *parent)
     layout->setSpacing(14);
 
     QHBoxLayout *resultActions = new QHBoxLayout;
-    QPushButton *compareButton = actionButton(localizedText("方案对比", "Plan Comparison"), QStringLiteral(":/icons/ui/compare.png"), true);
-    connect(compareButton, &QPushButton::clicked, this, &ResultsPage::comparisonRequested);
-    resultActions->addWidget(compareButton);
+    QPushButton *exportPdfButton = actionButton(localizedText("导出 PDF", "Export PDF"), QStringLiteral(":/icons/ui/export.png"), true);
+    QPushButton *exportBomButton = actionButton(localizedText("导出 BOM CSV", "Export BOM CSV"), QStringLiteral(":/icons/ui/export.png"), true);
+    connect(exportPdfButton, &QPushButton::clicked, this, &ResultsPage::exportPdfRequested);
+    connect(exportBomButton, &QPushButton::clicked, this, &ResultsPage::exportBomRequested);
+    resultActions->addWidget(exportPdfButton);
+    resultActions->addWidget(exportBomButton);
     resultActions->addStretch();
     QWidget *actionsWidget = new QWidget;
     actionsWidget->setLayout(resultActions);
@@ -130,7 +133,29 @@ void ResultsPage::refreshCards(const SelectionRequest &request)
         return;
     }
 
-    for (int i = 0; i < count; ++i) {
+    QVector<int> cardIndexes;
+    cardIndexes.reserve(count);
+    for (int i = 0; i < count; ++i)
+        cardIndexes.append(i);
+
+    bool hasFixedFocalCard = false;
+    for (int index : cardIndexes) {
+        if (!m_results.at(index).isTelecentric()) {
+            hasFixedFocalCard = true;
+            break;
+        }
+    }
+    if (!hasFixedFocalCard && cardIndexes.size() >= 3) {
+        for (int i = count; i < m_results.size(); ++i) {
+            if (!m_results.at(i).isTelecentric() && m_results.at(i).hardConstraintsPassed) {
+                cardIndexes[2] = i;
+                break;
+            }
+        }
+    }
+
+    for (int index : cardIndexes) {
+        const int i = index;
         const SelectionResult &r = m_results.at(i);
         QFrame *card = new QFrame;
         card->setObjectName(QStringLiteral("PlanCard"));

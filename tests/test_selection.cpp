@@ -38,14 +38,17 @@ private slots:
     void fixedLensDofAndDistortionRisk();
     void lightCoverageAffectsScore();
     void telecentricMeasurementWins();
+    void defaultRecommendationsIncludeFixedLensAlternatives();
     void largeFovPrefersFixedFocal();
     void motionPrefersGlobalShutter();
     void reflectiveSurfaceGetsCoaxialOrDome();
     void chineseTextIsUnicode();
     void threeDCameraCatalogLoadsFromResource();
+    void threeDCameraUserCatalogPersists();
     void threeDCameraMatcherClassifiesRequirements();
     void threeDMotionSamplingMatchesSpreadsheetExample();
     void threeDMotionSamplingUsesCameraDataAndFlagsRisks();
+    void threeDMotionSamplingChecksTriggerExposureAndEncoder();
     void threeDCameraDataDoesNotAffect2DSelection();
     void licenseValidationCoversSignatureMachineAndExpiry();
     void licenseIssuerParsesXmlAndSignsCompatibleKey();
@@ -131,6 +134,11 @@ void SelectionEngineTest::calculationAssistantEstimatesRequirements()
     QVERIFY(requirement.requiredResolutionY > 0);
     QVERIFY(requirement.requiredMegapixels > 0.0);
     QVERIFY(requirement.telecentricPreferred);
+
+    SelectionRequest broadMeasurement = request;
+    broadMeasurement.measurementToleranceUm = 100.0;
+    broadMeasurement.heightVariationMm = 0.0;
+    QVERIFY(!CalculationAssistant::estimateRequirement(broadMeasurement).telecentricPreferred);
 
     const QVector<CameraCalculationEstimate> estimates = CalculationAssistant::estimateCameras(request, m_catalog.cameras(), 5);
     QVERIFY(!estimates.isEmpty());
@@ -754,6 +762,39 @@ void SelectionEngineTest::telecentricMeasurementWins()
             || results.first().lens.lensType == LensType::ObjectTelecentric);
 }
 
+void SelectionEngineTest::defaultRecommendationsIncludeFixedLensAlternatives()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 20.0;
+    request.objectHeightMm = 20.0;
+    request.placementMarginMm = 2.0;
+    request.minFeatureUm = 50.0;
+    request.measurementToleranceUm = 10.0;
+    request.workingDistanceMm = 110.0;
+    request.heightVariationMm = 2.0;
+    request.detectionType = DetectionType::Measurement;
+    request.surfaceType = SurfaceType::ReflectiveMetal;
+    request.reflective = true;
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 20);
+    QVERIFY(!results.isEmpty());
+
+    bool hasTelecentric = false;
+    bool hasFixedFocal = false;
+    QStringList lensModels;
+    for (const SelectionResult &result : results) {
+        lensModels.append(result.lens.model);
+        if (result.isTelecentric())
+            hasTelecentric = true;
+        else if (result.hardConstraintsPassed)
+            hasFixedFocal = true;
+    }
+
+    QVERIFY(hasTelecentric);
+    QVERIFY2(hasFixedFocal, qPrintable(lensModels.join(QStringLiteral(", "))));
+}
+
 void SelectionEngineTest::largeFovPrefersFixedFocal()
 {
     SelectionRequest request;
@@ -886,6 +927,81 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
     QVERIFY2(hasReferenceDistance, "Expected at least one camera with reference distance.");
 }
 
+void SelectionEngineTest::threeDCameraUserCatalogPersists()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    ThreeDCameraRepository repository;
+    repository.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repository.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
+    const int builtInCount = repository.cameras().size();
+
+    ThreeDCameraSpec custom;
+    custom.manufacturer = QStringLiteral("Unit3D");
+    custom.series = QStringLiteral("Custom");
+    custom.model = QStringLiteral("UT-1000");
+    custom.technologyLabel = threeDTechnologyLabel(ThreeDTechnology::LineLaserProfile);
+    custom.technology = ThreeDTechnology::LineLaserProfile;
+    custom.status = QString::fromUtf8("用户录入");
+    custom.sourceDate = QStringLiteral("2026-06-08");
+    custom.xFovReferenceMm = 120.0;
+    custom.zMeasurementRangeMm = 30.0;
+    custom.zRepeatabilityUm = 2.0;
+    custom.profileDataIntervalUm = 20.0;
+    custom.profilePoints = 1600;
+    custom.scanRateMaxHz = 5000.0;
+    custom.encoderRateMaxHz = 100000.0;
+    custom.exposureTimeMinUs = 5.0;
+    custom.exposureTimeMaxUs = 900.0;
+    custom.supportsEncoder = 1;
+    custom.supportsExternalTrigger = 1;
+    custom.interfaces = QStringList() << QStringLiteral("GigE") << QString::fromUtf8("编码器");
+    custom.materialScenarios = QStringList() << QString::fromUtf8("金属");
+    QVERIFY2(repository.addCamera(custom, &error), qPrintable(error));
+    QCOMPARE(repository.cameras().size(), builtInCount + 1);
+
+    ThreeDCameraRepository reloaded;
+    reloaded.setStorageDirectory(storage.path());
+    QVERIFY2(reloaded.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
+    int customIndex = -1;
+    for (int i = 0; i < reloaded.cameras().size(); ++i) {
+        if (reloaded.cameras().at(i).manufacturer == custom.manufacturer
+            && reloaded.cameras().at(i).model == custom.model) {
+            customIndex = i;
+            break;
+        }
+    }
+    QVERIFY(customIndex >= 0);
+    QVERIFY(reloaded.cameras().at(customIndex).userDefined);
+    QCOMPARE(reloaded.cameras().at(customIndex).scanRateMaxHz, 5000.0);
+
+    ThreeDCameraSpec edited = reloaded.cameras().at(customIndex);
+    edited.zMeasurementRangeMm = 45.0;
+    QVERIFY2(reloaded.updateCamera(customIndex, edited, &error), qPrintable(error));
+
+    ThreeDCameraRepository editedReloaded;
+    editedReloaded.setStorageDirectory(storage.path());
+    QVERIFY2(editedReloaded.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
+    int editedIndex = -1;
+    for (int i = 0; i < editedReloaded.cameras().size(); ++i) {
+        if (editedReloaded.cameras().at(i).manufacturer == custom.manufacturer
+            && editedReloaded.cameras().at(i).model == custom.model) {
+            editedIndex = i;
+            break;
+        }
+    }
+    QVERIFY(editedIndex >= 0);
+    QCOMPARE(editedReloaded.cameras().at(editedIndex).zMeasurementRangeMm, 45.0);
+    QVERIFY2(editedReloaded.removeCamera(editedIndex, &error), qPrintable(error));
+
+    ThreeDCameraRepository removedReloaded;
+    removedReloaded.setStorageDirectory(storage.path());
+    QVERIFY2(removedReloaded.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
+    QCOMPARE(removedReloaded.cameras().size(), builtInCount);
+}
+
 void SelectionEngineTest::threeDCameraMatcherClassifiesRequirements()
 {
     ThreeDCameraRepository repository;
@@ -990,6 +1106,57 @@ void SelectionEngineTest::threeDMotionSamplingUsesCameraDataAndFlagsRisks()
     const ThreeDMotionSamplingResult invalid = ThreeDCalculation::estimateMotionSampling(input, &camera);
     QVERIFY(!invalid.valid);
     QVERIFY(!invalid.risks.isEmpty());
+}
+
+void SelectionEngineTest::threeDMotionSamplingChecksTriggerExposureAndEncoder()
+{
+    ThreeDCameraSpec camera;
+    camera.model = QStringLiteral("TRIGGER-3D");
+    camera.profileDataIntervalUm = 50.0;
+    camera.scanRateMaxHz = 1500.0;
+    camera.encoderRateMaxHz = 60000.0;
+    camera.exposureTimeMinUs = 5.0;
+    camera.exposureTimeMaxUs = 1200.0;
+    camera.supportsExternalTrigger = 1;
+
+    ThreeDMotionSamplingInput input;
+    input.scanDistanceMm = 300.0;
+    input.profileIntervalMm = 0.05;
+    input.targetAxisSpeedMmS = 40.0;
+    input.axisTravelMm = 10.0;
+    input.pulseCount = 10000;
+    input.refinementPoints = 50;
+    input.samplingRateHz = 1000.0;
+    input.safetyFactor = 0.8;
+    input.triggerMode = ThreeDTriggerMode::Encoder;
+    input.encoderPulseFrequencyHz = 50000.0;
+    input.encoderPulsesPerProfile = 50;
+    input.exposureTimeUs = 900.0;
+    input.readoutMarginUs = 3.0;
+
+    const ThreeDMotionSamplingResult result = ThreeDCalculation::estimateMotionSampling(input, &camera);
+    QVERIFY(result.valid);
+    QCOMPARE(result.effectiveProfileRateHz, 1000.0);
+    QCOMPARE(result.requiredProfileRateHz, 1000.0);
+    QCOMPARE(result.profilePeriodUs, 1000.0);
+    QCOMPARE(result.maxExposureTimeUs, 997.0);
+    QCOMPARE(result.encoderProfileIntervalMm, 0.05);
+    QCOMPARE(result.encoderAxisSpeedMmS, 50.0);
+    QVERIFY(result.exposureWithinProfilePeriod);
+    QVERIFY(result.encoderRateWithinCameraLimit);
+    QVERIFY(result.effectiveRateMeetsTarget);
+    QVERIFY(result.samplingRateWithinCameraLimit);
+
+    input.exposureTimeUs = 1200.0;
+    const ThreeDMotionSamplingResult exposureRisk = ThreeDCalculation::estimateMotionSampling(input, &camera);
+    QVERIFY(!exposureRisk.exposureWithinProfilePeriod);
+    QVERIFY(!exposureRisk.risks.isEmpty());
+
+    input.exposureTimeUs = 900.0;
+    input.encoderPulseFrequencyHz = 80000.0;
+    const ThreeDMotionSamplingResult encoderRisk = ThreeDCalculation::estimateMotionSampling(input, &camera);
+    QVERIFY(!encoderRisk.encoderRateWithinCameraLimit);
+    QVERIFY(!encoderRisk.risks.isEmpty());
 }
 
 void SelectionEngineTest::threeDCameraDataDoesNotAffect2DSelection()

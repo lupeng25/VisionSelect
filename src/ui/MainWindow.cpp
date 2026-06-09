@@ -9,10 +9,8 @@
 #include "ui/UiHelpers.h"
 #include "ui/pages/CalculationPage.h"
 #include "ui/pages/CatalogPage.h"
-#include "ui/pages/ComparisonPage.h"
 #include "ui/pages/InputPage.h"
 #include "ui/pages/PureCalculationPage.h"
-#include "ui/pages/ReportPage.h"
 #include "ui/pages/ResultsPage.h"
 #include "ui/pages/ThreeDCameraPage.h"
 
@@ -44,9 +42,7 @@ const int kPureCalculationPageIndex = 1;
 const int kCalculationPageIndex = 2;
 const int kThreeDCameraPageIndex = 3;
 const int kResultsPageIndex = 4;
-const int kComparisonPageIndex = 5;
-const int kCatalogPageIndex = 6;
-const int kReportPageIndex = 7;
+const int kCatalogPageIndex = 5;
 
 QString bomSpecForCamera(const CameraSpec &camera, const SelectionResult &result)
 {
@@ -135,7 +131,7 @@ void MainWindow::buildUi()
         setActivePage(kResultsPageIndex);
     });
     m_pages->addWidget(m_inputPage);
-    for (int i = 1; i <= kReportPageIndex; ++i)
+    for (int i = 1; i <= kCatalogPageIndex; ++i)
         m_pages->addWidget(new QWidget);
     rootLayout->addWidget(m_pages, 1);
 
@@ -186,7 +182,7 @@ QWidget *MainWindow::createSidebar()
     layout->addWidget(m_navTitleLabel);
 
     m_navButtons.clear();
-    m_navButtons.resize(kReportPageIndex + 1);
+    m_navButtons.resize(kCatalogPageIndex + 1);
     m_navSectionLabels.clear();
     const auto addSection = [this, layout](const QString &text) {
         QLabel *label = new QLabel(text);
@@ -211,8 +207,6 @@ QWidget *MainWindow::createSidebar()
     addNav(0, navigationLabels().at(0), QStringLiteral(":/icons/ui/requirement.png"));
     addNav(kCalculationPageIndex, navigationLabels().at(kCalculationPageIndex), QStringLiteral(":/icons/ui/assistant.png"));
     addNav(kResultsPageIndex, navigationLabels().at(kResultsPageIndex), QStringLiteral(":/icons/ui/results.png"));
-    addNav(kComparisonPageIndex, navigationLabels().at(kComparisonPageIndex), QStringLiteral(":/icons/ui/compare.png"));
-    addNav(kReportPageIndex, navigationLabels().at(kReportPageIndex), QStringLiteral(":/icons/ui/report.png"));
 
     addSection(localizedText("工程工具", "Engineering Tools"));
     addNav(kPureCalculationPageIndex, navigationLabels().at(kPureCalculationPageIndex), QStringLiteral(":/icons/ui/calculate.png"));
@@ -287,9 +281,7 @@ QStringList MainWindow::navigationLabels() const
         localizedText("产品计算", "Calculation Assistant"),
         localizedText("3D 相机", "3D Camera"),
         localizedText("推荐结果", "Recommended Results"),
-        localizedText("方案对比", "Plan Comparison"),
-        localizedText("参数库", "Catalog"),
-        localizedText("PDF 报告", "PDF Report")
+        localizedText("参数库", "Catalog")
     };
 }
 
@@ -315,8 +307,8 @@ void MainWindow::refreshSidebarSummary()
     if (m_summaryStatusLabel)
         m_summaryStatusLabel->setText(localizedText("就绪", "Ready"));
     if (m_summaryLabel)
-        m_summaryLabel->setText(localizedText("推荐、对比和报告可用。",
-                                             "Ready for recommendations, comparison, and reports."));
+        m_summaryLabel->setText(localizedText("推荐和导出可用。",
+                                             "Ready for recommendations and export."));
 
     const auto statText = [](const QString &label, int value) {
         return QStringLiteral("<span style=\"color:#9fb0c7; font-size:10px;\">%1</span><br>"
@@ -370,9 +362,7 @@ void MainWindow::rebuildPagesForLanguage()
     const bool hadCalculationPage = m_calculationPage != nullptr;
     const bool hadThreeDPage = m_threeDCameraPage != nullptr;
     const bool hadResultsPage = m_resultsPage != nullptr;
-    const bool hadComparisonPage = m_comparisonPage != nullptr;
     const bool hadCatalogPage = m_catalogPage != nullptr;
-    const bool hadReportPage = m_reportPage != nullptr;
     const bool hadResults = !m_results.isEmpty();
 
     m_inputPage = new InputPage;
@@ -388,9 +378,7 @@ void MainWindow::rebuildPagesForLanguage()
     m_calculationPage = nullptr;
     m_threeDCameraPage = nullptr;
     m_resultsPage = nullptr;
-    m_comparisonPage = nullptr;
     m_catalogPage = nullptr;
-    m_reportPage = nullptr;
     m_catalogPageInitialized = false;
     m_request = savedRequest;
 
@@ -407,22 +395,14 @@ void MainWindow::rebuildPagesForLanguage()
     }
     if (hadResultsPage)
         ensureResultsPage();
-    if (hadComparisonPage)
-        ensureComparisonPage();
     if (hadCatalogPage)
         ensureCatalogPageInitialized();
-    if (hadReportPage)
-        ensureReportPage();
 
     if (hadResults) {
         SelectionEngine engine;
         m_results = engine.select(m_request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 20);
         if (m_resultsPage)
             m_resultsPage->setResults(m_results, m_request);
-        if (m_comparisonPage)
-            m_comparisonPage->setResults(m_results);
-        if (m_reportPage)
-            m_reportPage->setReportData(m_request, m_results);
     }
 
     retranslateUi();
@@ -468,14 +448,9 @@ void MainWindow::setActivePage(int index)
     }
     if (index == kResultsPageIndex)
         ensureResultsPage();
-    if (index == kComparisonPageIndex)
-        ensureComparisonPage();
     if (index == kCatalogPageIndex)
         ensureCatalogPageInitialized();
-    if (index == kReportPageIndex)
-        ensureReportPage();
-    if ((index == kResultsPageIndex || index == kComparisonPageIndex || index == kReportPageIndex)
-        && m_results.isEmpty()) {
+    if (index == kResultsPageIndex && m_results.isEmpty()) {
         calculate();
     }
     m_pages->setCurrentIndex(index);
@@ -521,23 +496,11 @@ void MainWindow::ensureResultsPage()
         return;
 
     m_resultsPage = new ResultsPage;
-    connect(m_resultsPage, &ResultsPage::comparisonRequested, this, [this]() { setActivePage(kComparisonPageIndex); });
+    connect(m_resultsPage, &ResultsPage::exportPdfRequested, this, &MainWindow::exportReportPdf);
+    connect(m_resultsPage, &ResultsPage::exportBomRequested, this, &MainWindow::exportBomCsv);
     replaceStackPage(m_pages, kResultsPageIndex, m_resultsPage);
     if (!m_results.isEmpty())
         m_resultsPage->setResults(m_results, m_request);
-}
-
-void MainWindow::ensureComparisonPage()
-{
-    if (m_comparisonPage || !m_pages)
-        return;
-
-    m_comparisonPage = new ComparisonPage;
-    connect(m_comparisonPage, &ComparisonPage::recalculateRequested, this, &MainWindow::calculate);
-    connect(m_comparisonPage, &ComparisonPage::exportBomRequested, this, &MainWindow::exportBomCsv);
-    replaceStackPage(m_pages, kComparisonPageIndex, m_comparisonPage);
-    if (!m_results.isEmpty())
-        m_comparisonPage->setResults(m_results);
 }
 
 void MainWindow::ensureCatalogPage()
@@ -570,20 +533,6 @@ void MainWindow::ensureCatalogPage()
     replaceStackPage(m_pages, kCatalogPageIndex, m_catalogPage);
 }
 
-void MainWindow::ensureReportPage()
-{
-    if (m_reportPage || !m_pages)
-        return;
-
-    m_reportPage = new ReportPage;
-    connect(m_reportPage, &ReportPage::exportPdfRequested, this, &MainWindow::exportReportPdf);
-    connect(m_reportPage, &ReportPage::exportBomRequested, this, &MainWindow::exportBomCsv);
-    connect(m_reportPage, &ReportPage::recalculateRequested, this, &MainWindow::calculate);
-    replaceStackPage(m_pages, kReportPageIndex, m_reportPage);
-    if (!m_results.isEmpty())
-        m_reportPage->setReportData(m_request, m_results);
-}
-
 void MainWindow::ensureThreeDCameraPage()
 {
     if (m_threeDCameraPage || !m_pages)
@@ -612,11 +561,7 @@ void MainWindow::calculate()
         refreshCalculationAssistant();
     if (m_resultsPage)
         m_resultsPage->setResults(m_results, m_request);
-    if (m_comparisonPage)
-        m_comparisonPage->setResults(m_results);
     refreshCatalogTables();
-    if (m_reportPage)
-        m_reportPage->setReportData(m_request, m_results);
     refreshSidebarSummary();
 }
 

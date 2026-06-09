@@ -60,8 +60,13 @@ struct ThreeDCameraSpec
     double scanRateMaxHz = -1.0;
     double acquisitionTimeMs = -1.0;
     double frameRateHz = -1.0;
+    double encoderRateMaxHz = -1.0;
+    double exposureTimeMinUs = -1.0;
+    double exposureTimeMaxUs = -1.0;
+    double readoutTimeUs = -1.0;
     int requiresExternalMotion = -1;
     int supportsEncoder = -1;
+    int supportsExternalTrigger = -1;
 
     QString lightSource;
     double wavelengthNm = -1.0;
@@ -78,6 +83,7 @@ struct ThreeDCameraSpec
     QStringList materialScenarios;
     QStringList notes;
     QJsonObject rawSpecs;
+    bool userDefined = false;
 };
 
 struct ThreeDCameraRequirement

@@ -50,14 +50,20 @@ private:
     QTableWidget *m_table = nullptr;
     QTextBrowser *m_details = nullptr;
     QLabel *m_samplingCameraLabel = nullptr;
+    QComboBox *m_triggerModeCombo = nullptr;
     QDoubleSpinBox *m_scanDistanceSpin = nullptr;
     QDoubleSpinBox *m_profileIntervalSpin = nullptr;
+    QDoubleSpinBox *m_targetAxisSpeedSpin = nullptr;
     QDoubleSpinBox *m_axisTravelSpin = nullptr;
     QSpinBox *m_pulseCountSpin = nullptr;
     QSpinBox *m_refinementPointsSpin = nullptr;
+    QSpinBox *m_encoderPulsesPerProfileSpin = nullptr;
     QDoubleSpinBox *m_samplingRateSpin = nullptr;
     QDoubleSpinBox *m_safetyFactorSpin = nullptr;
     QDoubleSpinBox *m_xPitchOverrideSpin = nullptr;
+    QDoubleSpinBox *m_exposureTimeSpin = nullptr;
+    QDoubleSpinBox *m_readoutMarginSpin = nullptr;
+    QDoubleSpinBox *m_encoderFrequencySpin = nullptr;
     QTextEdit *m_samplingOutput = nullptr;
 
     void buildFilters(QLayout *parentLayout);
@@ -74,6 +80,11 @@ private:
     void fillTable();
     void showDetailsForRow(int row);
     void updateSamplingFromSelected(int row);
+    int selectedCameraRepositoryIndex() const;
+    void addCamera();
+    void copyCamera();
+    void editCamera();
+    void removeCamera();
 };
 
 #endif

@@ -33,10 +33,8 @@ SOURCES += \
     ../src/ui/MainWindow.cpp \
     ../src/ui/pages/CalculationPage.cpp \
     ../src/ui/pages/CatalogPage.cpp \
-    ../src/ui/pages/ComparisonPage.cpp \
     ../src/ui/pages/InputPage.cpp \
     ../src/ui/pages/PureCalculationPage.cpp \
-    ../src/ui/pages/ReportPage.cpp \
     ../src/ui/pages/ResultsPage.cpp \
     ../src/ui/pages/ThreeDCameraPage.cpp
 
@@ -58,10 +56,8 @@ HEADERS += \
     ../src/ui/MainWindow.h \
     ../src/ui/pages/CalculationPage.h \
     ../src/ui/pages/CatalogPage.h \
-    ../src/ui/pages/ComparisonPage.h \
     ../src/ui/pages/InputPage.h \
     ../src/ui/pages/PureCalculationPage.h \
-    ../src/ui/pages/ReportPage.h \
     ../src/ui/pages/ResultsPage.h \
     ../src/ui/pages/ThreeDCameraPage.h
 

@@ -134,16 +134,8 @@
         <translation>推荐结果</translation>
     </message>
     <message>
-        <source>Plan Comparison</source>
-        <translation>方案对比</translation>
-    </message>
-    <message>
         <source>Catalog</source>
         <translation>参数库</translation>
-    </message>
-    <message>
-        <source>PDF Report</source>
-        <translation>PDF 报告</translation>
     </message>
     <message>
         <source>License Info</source>

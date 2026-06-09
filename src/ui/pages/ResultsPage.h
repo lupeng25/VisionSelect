@@ -21,7 +21,8 @@ public:
                     const SelectionRequest &request);
 
 signals:
-    void comparisonRequested();
+    void exportPdfRequested();
+    void exportBomRequested();
 
 private:
     QVector<SelectionResult> m_results;

@@ -4,11 +4,13 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDate>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QFrame>
+#include <QLabel>
 #include <QLineEdit>
 #include <QObject>
 #include <QScrollArea>
@@ -18,6 +20,77 @@
 #include <QWidget>
 
 using namespace UiHelpers;
+
+namespace {
+void addDialogSection(QFormLayout *form, const QString &title)
+{
+    QLabel *label = new QLabel(title);
+    label->setObjectName(QStringLiteral("FilterGroupTitle"));
+    form->addRow(label);
+}
+
+QDoubleSpinBox *optionalThreeDSpin(double max, double value, const QString &suffix, int decimals = 2)
+{
+    QDoubleSpinBox *spin = dialogSpin(0.0, max, threeDHasValue(value) ? value : 0.0, suffix, decimals);
+    spin->setSpecialValueText(localizedText("未公开", "Unpublished"));
+    return spin;
+}
+
+QSpinBox *optionalThreeDInt(int max, int value, const QString &suffix = QString())
+{
+    QSpinBox *spin = dialogIntSpin(0, max, value >= 0 ? value : 0, suffix);
+    spin->setSpecialValueText(localizedText("未公开", "Unpublished"));
+    return spin;
+}
+
+double optionalThreeDValue(const QDoubleSpinBox *spin)
+{
+    return spin && spin->value() > 0.0 ? spin->value() : -1.0;
+}
+
+int optionalThreeDIntValue(const QSpinBox *spin)
+{
+    return spin && spin->value() > 0 ? spin->value() : -1;
+}
+
+QComboBox *tristateCombo(int value)
+{
+    QComboBox *combo = new QComboBox;
+    combo->addItem(localizedText("未公开", "Unpublished"), -1);
+    combo->addItem(localizedText("是", "Yes"), 1);
+    combo->addItem(localizedText("否", "No"), 0);
+    const int index = combo->findData(value);
+    combo->setCurrentIndex(index >= 0 ? index : 0);
+    return combo;
+}
+
+int tristateComboValue(const QComboBox *combo)
+{
+    return combo ? combo->currentData().toInt() : -1;
+}
+
+QString listText(const QStringList &values)
+{
+    return values.join(QLatin1Char('\n'));
+}
+
+QStringList listFromText(const QTextEdit *edit)
+{
+    QString text = edit ? edit->toPlainText() : QString();
+    text.replace(QLatin1Char(','), QLatin1Char('\n'));
+    text.replace(QString::fromUtf8("，"), QStringLiteral("\n"));
+    text.replace(QLatin1Char(';'), QLatin1Char('\n'));
+    text.replace(QString::fromUtf8("；"), QStringLiteral("\n"));
+    QStringList values;
+    for (const QString &value : text.split(QLatin1Char('\n'))) {
+        const QString trimmed = value.trimmed();
+        if (!trimmed.isEmpty())
+            values.append(trimmed);
+    }
+    values.removeDuplicates();
+    return values;
+}
+}
 
 bool editCameraDialog(QWidget *parent, CameraSpec *camera, const QString &title)
 {
@@ -234,5 +307,205 @@ bool editLightDialog(QWidget *parent, LightSpec *light, const QString &title)
     light->activeWidthMm = activeWidth->value();
     light->activeHeightMm = activeHeight->value();
     light->bestFor = bestFor->toPlainText().trimmed();
+    return true;
+}
+
+bool editThreeDCameraDialog(QWidget *parent, ThreeDCameraSpec *camera, const QString &title)
+{
+    QDialog dialog(parent);
+    dialog.setWindowTitle(title);
+    QVBoxLayout *outer = new QVBoxLayout(&dialog);
+    QScrollArea *scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    QWidget *content = new QWidget;
+    QFormLayout *form = new QFormLayout(content);
+    form->setLabelAlignment(Qt::AlignLeft);
+
+    QLineEdit *manufacturer = new QLineEdit(camera->manufacturer);
+    QLineEdit *series = new QLineEdit(camera->series);
+    QLineEdit *model = new QLineEdit(camera->model);
+    QComboBox *technology = editableCombo(threeDTechnologyLabels(),
+        camera->technologyLabel.isEmpty() ? threeDTechnologyLabel(camera->technology) : camera->technologyLabel);
+    QComboBox *status = editableCombo({QString::fromUtf8("在售"), QString::fromUtf8("停产"), localizedText("用户录入", "User entered")},
+        camera->status.isEmpty() ? localizedText("用户录入", "User entered") : camera->status);
+    QLineEdit *sourceUrl = new QLineEdit(camera->sourceUrl);
+    QLineEdit *sourceDate = new QLineEdit(camera->sourceDate.isEmpty()
+        ? QDate::currentDate().toString(Qt::ISODate) : camera->sourceDate);
+
+    QDoubleSpinBox *referenceDistance = optionalThreeDSpin(100000.0, camera->referenceDistanceMm, QStringLiteral(" mm"), 3);
+    QDoubleSpinBox *workingDistanceMin = optionalThreeDSpin(100000.0, camera->workingDistanceMinMm, QStringLiteral(" mm"), 3);
+    QDoubleSpinBox *workingDistanceMax = optionalThreeDSpin(100000.0, camera->workingDistanceMaxMm, QStringLiteral(" mm"), 3);
+    QDoubleSpinBox *zRange = optionalThreeDSpin(100000.0, camera->zMeasurementRangeMm, QStringLiteral(" mm"), 3);
+    QDoubleSpinBox *xNear = optionalThreeDSpin(100000.0, camera->xFovNearMm, QStringLiteral(" mm"), 3);
+    QDoubleSpinBox *xReference = optionalThreeDSpin(100000.0, camera->xFovReferenceMm, QStringLiteral(" mm"), 3);
+    QDoubleSpinBox *xFar = optionalThreeDSpin(100000.0, camera->xFovFarMm, QStringLiteral(" mm"), 3);
+    QDoubleSpinBox *yNear = optionalThreeDSpin(100000.0, camera->yFovNearMm, QStringLiteral(" mm"), 3);
+    QDoubleSpinBox *yReference = optionalThreeDSpin(100000.0, camera->yFovReferenceMm, QStringLiteral(" mm"), 3);
+    QDoubleSpinBox *yFar = optionalThreeDSpin(100000.0, camera->yFovFarMm, QStringLiteral(" mm"), 3);
+
+    QDoubleSpinBox *zRepeatability = optionalThreeDSpin(100000.0, camera->zRepeatabilityUm, QStringLiteral(" um"), 3);
+    QDoubleSpinBox *xRepeatability = optionalThreeDSpin(100000.0, camera->xRepeatabilityUm, QStringLiteral(" um"), 3);
+    QDoubleSpinBox *zResolution = optionalThreeDSpin(100000.0, camera->zResolutionUm, QStringLiteral(" um"), 3);
+    QDoubleSpinBox *zLinearity = optionalThreeDSpin(100.0, camera->zLinearityPercentOfRange, QStringLiteral(" % F.S."), 4);
+    QDoubleSpinBox *measurementAccuracy = optionalThreeDSpin(100000.0, camera->measurementAccuracyUm, QStringLiteral(" um"), 3);
+    QDoubleSpinBox *xyResolution = optionalThreeDSpin(100000.0, camera->xyResolutionUm, QStringLiteral(" um"), 3);
+    QDoubleSpinBox *profileDataInterval = optionalThreeDSpin(1000000.0, camera->profileDataIntervalUm, QStringLiteral(" um"), 3);
+    QTextEdit *accuracyCondition = new QTextEdit(camera->accuracyCondition);
+    accuracyCondition->setMinimumHeight(58);
+
+    QSpinBox *profilePoints = optionalThreeDInt(100000000, camera->profilePoints);
+    QDoubleSpinBox *scanRateMin = optionalThreeDSpin(10000000.0, camera->scanRateMinHz, QStringLiteral(" Hz"), 1);
+    QDoubleSpinBox *scanRateMax = optionalThreeDSpin(10000000.0, camera->scanRateMaxHz, QStringLiteral(" Hz"), 1);
+    QDoubleSpinBox *acquisitionTime = optionalThreeDSpin(100000.0, camera->acquisitionTimeMs, QStringLiteral(" ms"), 3);
+    QDoubleSpinBox *frameRate = optionalThreeDSpin(10000000.0, camera->frameRateHz, QStringLiteral(" fps"), 2);
+    QDoubleSpinBox *encoderRateMax = optionalThreeDSpin(10000000.0, camera->encoderRateMaxHz, QStringLiteral(" Hz"), 1);
+    QDoubleSpinBox *exposureMin = optionalThreeDSpin(10000000.0, camera->exposureTimeMinUs, QStringLiteral(" us"), 2);
+    QDoubleSpinBox *exposureMax = optionalThreeDSpin(10000000.0, camera->exposureTimeMaxUs, QStringLiteral(" us"), 2);
+    QDoubleSpinBox *readoutTime = optionalThreeDSpin(10000000.0, camera->readoutTimeUs, QStringLiteral(" us"), 2);
+    QComboBox *requiresMotion = tristateCombo(camera->requiresExternalMotion);
+    QComboBox *supportsEncoder = tristateCombo(camera->supportsEncoder);
+    QComboBox *supportsTrigger = tristateCombo(camera->supportsExternalTrigger);
+
+    QLineEdit *lightSource = new QLineEdit(camera->lightSource);
+    QDoubleSpinBox *wavelength = optionalThreeDSpin(100000.0, camera->wavelengthNm, QStringLiteral(" nm"), 1);
+    QLineEdit *laserClass = new QLineEdit(camera->laserClass);
+    QLineEdit *structure = new QLineEdit(camera->structure);
+    QLineEdit *ipRating = new QLineEdit(camera->ipRating);
+    QDoubleSpinBox *weight = optionalThreeDSpin(1000000.0, camera->weightG, QStringLiteral(" g"), 1);
+    QLineEdit *dimensions = new QLineEdit(camera->dimensions);
+    QLineEdit *temperature = new QLineEdit(camera->temperature);
+    QLineEdit *power = new QLineEdit(camera->power);
+    QTextEdit *interfaces = new QTextEdit(listText(camera->interfaces));
+    QTextEdit *outputs = new QTextEdit(listText(camera->outputTypes));
+    QTextEdit *materials = new QTextEdit(listText(camera->materialScenarios));
+    QTextEdit *notes = new QTextEdit(listText(camera->notes));
+    for (QTextEdit *edit : {interfaces, outputs, materials, notes}) {
+        edit->setMinimumHeight(64);
+    }
+
+    addDialogSection(form, localizedText("基础信息", "Basic Information"));
+    form->addRow(localizedText("品牌", "Manufacturer"), manufacturer);
+    form->addRow(localizedText("系列", "Series"), series);
+    form->addRow(localizedText("型号", "Model"), model);
+    form->addRow(localizedText("技术路线", "Technology"), technology);
+    form->addRow(localizedText("状态", "Status"), status);
+    form->addRow(localizedText("资料来源 URL", "Source URL"), sourceUrl);
+    form->addRow(localizedText("采集日期", "Source Date"), sourceDate);
+
+    addDialogSection(form, localizedText("几何范围", "Geometry"));
+    form->addRow(localizedText("参考距离", "Reference Distance"), referenceDistance);
+    form->addRow(localizedText("工作距离最小值", "Working Distance Min"), workingDistanceMin);
+    form->addRow(localizedText("工作距离最大值", "Working Distance Max"), workingDistanceMax);
+    form->addRow(localizedText("Z 量程", "Z Range"), zRange);
+    form->addRow(localizedText("X 视场近端", "X FOV Near"), xNear);
+    form->addRow(localizedText("X 视场参考", "X FOV Reference"), xReference);
+    form->addRow(localizedText("X 视场远端", "X FOV Far"), xFar);
+    form->addRow(localizedText("Y 视场近端", "Y FOV Near"), yNear);
+    form->addRow(localizedText("Y 视场参考", "Y FOV Reference"), yReference);
+    form->addRow(localizedText("Y 视场远端", "Y FOV Far"), yFar);
+
+    addDialogSection(form, localizedText("精度质量", "Accuracy / Quality"));
+    form->addRow(localizedText("Z 重复精度", "Z Repeatability"), zRepeatability);
+    form->addRow(localizedText("X 重复精度", "X Repeatability"), xRepeatability);
+    form->addRow(localizedText("Z 分辨率", "Z Resolution"), zResolution);
+    form->addRow(localizedText("Z 线性度", "Z Linearity"), zLinearity);
+    form->addRow(localizedText("测量精度", "Measurement Accuracy"), measurementAccuracy);
+    form->addRow(localizedText("XY 分辨率", "XY Resolution"), xyResolution);
+    form->addRow(localizedText("X 轮廓数据间隔", "X Profile Data Interval"), profileDataInterval);
+    form->addRow(localizedText("测试条件", "Test Conditions"), accuracyCondition);
+
+    addDialogSection(form, localizedText("速度、触发与编码器", "Speed, Trigger and Encoder"));
+    form->addRow(localizedText("点数/轮廓", "Points per Profile"), profilePoints);
+    form->addRow(localizedText("最小扫描频率", "Min Scan Rate"), scanRateMin);
+    form->addRow(localizedText("最大扫描频率", "Max Scan Rate"), scanRateMax);
+    form->addRow(localizedText("采集时间", "Acquisition Time"), acquisitionTime);
+    form->addRow(localizedText("帧率", "Frame Rate"), frameRate);
+    form->addRow(localizedText("编码器输入上限", "Encoder Input Limit"), encoderRateMax);
+    form->addRow(localizedText("最小曝光", "Min Exposure"), exposureMin);
+    form->addRow(localizedText("最大曝光", "Max Exposure"), exposureMax);
+    form->addRow(localizedText("读出/复位时间", "Readout / Reset Time"), readoutTime);
+    form->addRow(localizedText("需要外部运动", "Requires External Motion"), requiresMotion);
+    form->addRow(localizedText("支持编码器", "Supports Encoder"), supportsEncoder);
+    form->addRow(localizedText("支持外部触发", "Supports External Trigger"), supportsTrigger);
+
+    addDialogSection(form, localizedText("光学、结构与环境", "Optics, Structure and Environment"));
+    form->addRow(localizedText("光源", "Light Source"), lightSource);
+    form->addRow(localizedText("波长", "Wavelength"), wavelength);
+    form->addRow(localizedText("激光等级", "Laser Class"), laserClass);
+    form->addRow(localizedText("结构", "Structure"), structure);
+    form->addRow(QStringLiteral("IP"), ipRating);
+    form->addRow(localizedText("重量", "Weight"), weight);
+    form->addRow(localizedText("尺寸", "Dimensions"), dimensions);
+    form->addRow(localizedText("温度", "Temperature"), temperature);
+    form->addRow(localizedText("供电", "Power"), power);
+    form->addRow(localizedText("接口列表", "Interfaces"), interfaces);
+    form->addRow(localizedText("输出类型", "Output Types"), outputs);
+    form->addRow(localizedText("材质场景", "Material Scenarios"), materials);
+    form->addRow(localizedText("备注", "Notes"), notes);
+
+    scroll->setWidget(content);
+    outer->addWidget(scroll);
+    QDialogButtonBox *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    QObject::connect(box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    outer->addWidget(box);
+    dialog.resize(640, 760);
+
+    if (dialog.exec() != QDialog::Accepted)
+        return false;
+
+    camera->manufacturer = manufacturer->text().trimmed();
+    camera->series = series->text().trimmed();
+    camera->model = model->text().trimmed();
+    camera->technologyLabel = technology->currentText().trimmed();
+    camera->technology = threeDTechnologyFromLabel(camera->technologyLabel);
+    camera->status = status->currentText().trimmed();
+    camera->sourceUrl = sourceUrl->text().trimmed();
+    camera->sourceDate = sourceDate->text().trimmed();
+    camera->referenceDistanceMm = optionalThreeDValue(referenceDistance);
+    camera->workingDistanceMinMm = optionalThreeDValue(workingDistanceMin);
+    camera->workingDistanceMaxMm = optionalThreeDValue(workingDistanceMax);
+    camera->zMeasurementRangeMm = optionalThreeDValue(zRange);
+    camera->xFovNearMm = optionalThreeDValue(xNear);
+    camera->xFovReferenceMm = optionalThreeDValue(xReference);
+    camera->xFovFarMm = optionalThreeDValue(xFar);
+    camera->yFovNearMm = optionalThreeDValue(yNear);
+    camera->yFovReferenceMm = optionalThreeDValue(yReference);
+    camera->yFovFarMm = optionalThreeDValue(yFar);
+    camera->zRepeatabilityUm = optionalThreeDValue(zRepeatability);
+    camera->xRepeatabilityUm = optionalThreeDValue(xRepeatability);
+    camera->zResolutionUm = optionalThreeDValue(zResolution);
+    camera->zLinearityPercentOfRange = optionalThreeDValue(zLinearity);
+    camera->measurementAccuracyUm = optionalThreeDValue(measurementAccuracy);
+    camera->xyResolutionUm = optionalThreeDValue(xyResolution);
+    camera->profileDataIntervalUm = optionalThreeDValue(profileDataInterval);
+    camera->accuracyCondition = accuracyCondition->toPlainText().trimmed();
+    camera->profilePoints = optionalThreeDIntValue(profilePoints);
+    camera->scanRateMinHz = optionalThreeDValue(scanRateMin);
+    camera->scanRateMaxHz = optionalThreeDValue(scanRateMax);
+    camera->acquisitionTimeMs = optionalThreeDValue(acquisitionTime);
+    camera->frameRateHz = optionalThreeDValue(frameRate);
+    camera->encoderRateMaxHz = optionalThreeDValue(encoderRateMax);
+    camera->exposureTimeMinUs = optionalThreeDValue(exposureMin);
+    camera->exposureTimeMaxUs = optionalThreeDValue(exposureMax);
+    camera->readoutTimeUs = optionalThreeDValue(readoutTime);
+    camera->requiresExternalMotion = tristateComboValue(requiresMotion);
+    camera->supportsEncoder = tristateComboValue(supportsEncoder);
+    camera->supportsExternalTrigger = tristateComboValue(supportsTrigger);
+    camera->lightSource = lightSource->text().trimmed();
+    camera->wavelengthNm = optionalThreeDValue(wavelength);
+    camera->laserClass = laserClass->text().trimmed();
+    camera->structure = structure->text().trimmed();
+    camera->ipRating = ipRating->text().trimmed();
+    camera->weightG = optionalThreeDValue(weight);
+    camera->dimensions = dimensions->text().trimmed();
+    camera->temperature = temperature->text().trimmed();
+    camera->power = power->text().trimmed();
+    camera->interfaces = listFromText(interfaces);
+    camera->outputTypes = listFromText(outputs);
+    camera->materialScenarios = listFromText(materials);
+    camera->notes = listFromText(notes);
+    camera->userDefined = true;
     return true;
 }

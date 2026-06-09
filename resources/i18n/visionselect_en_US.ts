@@ -134,16 +134,8 @@
         <translation>Recommended Results</translation>
     </message>
     <message>
-        <source>Plan Comparison</source>
-        <translation>Plan Comparison</translation>
-    </message>
-    <message>
         <source>Catalog</source>
         <translation>Catalog</translation>
-    </message>
-    <message>
-        <source>PDF Report</source>
-        <translation>PDF Report</translation>
     </message>
     <message>
         <source>License Info</source>

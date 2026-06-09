@@ -53,6 +53,20 @@ struct PairCandidate
     bool hardConstraintsPassed;
 };
 
+bool samePairCandidate(const PairCandidate &a, const PairCandidate &b)
+{
+    return a.cameraIndex == b.cameraIndex && a.lensIndex == b.lensIndex;
+}
+
+bool containsPairCandidate(const QVector<PairCandidate> &candidates, const PairCandidate &candidate)
+{
+    for (const PairCandidate &existing : candidates) {
+        if (samePairCandidate(existing, candidate))
+            return true;
+    }
+    return false;
+}
+
 bool betterCandidate(const SelectionResult &a, const SelectionResult &b)
 {
     if (a.hardConstraintsPassed != b.hardConstraintsPassed)
@@ -65,6 +79,13 @@ bool betterPairCandidate(const PairCandidate &a, const PairCandidate &b)
     if (a.hardConstraintsPassed != b.hardConstraintsPassed)
         return a.hardConstraintsPassed;
     return a.score > b.score;
+}
+
+int fixedFocalReserveCount(int limit)
+{
+    if (limit <= 1)
+        return 0;
+    return qMin(3, qMax(1, limit / 5));
 }
 }
 
@@ -85,24 +106,28 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
     }
 
     QVector<PairCandidate> candidates;
+    QVector<PairCandidate> fixedFocalCandidates;
     if (limit > 0)
         candidates.reserve(limit);
-    const auto appendCandidate = [&candidates, limit](const PairCandidate &candidate) {
-        if (limit <= 0) {
-            candidates.append(candidate);
+    const int typePoolLimit = limit > 0 ? qMax(limit, 12) : 0;
+    const auto appendCandidate = [](QVector<PairCandidate> *pool, int poolLimit, const PairCandidate &candidate) {
+        if (!pool)
+            return;
+        if (poolLimit <= 0) {
+            pool->append(candidate);
             return;
         }
-        if (candidates.size() < limit) {
-            candidates.append(candidate);
+        if (pool->size() < poolLimit) {
+            pool->append(candidate);
             return;
         }
         int worstIndex = 0;
-        for (int i = 1; i < candidates.size(); ++i) {
-            if (betterPairCandidate(candidates.at(worstIndex), candidates.at(i)))
+        for (int i = 1; i < pool->size(); ++i) {
+            if (betterPairCandidate(pool->at(worstIndex), pool->at(i)))
                 worstIndex = i;
         }
-        if (betterPairCandidate(candidate, candidates.at(worstIndex)))
-            candidates[worstIndex] = candidate;
+        if (betterPairCandidate(candidate, pool->at(worstIndex)))
+            (*pool)[worstIndex] = candidate;
     };
 
     for (int cameraIndex = 0; cameraIndex < cameras.size(); ++cameraIndex) {
@@ -118,13 +143,52 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
             candidate.lensIndex = lensIndex;
             candidate.score = quickResult.score.score;
             candidate.hardConstraintsPassed = quickResult.hardConstraintsPassed;
-            appendCandidate(candidate);
+            appendCandidate(&candidates, limit, candidate);
+            if (!lens.isTelecentric())
+                appendCandidate(&fixedFocalCandidates, typePoolLimit, candidate);
         }
     }
 
     std::sort(candidates.begin(), candidates.end(), betterPairCandidate);
     if (limit > 0 && candidates.size() > limit)
         candidates.resize(limit);
+
+    if (limit > 0 && !fixedFocalCandidates.isEmpty()) {
+        std::sort(fixedFocalCandidates.begin(), fixedFocalCandidates.end(), betterPairCandidate);
+        int fixedFocalCount = 0;
+        for (const PairCandidate &candidate : candidates) {
+            if (!lenses.at(candidate.lensIndex).isTelecentric())
+                ++fixedFocalCount;
+        }
+
+        const int reserveCount = fixedFocalReserveCount(limit);
+        for (const PairCandidate &fixedCandidate : fixedFocalCandidates) {
+            if (fixedFocalCount >= reserveCount)
+                break;
+            if (!fixedCandidate.hardConstraintsPassed || containsPairCandidate(candidates, fixedCandidate))
+                continue;
+
+            if (candidates.size() < limit) {
+                candidates.append(fixedCandidate);
+                ++fixedFocalCount;
+                continue;
+            }
+
+            int replacementIndex = -1;
+            for (int i = 0; i < candidates.size(); ++i) {
+                if (!lenses.at(candidates.at(i).lensIndex).isTelecentric())
+                    continue;
+                if (replacementIndex < 0 || betterPairCandidate(candidates.at(replacementIndex), candidates.at(i)))
+                    replacementIndex = i;
+            }
+            if (replacementIndex < 0)
+                break;
+
+            candidates[replacementIndex] = fixedCandidate;
+            ++fixedFocalCount;
+        }
+        std::sort(candidates.begin(), candidates.end(), betterPairCandidate);
+    }
 
     QVector<SelectionResult> results;
     results.reserve(candidates.size());
@@ -601,7 +665,7 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
     }
 
     if (measurementNeedsTelecentric(request)) {
-        result->score.score -= 10.0;
+        result->score.score -= 6.0;
         ADD_DETAIL_RISK(QString::fromUtf8("\351\253\230\347\262\276\345\272\246\346\265\213\351\207\217\346\210\226\351\253\230\345\272\246\346\263\242\345\212\250\345\234\272\346\231\257\357\274\214\346\231\256\351\200\232\351\225\234\345\244\264\345\255\230\345\234\250\351\200\217\350\247\206\350\257\257\345\267\256"));
     } else {
         result->score.score += 10.0;
@@ -744,7 +808,7 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
     }
 
     if (measurementNeedsTelecentric(request)) {
-        result->score.score += 22.0;
+        result->score.score += 14.0;
         ADD_DETAIL_REASON(QString::fromUtf8("\351\253\230\347\262\276\345\272\246\346\265\213\351\207\217/\351\253\230\345\272\246\346\263\242\345\212\250\344\274\230\345\205\210\350\277\234\345\277\203\351\225\234\345\244\264\344\273\245\351\231\215\344\275\216\351\200\217\350\247\206\350\257\257\345\267\256"));
     }
 
@@ -762,7 +826,9 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
 
 bool SelectionEngine::measurementNeedsTelecentric(const SelectionRequest &request)
 {
-    return request.detectionType == DetectionType::Measurement
-        || request.measurementToleranceUm <= 20.0
-        || request.heightVariationMm >= 1.0;
+    return (request.detectionType == DetectionType::Measurement
+            && request.measurementToleranceUm > 0.0
+            && request.measurementToleranceUm <= 20.0)
+        || request.heightVariationMm >= 1.0
+        || targetObjectPixelUm(request) <= 5.0;
 }

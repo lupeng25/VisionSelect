@@ -10,13 +10,11 @@
 #include <QMainWindow>
 #include <QVector>
 
-class ComparisonPage;
 class QComboBox;
 class InputPage;
 class QLabel;
 class PureCalculationPage;
 class QPushButton;
-class ReportPage;
 class ResultsPage;
 class QStackedWidget;
 class ThreeDCameraPage;
@@ -54,10 +52,8 @@ private:
     CalculationPage *m_calculationPage = nullptr;
     CatalogPage *m_catalogPage = nullptr;
     ResultsPage *m_resultsPage = nullptr;
-    ComparisonPage *m_comparisonPage = nullptr;
     InputPage *m_inputPage = nullptr;
     PureCalculationPage *m_pureCalculationPage = nullptr;
-    ReportPage *m_reportPage = nullptr;
     ThreeDCameraPage *m_threeDCameraPage = nullptr;
 
     QVector<CameraCalculationEstimate> m_assistantCameraEstimates;
@@ -76,9 +72,7 @@ private:
     void ensurePureCalculationPage();
     void ensureCalculationPage();
     void ensureResultsPage();
-    void ensureComparisonPage();
     void ensureCatalogPage();
-    void ensureReportPage();
     void ensureThreeDCameraPage();
     void ensureCatalogPageInitialized();
     void setActivePage(int index);

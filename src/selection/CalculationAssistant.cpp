@@ -547,7 +547,9 @@ double CalculationAssistant::estimatedFixedFocalLengthMm(const SelectionRequest 
 
 bool CalculationAssistant::telecentricPreferred(const SelectionRequest &request)
 {
-    return request.detectionType == DetectionType::Measurement
-        || request.measurementToleranceUm <= 20.0
-        || request.heightVariationMm >= 1.0;
+    return (request.detectionType == DetectionType::Measurement
+            && request.measurementToleranceUm > 0.0
+            && request.measurementToleranceUm <= 20.0)
+        || request.heightVariationMm >= 1.0
+        || SelectionEngine::targetObjectPixelUm(request) <= 5.0;
 }

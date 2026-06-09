@@ -1,10 +1,12 @@
 #include "ui/pages/ThreeDCameraPage.h"
 
+#include "ui/CatalogDialogs.h"
 #include "ui/UiHelpers.h"
 
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
+#include <QDate>
 #include <QDoubleSpinBox>
 #include <QFrame>
 #include <QGridLayout>
@@ -16,6 +18,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QList>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
@@ -215,6 +218,31 @@ QString htmlList(const QStringList &items, const QString &fallback)
     html += QStringLiteral("</ul>");
     return html;
 }
+
+bool sameCameraIdentity(const ThreeDCameraSpec &left, const ThreeDCameraSpec &right)
+{
+    return left.manufacturer.trimmed().compare(right.manufacturer.trimmed(), Qt::CaseInsensitive) == 0
+        && left.series.trimmed().compare(right.series.trimmed(), Qt::CaseInsensitive) == 0
+        && left.model.trimmed().compare(right.model.trimmed(), Qt::CaseInsensitive) == 0;
+}
+
+QString sourceTypeText(const ThreeDCameraSpec &spec)
+{
+    return spec.userDefined ? localizedText("自定义", "Custom") : localizedText("内置", "Built-in");
+}
+
+QString triggerModeText(ThreeDTriggerMode mode)
+{
+    switch (mode) {
+    case ThreeDTriggerMode::FreeRun:
+        return localizedText("自由运行", "Free running");
+    case ThreeDTriggerMode::ExternalTrigger:
+        return localizedText("外部线触发", "External line trigger");
+    case ThreeDTriggerMode::Encoder:
+        return localizedText("编码器触发", "Encoder trigger");
+    }
+    return localizedText("自由运行", "Free running");
+}
 }
 
 ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
@@ -247,9 +275,10 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     m_table->setTextElideMode(Qt::ElideRight);
     m_table->verticalHeader()->setDefaultSectionSize(30);
     m_table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    m_table->setColumnCount(9);
+    m_table->setColumnCount(10);
     m_table->setHorizontalHeaderLabels({
         localizedText("匹配状态", "Match Status"),
+        localizedText("来源", "Source"),
         localizedText("品牌", "Brand"),
         localizedText("系列", "Series"),
         localizedText("型号", "Model"),
@@ -261,14 +290,15 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     });
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     m_table->setColumnWidth(0, 96);
-    m_table->setColumnWidth(1, 88);
-    m_table->setColumnWidth(2, 120);
+    m_table->setColumnWidth(1, 76);
+    m_table->setColumnWidth(2, 88);
     m_table->setColumnWidth(3, 120);
-    m_table->setColumnWidth(4, 140);
-    m_table->setColumnWidth(6, 240);
-    m_table->setColumnWidth(7, 150);
-    m_table->setColumnWidth(8, 180);
-    m_table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
+    m_table->setColumnWidth(4, 120);
+    m_table->setColumnWidth(5, 140);
+    m_table->setColumnWidth(7, 240);
+    m_table->setColumnWidth(8, 150);
+    m_table->setColumnWidth(9, 180);
+    m_table->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Stretch);
     connect(m_table, &QTableWidget::cellClicked, this, [this](int row, int) { showDetailsForRow(row); });
     connect(m_table, &QTableWidget::cellActivated, this, [this](int row, int) { showDetailsForRow(row); });
     splitter->addWidget(m_table);
@@ -292,8 +322,8 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
 
     populateFilterOptions();
     m_summaryLabel->setText(localizedText(
-        "3D 型号库将在首次进入页面或应用筛选时加载。该页面只做 3D 查询过滤，不参与 2D 评分、推荐、BOM 或 PDF 报告。",
-        "The 3D model library loads when this page is first opened or filters are applied. This page only queries and filters 3D products; it does not affect 2D scoring, recommendations, BOM, or PDF reports."));
+        "3D 型号库将在首次进入页面或应用筛选时加载。该页面只做 3D 查询过滤，不参与 2D 评分、推荐、BOM 或 PDF 导出。",
+        "The 3D model library loads when this page is first opened or filters are applied. This page only queries and filters 3D products; it does not affect 2D scoring, recommendations, BOM, or PDF export."));
 }
 
 void ThreeDCameraPage::activate()
@@ -431,6 +461,10 @@ void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
     groupsLayout->addWidget(performance.frame, 1);
     panelLayout->addLayout(groupsLayout);
 
+    QPushButton *addButton = actionButton(localizedText("新增型号", "Add Model"), QStringLiteral(":/icons/ui/catalog.png"), true);
+    QPushButton *copyButton = actionButton(localizedText("复制型号", "Copy Model"), QStringLiteral(":/icons/ui/compare.png"), true);
+    QPushButton *editButton = actionButton(localizedText("编辑型号", "Edit Model"), QStringLiteral(":/icons/ui/info.png"), true);
+    QPushButton *removeButton = actionButton(localizedText("删除自定义", "Delete Custom"), QStringLiteral(":/icons/ui/error.png"), true);
     QPushButton *applyButton = actionButton(localizedText("应用筛选", "Apply Filters"), QStringLiteral(":/icons/ui/calculate.png"));
     QPushButton *clearButton = actionButton(localizedText("清空条件", "Clear"), QStringLiteral(":/icons/ui/info.png"), true);
 
@@ -440,10 +474,18 @@ void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
     QLabel *hintLabel = new QLabel(localizedText("数值为“不限”时不会参与过滤。", "Numeric fields set to Any are ignored."));
     hintLabel->setObjectName(QStringLiteral("FilterHint"));
     actionLayout->addWidget(hintLabel, 1);
+    actionLayout->addWidget(addButton);
+    actionLayout->addWidget(copyButton);
+    actionLayout->addWidget(editButton);
+    actionLayout->addWidget(removeButton);
     actionLayout->addWidget(clearButton);
     actionLayout->addWidget(applyButton);
     panelLayout->addLayout(actionLayout);
 
+    connect(addButton, &QPushButton::clicked, this, &ThreeDCameraPage::addCamera);
+    connect(copyButton, &QPushButton::clicked, this, &ThreeDCameraPage::copyCamera);
+    connect(editButton, &QPushButton::clicked, this, &ThreeDCameraPage::editCamera);
+    connect(removeButton, &QPushButton::clicked, this, &ThreeDCameraPage::removeCamera);
     connect(applyButton, &QPushButton::clicked, this, &ThreeDCameraPage::refresh);
     connect(clearButton, &QPushButton::clicked, this, &ThreeDCameraPage::clearFilters);
     parentLayout->addWidget(panel);
@@ -538,11 +580,31 @@ void ThreeDCameraPage::buildSamplingPanel(QLayout *parentLayout)
     m_scanDistanceSpin = makeSpin(0.001, 100000.0, 300.0, QStringLiteral(" mm"), 3);
     m_profileIntervalSpin = makeSpin(0.0001, 1000.0, 0.05, localizedText(" mm/轮廓", " mm/profile"), 4);
     m_samplingRateSpin = makeSpin(0.1, 1000000.0, 1000.0, QStringLiteral(" Hz"), 1);
+    m_targetAxisSpeedSpin = makeSpin(0.0, 1000000.0, 0.0, QStringLiteral(" mm/s"), 3);
+    m_targetAxisSpeedSpin->setSpecialValueText(localizedText("不校验", "No check"));
     m_safetyFactorSpin = makeSpin(0.01, 1.0, 0.8, QString(), 2);
     scanGroup.grid->addWidget(field(localizedText("扫描距离", "Scan distance"), m_scanDistanceSpin), 0, 0);
     scanGroup.grid->addWidget(field(localizedText("轮廓采样间隔", "Profile interval"), m_profileIntervalSpin), 0, 1);
     scanGroup.grid->addWidget(field(localizedText("采样频率", "Sampling rate"), m_samplingRateSpin), 1, 0);
     scanGroup.grid->addWidget(field(localizedText("安全系数", "Safety factor"), m_safetyFactorSpin), 1, 1);
+    scanGroup.grid->addWidget(field(localizedText("目标轴速度", "Target axis speed"), m_targetAxisSpeedSpin), 2, 0);
+
+    ParameterGroup triggerGroup = makeGroup(
+        localizedText("触发与曝光", "Trigger and Exposure"),
+        localizedText("校验自由运行、外部线触发或编码器触发下的有效轮廓频率和曝光周期余量。",
+                      "Validate effective profile rate and exposure cycle margin for free-running, external trigger, or encoder trigger."));
+    m_triggerModeCombo = new QComboBox;
+    m_triggerModeCombo->addItem(triggerModeText(ThreeDTriggerMode::FreeRun), static_cast<int>(ThreeDTriggerMode::FreeRun));
+    m_triggerModeCombo->addItem(triggerModeText(ThreeDTriggerMode::ExternalTrigger), static_cast<int>(ThreeDTriggerMode::ExternalTrigger));
+    m_triggerModeCombo->addItem(triggerModeText(ThreeDTriggerMode::Encoder), static_cast<int>(ThreeDTriggerMode::Encoder));
+    m_exposureTimeSpin = makeSpin(0.0, 10000000.0, 100.0, QStringLiteral(" us"), 2);
+    m_readoutMarginSpin = makeSpin(0.0, 1000000.0, 3.0, QStringLiteral(" us"), 2);
+    m_encoderFrequencySpin = makeSpin(0.0, 10000000.0, 0.0, QStringLiteral(" Hz"), 1);
+    m_encoderFrequencySpin->setSpecialValueText(localizedText("未输入", "Not set"));
+    triggerGroup.grid->addWidget(field(localizedText("触发方式", "Trigger mode"), m_triggerModeCombo), 0, 0);
+    triggerGroup.grid->addWidget(field(localizedText("曝光时间", "Exposure time"), m_exposureTimeSpin), 0, 1);
+    triggerGroup.grid->addWidget(field(localizedText("读出/复位余量", "Readout/reset margin"), m_readoutMarginSpin), 1, 0);
+    triggerGroup.grid->addWidget(field(localizedText("编码器脉冲频率", "Encoder pulse frequency"), m_encoderFrequencySpin), 1, 1);
 
     ParameterGroup encoderGroup = makeGroup(
         localizedText("编码器与像素当量", "Encoder and Pixel Pitch"),
@@ -551,15 +613,18 @@ void ThreeDCameraPage::buildSamplingPanel(QLayout *parentLayout)
     m_axisTravelSpin = makeSpin(0.001, 100000.0, 10.0, QStringLiteral(" mm"), 3);
     m_pulseCountSpin = dialogIntSpin(1, 1000000000, 10000);
     m_refinementPointsSpin = dialogIntSpin(1, 1000000, 50);
+    m_encoderPulsesPerProfileSpin = dialogIntSpin(1, 1000000, 50);
     m_xPitchOverrideSpin = makeSpin(0.0, 1000.0, 0.0, QStringLiteral(" mm"), 4);
     m_xPitchOverrideSpin->setSpecialValueText(localizedText("自动", "Auto"));
     encoderGroup.grid->addWidget(field(localizedText("轴移动距离", "Axis travel"), m_axisTravelSpin), 0, 0);
     encoderGroup.grid->addWidget(field(localizedText("脉冲数量", "Pulse count"), m_pulseCountSpin), 0, 1);
     encoderGroup.grid->addWidget(field(localizedText("细化点数", "Refinement points"), m_refinementPointsSpin), 1, 0);
-    encoderGroup.grid->addWidget(field(localizedText("手动 X 像素当量", "Manual X pitch"), m_xPitchOverrideSpin), 1, 1);
+    encoderGroup.grid->addWidget(field(localizedText("每轮廓脉冲数", "Pulses per profile"), m_encoderPulsesPerProfileSpin), 1, 1);
+    encoderGroup.grid->addWidget(field(localizedText("手动 X 像素当量", "Manual X pitch"), m_xPitchOverrideSpin), 2, 0);
 
     inputLayout->addWidget(cameraGroup.frame);
     inputLayout->addWidget(scanGroup.frame);
+    inputLayout->addWidget(triggerGroup.frame);
     inputLayout->addWidget(encoderGroup.frame);
     inputLayout->addStretch();
     inputScroll->setWidget(inputPanel);
@@ -605,16 +670,19 @@ void ThreeDCameraPage::buildSamplingPanel(QLayout *parentLayout)
     connect(resetButton, &QPushButton::clicked, this, &ThreeDCameraPage::resetSamplingDefaults);
 
     const QList<QDoubleSpinBox *> doubleSpins = {
-        m_scanDistanceSpin, m_profileIntervalSpin, m_axisTravelSpin,
-        m_samplingRateSpin, m_safetyFactorSpin, m_xPitchOverrideSpin
+        m_scanDistanceSpin, m_profileIntervalSpin, m_targetAxisSpeedSpin, m_axisTravelSpin,
+        m_samplingRateSpin, m_safetyFactorSpin, m_xPitchOverrideSpin,
+        m_exposureTimeSpin, m_readoutMarginSpin, m_encoderFrequencySpin
     };
     for (QDoubleSpinBox *spin : doubleSpins)
         connect(spin, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
             this, [this](double) { refreshSampling(); });
-    const QList<QSpinBox *> intSpins = {m_pulseCountSpin, m_refinementPointsSpin};
+    const QList<QSpinBox *> intSpins = {m_pulseCountSpin, m_refinementPointsSpin, m_encoderPulsesPerProfileSpin};
     for (QSpinBox *spin : intSpins)
         connect(spin, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged),
             this, [this](int) { refreshSampling(); });
+    connect(m_triggerModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+        this, [this](int) { refreshSampling(); });
     refreshSampling();
 }
 
@@ -670,13 +738,25 @@ ThreeDMotionSamplingInput ThreeDCameraPage::samplingInput() const
         return input;
     input.scanDistanceMm = m_scanDistanceSpin->value();
     input.profileIntervalMm = m_profileIntervalSpin->value();
+    input.targetAxisSpeedMmS = m_targetAxisSpeedSpin && m_targetAxisSpeedSpin->value() > 0.0
+        ? m_targetAxisSpeedSpin->value()
+        : -1.0;
     input.axisTravelMm = m_axisTravelSpin->value();
     input.pulseCount = m_pulseCountSpin->value();
     input.refinementPoints = m_refinementPointsSpin->value();
+    input.encoderPulsesPerProfile = m_encoderPulsesPerProfileSpin ? m_encoderPulsesPerProfileSpin->value() : 1;
     input.samplingRateHz = m_samplingRateSpin->value();
     input.safetyFactor = m_safetyFactorSpin->value();
     input.overrideXPixelPitchMm = m_xPitchOverrideSpin->value() > 0.0
         ? m_xPitchOverrideSpin->value()
+        : -1.0;
+    input.triggerMode = m_triggerModeCombo
+        ? static_cast<ThreeDTriggerMode>(m_triggerModeCombo->currentData().toInt())
+        : ThreeDTriggerMode::FreeRun;
+    input.exposureTimeUs = m_exposureTimeSpin ? m_exposureTimeSpin->value() : 100.0;
+    input.readoutMarginUs = m_readoutMarginSpin ? m_readoutMarginSpin->value() : 3.0;
+    input.encoderPulseFrequencyHz = m_encoderFrequencySpin && m_encoderFrequencySpin->value() > 0.0
+        ? m_encoderFrequencySpin->value()
         : -1.0;
     return input;
 }
@@ -715,6 +795,7 @@ void ThreeDCameraPage::refreshSampling()
             parts.append(localizedText("技术路线：%1", "Technology: %1").arg(threeDTechnologyLabel(camera->technology)));
             parts.append(localizedText("X 间隔：%1", "X interval: %1").arg(valueOrUnknown(camera->profileDataIntervalUm, QStringLiteral(" um"), 2)));
             parts.append(localizedText("速度上限：%1", "Speed limit: %1").arg(valueOrUnknown(result.cameraSamplingRateLimitHz, QStringLiteral(" Hz"), 0)));
+            parts.append(localizedText("编码器上限：%1", "Encoder limit: %1").arg(valueOrUnknown(camera->encoderRateMaxHz, QStringLiteral(" Hz"), 0)));
             m_samplingCameraLabel->setText(parts.join(localizedText("；", "; ")));
         } else {
             m_samplingCameraLabel->setText(localizedText(
@@ -732,6 +813,24 @@ void ThreeDCameraPage::refreshSampling()
     const QString ratioText = threeDHasValue(result.xyPitchRatio)
         ? QStringLiteral("%1:1").arg(result.xyPitchRatio, 0, 'f', 2)
         : localizedText("需确认", "Needs confirmation");
+    const QString requiredRateText = threeDHasValue(result.requiredProfileRateHz)
+        ? QStringLiteral("%1 Hz").arg(result.requiredProfileRateHz, 0, 'f', 1)
+        : localizedText("不校验", "No check");
+    const QString effectiveRateText = threeDHasValue(result.effectiveProfileRateHz)
+        ? QStringLiteral("%1 Hz").arg(result.effectiveProfileRateHz, 0, 'f', 1)
+        : localizedText("需确认", "Needs confirmation");
+    const QString periodText = threeDHasValue(result.profilePeriodUs)
+        ? QStringLiteral("%1 us").arg(result.profilePeriodUs, 0, 'f', 2)
+        : localizedText("需确认", "Needs confirmation");
+    const QString exposureLimitText = threeDHasValue(result.maxExposureTimeUs)
+        ? QStringLiteral("%1 us").arg(result.maxExposureTimeUs, 0, 'f', 2)
+        : localizedText("需确认", "Needs confirmation");
+    const QString encoderIntervalText = threeDHasValue(result.encoderProfileIntervalMm)
+        ? QStringLiteral("%1 mm/轮廓").arg(result.encoderProfileIntervalMm, 0, 'f', 6)
+        : localizedText("未计算", "Not calculated");
+    const QString encoderAxisSpeedText = threeDHasValue(result.encoderAxisSpeedMmS)
+        ? QStringLiteral("%1 mm/s").arg(result.encoderAxisSpeedMmS, 0, 'f', 2)
+        : localizedText("未计算", "Not calculated");
     const QString stateText = result.valid && result.risks.isEmpty()
         ? localizedText("参数正常", "Parameters OK")
         : result.valid ? localizedText("需要确认", "Needs confirmation") : localizedText("输入无效", "Invalid input");
@@ -768,6 +867,29 @@ void ThreeDCameraPage::refreshSampling()
     html += row(localizedText("相机速度上限", "Camera speed limit"),
                 rateLimitText,
                 localizedText("最大扫描频率或帧率", "max scan rate or frame rate"));
+    html += row(localizedText("触发方式", "Trigger mode"),
+                triggerModeText(input.triggerMode),
+                localizedText("自由运行 / 外部线触发 / 编码器触发", "free running / external trigger / encoder trigger"));
+    html += row(localizedText("有效轮廓频率", "Effective profile rate"),
+                effectiveRateText,
+                input.triggerMode == ThreeDTriggerMode::Encoder
+                    ? localizedText("编码器脉冲频率 / 每轮廓脉冲数", "encoder pulse frequency / pulses per profile")
+                    : localizedText("采样频率", "sampling rate"));
+    html += row(localizedText("目标所需轮廓频率", "Required profile rate"),
+                requiredRateText,
+                localizedText("目标轴速度 / (轮廓间隔 × 安全系数)", "target speed / (profile interval x safety factor)"));
+    html += row(localizedText("轮廓周期", "Profile period"),
+                periodText,
+                localizedText("1 / 有效轮廓频率", "1 / effective profile rate"));
+    html += row(localizedText("最大曝光时间", "Max exposure time"),
+                exposureLimitText,
+                localizedText("轮廓周期 - 读出/复位余量", "profile period - readout/reset margin"));
+    html += row(localizedText("编码器每轮廓距离", "Encoder distance per profile"),
+                encoderIntervalText,
+                localizedText("脉冲采样间隔 × 每轮廓脉冲数", "pulse interval x pulses per profile"));
+    html += row(localizedText("编码器推算轴速", "Encoder-derived axis speed"),
+                encoderAxisSpeedText,
+                localizedText("编码器脉冲频率 × 脉冲采样间隔", "encoder pulse frequency x pulse interval"));
     html += QStringLiteral("</table>");
 
     html += QStringLiteral("<h4>%1</h4>%2")
@@ -786,12 +908,18 @@ void ThreeDCameraPage::resetSamplingDefaults()
         return;
     m_scanDistanceSpin->setValue(300.0);
     m_profileIntervalSpin->setValue(0.05);
+    m_targetAxisSpeedSpin->setValue(0.0);
     m_axisTravelSpin->setValue(10.0);
     m_pulseCountSpin->setValue(10000);
     m_refinementPointsSpin->setValue(50);
+    m_encoderPulsesPerProfileSpin->setValue(50);
     m_samplingRateSpin->setValue(1000.0);
     m_safetyFactorSpin->setValue(0.8);
     m_xPitchOverrideSpin->setValue(0.0);
+    m_triggerModeCombo->setCurrentIndex(0);
+    m_exposureTimeSpin->setValue(100.0);
+    m_readoutMarginSpin->setValue(3.0);
+    m_encoderFrequencySpin->setValue(0.0);
     refreshSampling();
 }
 
@@ -831,8 +959,8 @@ void ThreeDCameraPage::fillTable()
             ++rejected;
     }
     m_summaryLabel->setText(localizedText(
-        "3D 型号库 %1 个；满足 %2，待确认 %3，不满足 %4。该页面只做 3D 查询过滤，不参与 2D 评分、推荐、BOM 或 PDF 报告。",
-        "3D library: %1 models; meets %2, needs confirmation %3, does not meet %4. This page only queries and filters 3D products; it does not affect 2D scoring, recommendations, BOM, or PDF reports.")
+        "3D 型号库 %1 个；满足 %2，待确认 %3，不满足 %4。该页面只做 3D 查询过滤，不参与 2D 评分、推荐、BOM 或 PDF 导出。",
+        "3D library: %1 models; meets %2, needs confirmation %3, does not meet %4. This page only queries and filters 3D products; it does not affect 2D scoring, recommendations, BOM, or PDF export.")
         .arg(m_matches.size()).arg(matched).arg(missing).arg(rejected));
 
     {
@@ -848,14 +976,15 @@ void ThreeDCameraPage::fillTable()
             QTableWidgetItem *statusItem = indexedItem(threeDMatchStatusLabel(match.status), row);
             setStatusColor(statusItem, match.status);
             m_table->setItem(row, 0, statusItem);
-            m_table->setItem(row, 1, item(spec.manufacturer));
-            m_table->setItem(row, 2, item(spec.series));
-            m_table->setItem(row, 3, item(spec.model));
-            m_table->setItem(row, 4, item(threeDTechnologyLabel(spec.technology)));
-            m_table->setItem(row, 5, item(geometrySummary(spec)));
-            m_table->setItem(row, 6, item(qualitySummary(spec)));
-            m_table->setItem(row, 7, item(speedSummary(spec)));
-            m_table->setItem(row, 8, item(spec.interfaces.join(QStringLiteral(", "))));
+            m_table->setItem(row, 1, item(sourceTypeText(spec)));
+            m_table->setItem(row, 2, item(spec.manufacturer));
+            m_table->setItem(row, 3, item(spec.series));
+            m_table->setItem(row, 4, item(spec.model));
+            m_table->setItem(row, 5, item(threeDTechnologyLabel(spec.technology)));
+            m_table->setItem(row, 6, item(geometrySummary(spec)));
+            m_table->setItem(row, 7, item(qualitySummary(spec)));
+            m_table->setItem(row, 8, item(speedSummary(spec)));
+            m_table->setItem(row, 9, item(spec.interfaces.join(QStringLiteral(", "))));
         }
         m_table->setUpdatesEnabled(true);
     }
@@ -879,6 +1008,136 @@ void ThreeDCameraPage::updateSamplingFromSelected(int row)
     const int sourceIndex = rowSourceIndex(m_table, row);
     m_selectedMatchIndex = sourceIndex >= 0 ? sourceIndex : row;
     refreshSampling();
+}
+
+int ThreeDCameraPage::selectedCameraRepositoryIndex() const
+{
+    int matchIndex = -1;
+    if (m_table && m_table->currentRow() >= 0)
+        matchIndex = rowSourceIndex(m_table, m_table->currentRow());
+    if (matchIndex < 0)
+        matchIndex = m_selectedMatchIndex;
+    if (matchIndex < 0 || matchIndex >= m_matches.size())
+        return -1;
+
+    const ThreeDCameraSpec &selected = m_matches.at(matchIndex).spec;
+    const QVector<ThreeDCameraSpec> &cameras = m_repository.cameras();
+    for (int i = 0; i < cameras.size(); ++i) {
+        if (sameCameraIdentity(cameras.at(i), selected))
+            return i;
+    }
+    return -1;
+}
+
+void ThreeDCameraPage::addCamera()
+{
+    if (!ensureLoaded())
+        return;
+    ThreeDCameraSpec camera;
+    camera.manufacturer = localizedText("自定义品牌", "Custom Brand");
+    camera.series = localizedText("自定义系列", "Custom Series");
+    camera.model = localizedText("自定义型号", "Custom Model");
+    camera.technology = ThreeDTechnology::LineLaserProfile;
+    camera.technologyLabel = threeDTechnologyLabel(camera.technology);
+    camera.status = localizedText("用户录入", "User entered");
+    camera.sourceDate = QDate::currentDate().toString(Qt::ISODate);
+    camera.supportsEncoder = 1;
+    camera.supportsExternalTrigger = 1;
+    camera.userDefined = true;
+    if (!editThreeDCameraDialog(this, &camera, localizedText("新增 3D 相机", "Add 3D Camera")))
+        return;
+
+    QString error;
+    if (!m_repository.addCamera(camera, &error)) {
+        QMessageBox::warning(this, localizedText("保存失败", "Save Failed"), error);
+        return;
+    }
+    populateFilterOptions();
+    refresh();
+}
+
+void ThreeDCameraPage::copyCamera()
+{
+    if (!ensureLoaded())
+        return;
+    const int index = selectedCameraRepositoryIndex();
+    if (index < 0 || index >= m_repository.cameras().size()) {
+        QMessageBox::information(this, localizedText("未选择型号", "No Model Selected"),
+            localizedText("请先在表格中选择一个 3D 相机型号。", "Select a 3D camera model in the table first."));
+        return;
+    }
+
+    ThreeDCameraSpec camera = m_repository.cameras().at(index);
+    camera.model += localizedText(" 副本", " Copy");
+    camera.status = localizedText("用户录入", "User entered");
+    camera.sourceDate = QDate::currentDate().toString(Qt::ISODate);
+    camera.userDefined = true;
+    if (!editThreeDCameraDialog(this, &camera, localizedText("复制 3D 相机", "Copy 3D Camera")))
+        return;
+
+    QString error;
+    if (!m_repository.addCamera(camera, &error)) {
+        QMessageBox::warning(this, localizedText("保存失败", "Save Failed"), error);
+        return;
+    }
+    populateFilterOptions();
+    refresh();
+}
+
+void ThreeDCameraPage::editCamera()
+{
+    if (!ensureLoaded())
+        return;
+    const int index = selectedCameraRepositoryIndex();
+    if (index < 0 || index >= m_repository.cameras().size()) {
+        QMessageBox::information(this, localizedText("未选择型号", "No Model Selected"),
+            localizedText("请先在表格中选择一个 3D 相机型号。", "Select a 3D camera model in the table first."));
+        return;
+    }
+
+    ThreeDCameraSpec camera = m_repository.cameras().at(index);
+    if (!editThreeDCameraDialog(this, &camera, localizedText("编辑 3D 相机", "Edit 3D Camera")))
+        return;
+
+    QString error;
+    if (!m_repository.updateCamera(index, camera, &error)) {
+        QMessageBox::warning(this, localizedText("保存失败", "Save Failed"), error);
+        return;
+    }
+    populateFilterOptions();
+    refresh();
+}
+
+void ThreeDCameraPage::removeCamera()
+{
+    if (!ensureLoaded())
+        return;
+    const int index = selectedCameraRepositoryIndex();
+    if (index < 0 || index >= m_repository.cameras().size()) {
+        QMessageBox::information(this, localizedText("未选择型号", "No Model Selected"),
+            localizedText("请先在表格中选择一个自定义 3D 相机型号。", "Select a custom 3D camera model in the table first."));
+        return;
+    }
+    const ThreeDCameraSpec camera = m_repository.cameras().at(index);
+    if (!camera.userDefined) {
+        QMessageBox::information(this, localizedText("不能删除内置型号", "Cannot Delete Built-in Model"),
+            localizedText("内置 3D 相机不能删除；可复制为自定义型号后维护。", "Built-in 3D cameras cannot be deleted; copy one as a custom model first."));
+        return;
+    }
+
+    const int answer = QMessageBox::question(this, localizedText("删除自定义 3D 相机", "Delete Custom 3D Camera"),
+        localizedText("确定删除自定义型号“%1 %2”吗？", "Delete custom model \"%1 %2\"?")
+            .arg(camera.manufacturer, camera.model));
+    if (answer != QMessageBox::Yes)
+        return;
+
+    QString error;
+    if (!m_repository.removeCamera(index, &error)) {
+        QMessageBox::warning(this, localizedText("删除失败", "Delete Failed"), error);
+        return;
+    }
+    populateFilterOptions();
+    refresh();
 }
 
 void ThreeDCameraPage::showDetailsForRow(int row)
@@ -907,10 +1166,15 @@ void ThreeDCameraPage::showDetailsForRow(int row)
     };
     html += QStringLiteral("<p>");
     html += line(localizedText("匹配状态", "Match Status"), htmlEscape(threeDMatchStatusLabel(match.status)));
+    html += line(localizedText("资料来源类型", "Source Type"), htmlEscape(sourceTypeText(spec)));
     html += line(localizedText("技术路线", "Technology"), htmlEscape(threeDTechnologyLabel(spec.technology)));
     html += line(localizedText("产品状态", "Product Status"), htmlEscape(spec.status));
-    html += QStringLiteral("<b>%1</b>: <a href=\"%2\">%2</a><br>")
-        .arg(htmlEscape(localizedText("官方来源", "Official Source")), htmlEscape(spec.sourceUrl));
+    if (spec.sourceUrl.trimmed().isEmpty()) {
+        html += line(localizedText("资料来源", "Source"), htmlEscape(localizedText("用户录入", "User entered")));
+    } else {
+        html += QStringLiteral("<b>%1</b>: <a href=\"%2\">%2</a><br>")
+            .arg(htmlEscape(localizedText("资料来源", "Source")), htmlEscape(spec.sourceUrl));
+    }
     html += line(localizedText("采集日期", "Collection Date"), htmlEscape(spec.sourceDate));
     html += QStringLiteral("</p>");
     html += QStringLiteral("<p>");
@@ -939,10 +1203,18 @@ void ThreeDCameraPage::showDetailsForRow(int row)
     qualityHtml += line(localizedText("测试条件", "Test Conditions"), htmlEscape(accuracyCondition));
     html += QStringLiteral("<h4>%1</h4><p>%2</p>")
         .arg(htmlEscape(localizedText("精度质量", "Accuracy / Quality")), qualityHtml);
-    html += QStringLiteral("<h4>%1</h4><p>%2<br>%3%4</p>")
+    const QString exposureRange = (threeDHasValue(spec.exposureTimeMinUs) || threeDHasValue(spec.exposureTimeMaxUs))
+        ? QStringLiteral("%1 - %2")
+            .arg(valueOrUnknown(spec.exposureTimeMinUs, QStringLiteral(" us"), 2),
+                 valueOrUnknown(spec.exposureTimeMaxUs, QStringLiteral(" us"), 2))
+        : localizedText("未公开", "Unpublished");
+    html += QStringLiteral("<h4>%1</h4><p>%2<br>%3%4%5%6%7</p>")
         .arg(htmlEscape(localizedText("速度采样", "Speed / Sampling")), htmlEscape(speedSummary(spec)),
             line(localizedText("需要外部运动", "External Motion Required"), htmlEscape(yesNoUnknown(spec.requiresExternalMotion))),
-            line(localizedText("支持编码器", "Encoder Supported"), htmlEscape(yesNoUnknown(spec.supportsEncoder))));
+            line(localizedText("支持编码器", "Encoder Supported"), htmlEscape(yesNoUnknown(spec.supportsEncoder))),
+            line(localizedText("支持外部触发", "External Trigger Supported"), htmlEscape(yesNoUnknown(spec.supportsExternalTrigger))),
+            line(localizedText("编码器输入上限", "Encoder Input Limit"), htmlEscape(valueOrUnknown(spec.encoderRateMaxHz, QStringLiteral(" Hz"), 0))),
+            line(localizedText("曝光范围", "Exposure Range"), htmlEscape(exposureRange)));
     html += QStringLiteral("<h4>%1</h4><p>%2%3%4</p>")
         .arg(htmlEscape(localizedText("光学与集成", "Optics / Integration")),
             line(localizedText("光源", "Light Source"), htmlEscape(spec.lightSource.isEmpty() ? localizedText("未公开", "Unpublished") : spec.lightSource)),
