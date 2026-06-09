@@ -214,6 +214,29 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     form->addRow(QString(), coaxial);
     form->addRow(localizedText("备注", "Notes"), notes);
 
+    const auto setFieldVisible = [form](QWidget *field, bool visible) {
+        if (!field)
+            return;
+        field->setVisible(visible);
+        if (QWidget *label = form->labelForField(field))
+            label->setVisible(visible);
+    };
+    const auto refreshLensFields = [=]() {
+        const bool fixedLens = type->currentIndex() == 0;
+        setFieldVisible(focal, fixedLens);
+        setFieldVisible(minWd, fixedLens);
+        setFieldVisible(pmag, !fixedLens);
+        setFieldVisible(nominalWd, !fixedLens);
+        setFieldVisible(wdTolerance, !fixedLens);
+        setFieldVisible(maxSensor, !fixedLens);
+        setFieldVisible(telecentricity, !fixedLens);
+        setFieldVisible(dof, !fixedLens);
+        setFieldVisible(coaxial, !fixedLens);
+    };
+    QObject::connect(type, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+                     &dialog, refreshLensFields);
+    refreshLensFields();
+
     scroll->setWidget(content);
     outer->addWidget(scroll);
     QDialogButtonBox *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -229,21 +252,22 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     lens->manufacturer = manufacturer->text().trimmed();
     lens->lensType = type->currentIndex() == 0 ? LensType::FixedFocal : type->currentIndex() == 1 ? LensType::ObjectTelecentric : LensType::BiTelecentric;
     lens->lensMount = mount->currentText().trimmed();
-    lens->focalLengthMm = focal->value();
-    lens->minWorkingDistanceMm = minWd->value();
+    const bool fixedLens = lens->lensType == LensType::FixedFocal;
+    lens->focalLengthMm = fixedLens ? focal->value() : 0.0;
+    lens->minWorkingDistanceMm = fixedLens ? minWd->value() : 0.0;
     lens->distortionPercent = distortion->value();
     lens->imageCircleMm = imageCircle->value();
     lens->megapixelRating = mp->value();
     lens->recommendedMinPixelUm = recommendedPixel->value();
-    lens->pmag = pmag->value();
-    lens->nominalWorkingDistanceMm = nominalWd->value();
-    lens->workingDistanceToleranceMm = wdTolerance->value();
-    lens->maxSensorDiagonalMm = maxSensor->value();
-    lens->telecentricityDeg = telecentricity->value();
-    lens->dofMm = dof->value();
+    lens->pmag = fixedLens ? 0.0 : pmag->value();
+    lens->nominalWorkingDistanceMm = fixedLens ? 0.0 : nominalWd->value();
+    lens->workingDistanceToleranceMm = fixedLens ? 0.0 : wdTolerance->value();
+    lens->maxSensorDiagonalMm = fixedLens ? 0.0 : maxSensor->value();
+    lens->telecentricityDeg = fixedLens ? 0.0 : telecentricity->value();
+    lens->dofMm = fixedLens ? 0.0 : dof->value();
     lens->numericalAperture = na->value();
     lens->fNumber = fNumber->value();
-    lens->coaxialIllumination = coaxial->isChecked();
+    lens->coaxialIllumination = fixedLens ? false : coaxial->isChecked();
     lens->notes = notes->toPlainText().trimmed();
     return true;
 }
