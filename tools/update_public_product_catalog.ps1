@@ -127,9 +127,116 @@ function Parse-WdPair([string]$text) {
     $t = Html-Decode $text
     $nominal = First-Number $t 0
     $tol = 0
-    $m = [regex]::Match($t, '±\s*([0-9]+(?:\.[0-9]+)?)')
+    $m = [regex]::Match($t, '[±卤]\s*([0-9]+(?:\.[0-9]+)?)')
     if ($m.Success) { $tol = [double]$m.Groups[1].Value }
     return @($nominal, $tol)
+}
+
+function Format-Number([double]$value) {
+    if ([math]::Abs($value - [math]::Round($value)) -lt 0.0000001) {
+        return [string][int][math]::Round($value)
+    }
+    return ("{0:0.######}" -f $value).TrimEnd("0").TrimEnd(".")
+}
+
+function Parse-DofMm([string]$text) {
+    $t = Html-Decode $text
+    $dof = First-Number $t 0
+    if ($dof -le 0) { return 0 }
+    if ($t -match '[±卤]') { return $dof * 2.0 }
+    return $dof
+}
+
+function Strip-Html([string]$text) {
+    if ([string]::IsNullOrWhiteSpace($text)) { return "" }
+    return Clean-Field (Html-Decode ($text -replace '<[^>]+>', ''))
+}
+
+function Get-CoolensProductFields([string]$productId, [string]$listId) {
+    $fields = @{}
+    if ([string]::IsNullOrWhiteSpace($productId) -or [string]::IsNullOrWhiteSpace($listId)) {
+        return $fields
+    }
+
+    $url = "https://coolens.cn/productview/$productId.html?plid=$listId"
+    $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 20
+    $html = $response.Content
+    $matches = [regex]::Matches(
+        $html,
+        '<div class="dd">\s*<div class="title ellipsis">\s*<div class="ww">(.*?)</div>\s*</div>\s*<div class="data ellipsis">(.*?)</div>',
+        'Singleline')
+    foreach ($match in $matches) {
+        $label = Strip-Html $match.Groups[1].Value
+        $value = Strip-Html $match.Groups[2].Value
+        $upper = $label.ToUpperInvariant()
+        if ($upper.Contains("WD")) {
+            $fields["wd"] = $value
+        } elseif ($upper.Contains("DOF")) {
+            $fields["dof"] = $value
+        } elseif ($upper.Contains("F/#")) {
+            $fields["fno"] = $value
+        } elseif ($label.Contains("焦距")) {
+            $fields["focal"] = $value
+        } elseif ($label.Contains("接口")) {
+            $fields["mount"] = $value
+        } elseif ($label.Contains("支持") -and ($upper.Contains("CCD") -or $label.Contains("尺寸"))) {
+            $fields["sensor"] = $value
+        } elseif ($label.Contains("分辨率")) {
+            $fields["objectResolution"] = $value
+        } elseif ($label.Contains("%") -and ($upper.Contains("MAX") -or $label.Contains("畸变"))) {
+            $fields["distortion"] = $value
+        } elseif (($upper.Contains("MAX") -or $label.Contains("远心度")) -and !$label.Contains("%")) {
+            $fields["telecentricity"] = $value
+        }
+    }
+    return $fields
+}
+
+function Update-CoolensLensDetail([hashtable]$map, [string]$model, [hashtable]$detail) {
+    if ([string]::IsNullOrWhiteSpace($model) -or !$map.ContainsKey($model) -or !$detail -or $detail.Count -eq 0) {
+        return
+    }
+
+    $row = $map[$model]
+    if ($row.manufacturer -ne "COOLENS" -or ($row.lens_type -ne "ObjectTelecentric" -and $row.lens_type -ne "BiTelecentric")) {
+        return
+    }
+
+    if ($detail.ContainsKey("wd")) {
+        $wdPair = Parse-WdPair $detail["wd"]
+        if ($wdPair[0] -gt 0) {
+            $row.nominal_wd_mm = Format-Number $wdPair[0]
+        }
+        if ($wdPair[1] -gt 0 -and (First-Number ([string]$row.wd_tolerance_mm) 0) -le 0) {
+            $row.wd_tolerance_mm = Format-Number $wdPair[1]
+        }
+    }
+    if ($detail.ContainsKey("dof")) {
+        $dof = Parse-DofMm $detail["dof"]
+        $currentDof = First-Number ([string]$row.dof_mm) 0
+        $looksLikeHalfDof = $detail["dof"] -match '±' -and [math]::Abs(($currentDof * 2.0) - $dof) -lt 0.0000001
+        if ($dof -gt 0 -and ($currentDof -le 0 -or $looksLikeHalfDof -or [math]::Abs($currentDof - $dof) -gt 0.0000001)) {
+            $row.dof_mm = Format-Number $dof
+        }
+    }
+    if ($detail.ContainsKey("fno")) {
+        $fno = First-Number $detail["fno"] 0
+        if ($fno -gt 0) {
+            $row.f_number = Format-Number $fno
+        }
+    }
+    if ($detail.ContainsKey("distortion")) {
+        $distortion = First-Number $detail["distortion"] 0
+        if ($distortion -gt 0) {
+            $row.distortion_percent = Format-Number $distortion
+        }
+    }
+    if ($detail.ContainsKey("telecentricity")) {
+        $telecentricity = First-Number $detail["telecentricity"] 0
+        if ($telecentricity -gt 0) {
+            $row.telecentricity_deg = Format-Number $telecentricity
+        }
+    }
 }
 
 function Infer-Mount([string]$model, [string]$mountText) {
@@ -311,7 +418,7 @@ function Add-CoolensTeleLens([hashtable]$map, $row, [string]$type, [string]$seri
         wd_tolerance_mm = $wdPair[1]
         max_sensor_diagonal_mm = $imageCircle
         telecentricity_deg = (First-Number $telecentricity 0)
-        dof_mm = (First-Number $dof 0)
+        dof_mm = (Parse-DofMm $dof)
         numerical_aperture = 0
         f_number = (First-Number $fno 0)
         coaxial_illumination = (Is-Yes $coax).ToString().ToLowerInvariant()
@@ -329,6 +436,24 @@ function Add-CoolensFixedLens([hashtable]$map, $row, [string]$series) {
     if ([string]::IsNullOrWhiteSpace($model) -or $focal -le 0 -or $imageCircle -le 0) { return }
 
     Add-FixedLens $map $model $focal (First-Number $row.text1 0) $imageCircle 0 $minWd (First-Number $row.text3 0) $row.text5 "COOLENS $series official product list" "COOLENS"
+}
+
+function Add-CoolensWwtFixedLens([hashtable]$map, $row, [hashtable]$detail, [string]$series) {
+    $model = Html-Decode $row.pl_title
+    if ([string]::IsNullOrWhiteSpace($model) -or !$detail -or !$detail.ContainsKey("focal")) { return }
+
+    $sensor = if ($detail.ContainsKey("sensor")) { $detail["sensor"] } else { $row.text0 }
+    $imageCircle = Sensor-DiagonalFromSpec $sensor
+    $focal = First-Number $detail["focal"] 0
+    if ($imageCircle -le 0 -or $focal -le 0) { return }
+
+    $wdText = if ($detail.ContainsKey("wd")) { $detail["wd"] } else { $row.text1 }
+    $minWd = (Parse-WdPair $wdText)[0]
+    $fno = if ($detail.ContainsKey("fno")) { First-Number $detail["fno"] 0 } else { First-Number $row.text2 0 }
+    $distortion = if ($detail.ContainsKey("distortion")) { First-Number $detail["distortion"] 0 } else { 0 }
+    $mount = if ($detail.ContainsKey("mount")) { $detail["mount"] } else { "C" }
+
+    Add-FixedLens $map $model $focal $fno $imageCircle 0 $minWd $distortion $mount "COOLENS $series official product detail" "COOLENS"
 }
 
 $cameraMap = @{}
@@ -510,10 +635,18 @@ if (!$SkipNetwork) {
             $list = Invoke-Utf8Json $url
             Write-Host "  COOLENS $($page.series): $($list.data.Count) rows"
             foreach ($rec in $list.data) {
+                $model = Html-Decode $rec.pl_title
+                $detail = @{}
+                try {
+                    $detail = Get-CoolensProductFields $rec.pl_proid $rec.pl_id
+                    Update-CoolensLensDetail $lensMap $model $detail
+                } catch {
+                    Write-Warning "Skipped COOLENS detail $model id=$($rec.pl_id): $($_.Exception.Message)"
+                }
                 $coolensRawRows += [pscustomobject]@{
                     source_page = $page.id
                     series = $page.series
-                    model = (Html-Decode $rec.pl_title)
+                    model = $model
                     pl_id = $rec.pl_id
                     pl_proid = $rec.pl_proid
                     text0 = (Html-Decode $rec.text0)
@@ -528,16 +661,30 @@ if (!$SkipNetwork) {
                     text9 = (Html-Decode $rec.text9)
                     source_url = "https://www.coolens.cn/product/$($page.id).html"
                 }
+                $wdText = if ($detail.ContainsKey("wd")) { $detail["wd"] } else { $rec.text3 }
+                $dofText = if ($detail.ContainsKey("dof")) { $detail["dof"] } else { "" }
+                $distortionText = if ($detail.ContainsKey("distortion")) { $detail["distortion"] } else { "" }
+                $telecentricityText = if ($detail.ContainsKey("telecentricity")) { $detail["telecentricity"] } else { "" }
                 if ($page.kind -eq "dtcm") {
-                    Add-CoolensTeleLens $lensMap $rec $page.type $page.series $rec.text0 $rec.text2 $rec.text3 $rec.text4 $rec.text5 "" "" "" ""
+                    $fnoText = if ($detail.ContainsKey("fno")) { $detail["fno"] } else { $rec.text4 }
+                    Add-CoolensTeleLens $lensMap $rec $page.type $page.series $rec.text0 $rec.text2 $wdText $fnoText $rec.text5 "" $distortionText $telecentricityText $dofText
                 } elseif ($page.kind -eq "dtcmSmall") {
-                    Add-CoolensTeleLens $lensMap $rec $page.type $page.series $rec.text0 $rec.text2 $rec.text3 "" $rec.text4 "" "" "" ""
+                    $fnoText = if ($detail.ContainsKey("fno")) { $detail["fno"] } else { "" }
+                    Add-CoolensTeleLens $lensMap $rec $page.type $page.series $rec.text0 $rec.text2 $wdText $fnoText $rec.text4 "" $distortionText $telecentricityText $dofText
                 } elseif ($page.kind -eq "tele") {
-                    Add-CoolensTeleLens $lensMap $rec $page.type $page.series $rec.text0 $rec.text1 $rec.text2 $rec.text3 "" $rec.text4 "" "" ""
+                    $teleWdText = if ($detail.ContainsKey("wd")) { $detail["wd"] } else { $rec.text2 }
+                    $fnoText = if ($detail.ContainsKey("fno")) { $detail["fno"] } else { $rec.text3 }
+                    Add-CoolensTeleLens $lensMap $rec $page.type $page.series $rec.text0 $rec.text1 $teleWdText $fnoText "" $rec.text4 $distortionText $telecentricityText $dofText
                 } elseif ($page.kind -eq "ltcm") {
-                    Add-CoolensTeleLens $lensMap $rec $page.type $page.series $rec.text3 $rec.text1 $rec.text2 $rec.text4 "" "" $rec.text7 $rec.text8 $rec.text6
+                    $fnoText = if ($detail.ContainsKey("fno")) { $detail["fno"] } else { $rec.text4 }
+                    $ltcmDofText = if ($detail.ContainsKey("dof")) { $detail["dof"] } else { $rec.text6 }
+                    $ltcmDistortionText = if ($detail.ContainsKey("distortion")) { $detail["distortion"] } else { $rec.text7 }
+                    $ltcmTelecentricityText = if ($detail.ContainsKey("telecentricity")) { $detail["telecentricity"] } else { $rec.text8 }
+                    Add-CoolensTeleLens $lensMap $rec $page.type $page.series $rec.text3 $rec.text1 $wdText $fnoText "" "" $ltcmDistortionText $ltcmTelecentricityText $ltcmDofText
                 } elseif ($page.kind -eq "mfa") {
                     Add-CoolensFixedLens $lensMap $rec $page.series
+                } elseif ($page.id -eq "003001006") {
+                    Add-CoolensWwtFixedLens $lensMap $rec $detail $page.series
                 }
             }
         } catch {

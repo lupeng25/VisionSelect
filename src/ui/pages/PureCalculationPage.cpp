@@ -152,34 +152,52 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     cameraGroup.grid->addWidget(field(localizedText("接口带宽", "Interface bandwidth"), m_interfaceBandwidthSpin), 2, 0);
     cameraGroup.grid->addWidget(field(localizedText("快门", "Shutter"), m_shutterCombo), 2, 1);
 
-    ParameterGroup lensGroup = makeGroup(
-        localizedText("手动镜头参数", "Manual Lens Parameters"),
-        localizedText("普通镜头与远心镜头参数共用，按模式参与计算。", "Fixed-focal and telecentric parameters are used according to the selected mode."));
+    ParameterGroup lensModeGroup = makeGroup(
+        localizedText("镜头模式", "Lens Mode"),
+        QString());
     m_lensModeCombo = new QComboBox;
     m_lensModeCombo->addItems({localizedText("普通镜头", "Fixed-focal Lens"), localizedText("远心镜头", "Telecentric Lens")});
+    lensModeGroup.grid->addWidget(field(localizedText("模式", "Mode"), m_lensModeCombo), 0, 0);
+
+    ParameterGroup fixedLensGroup = makeGroup(
+        localizedText("普通镜头参数", "Fixed-focal Lens Parameters"),
+        localizedText("按焦距、当前 WD 和相机靶面估算 FOV、倍率、景深和畸变误差。", "Estimate FOV, magnification, DOF, and distortion from focal length, current WD, and sensor size."));
+    m_fixedLensGroup = fixedLensGroup.frame;
     m_focalSpin = makeSpin(0.1, 10000.0, 25.0, QStringLiteral(" mm"), 2);
     m_fNumberSpin = makeSpin(0.0, 1000.0, 4.0, QStringLiteral(" F"), 2);
     m_minWdSpin = makeSpin(0.0, 100000.0, 100.0, QStringLiteral(" mm"), 2);
     m_distortionSpin = makeSpin(0.0, 100.0, 0.05, QStringLiteral(" %"), 3);
     m_imageCircleSpin = makeSpin(0.0, 1000.0, 11.0, QStringLiteral(" mm"), 2);
     m_lensMpSpin = makeSpin(0.0, 1000.0, 5.0, QStringLiteral(" MP"), 2);
+    fixedLensGroup.grid->addWidget(field(localizedText("焦距", "Focal length"), m_focalSpin), 0, 0);
+    fixedLensGroup.grid->addWidget(field(QStringLiteral("F/#"), m_fNumberSpin), 0, 1);
+    fixedLensGroup.grid->addWidget(field(localizedText("最小 WD", "Minimum WD"), m_minWdSpin), 1, 0);
+    fixedLensGroup.grid->addWidget(field(localizedText("畸变", "Distortion"), m_distortionSpin), 1, 1);
+    fixedLensGroup.grid->addWidget(field(localizedText("像面", "Image circle"), m_imageCircleSpin), 2, 0);
+    fixedLensGroup.grid->addWidget(field(localizedText("镜头 MP", "Lens MP"), m_lensMpSpin), 2, 1);
+
+    ParameterGroup telecentricLensGroup = makeGroup(
+        localizedText("远心镜头参数", "Telecentric Lens Parameters"),
+        localizedText("按倍率 PMAG 和标称 WD 校核远心 FOV、采样、DOF、远心度和安装距离。", "Check telecentric FOV, sampling, DOF, telecentricity, and WD from PMAG and nominal WD."));
+    m_telecentricLensGroup = telecentricLensGroup.frame;
     m_pmagSpin = makeSpin(0.001, 1000.0, 0.5, QStringLiteral("x"), 3);
     m_nominalWdSpin = makeSpin(0.0, 100000.0, 110.0, QStringLiteral(" mm"), 2);
     m_wdToleranceSpin = makeSpin(0.0, 10000.0, 5.0, QStringLiteral(" mm"), 2);
     m_dofSpin = makeSpin(0.0, 100000.0, 5.0, QStringLiteral(" mm"), 2);
     m_telecentricitySpin = makeSpin(0.0, 90.0, 0.1, QStringLiteral(" deg"), 3);
-    lensGroup.grid->addWidget(field(localizedText("模式", "Mode"), m_lensModeCombo), 0, 0);
-    lensGroup.grid->addWidget(field(localizedText("普通焦距", "Fixed focal length"), m_focalSpin), 0, 1);
-    lensGroup.grid->addWidget(field(QStringLiteral("F/#"), m_fNumberSpin), 1, 0);
-    lensGroup.grid->addWidget(field(localizedText("普通最小 WD", "Fixed-lens min WD"), m_minWdSpin), 1, 1);
-    lensGroup.grid->addWidget(field(localizedText("畸变", "Distortion"), m_distortionSpin), 2, 0);
-    lensGroup.grid->addWidget(field(localizedText("像面", "Image circle"), m_imageCircleSpin), 2, 1);
-    lensGroup.grid->addWidget(field(localizedText("镜头 MP", "Lens MP"), m_lensMpSpin), 3, 0);
-    lensGroup.grid->addWidget(field(QStringLiteral("PMAG"), m_pmagSpin), 3, 1);
-    lensGroup.grid->addWidget(field(localizedText("远心标称 WD", "Telecentric nominal WD"), m_nominalWdSpin), 4, 0);
-    lensGroup.grid->addWidget(field(localizedText("WD 容差", "WD tolerance"), m_wdToleranceSpin), 4, 1);
-    lensGroup.grid->addWidget(field(QStringLiteral("DOF"), m_dofSpin), 5, 0);
-    lensGroup.grid->addWidget(field(localizedText("远心度", "Telecentricity"), m_telecentricitySpin), 5, 1);
+    m_teleFNumberSpin = makeSpin(0.0, 1000.0, 8.0, QStringLiteral(" F"), 2);
+    m_teleDistortionSpin = makeSpin(0.0, 100.0, 0.05, QStringLiteral(" %"), 3);
+    m_teleImageCircleSpin = makeSpin(0.0, 1000.0, 11.0, QStringLiteral(" mm"), 2);
+    m_teleLensMpSpin = makeSpin(0.0, 1000.0, 5.0, QStringLiteral(" MP"), 2);
+    telecentricLensGroup.grid->addWidget(field(QStringLiteral("PMAG"), m_pmagSpin), 0, 0);
+    telecentricLensGroup.grid->addWidget(field(localizedText("标称 WD", "Nominal WD"), m_nominalWdSpin), 0, 1);
+    telecentricLensGroup.grid->addWidget(field(localizedText("WD 容差", "WD tolerance"), m_wdToleranceSpin), 1, 0);
+    telecentricLensGroup.grid->addWidget(field(QStringLiteral("DOF"), m_dofSpin), 1, 1);
+    telecentricLensGroup.grid->addWidget(field(localizedText("远心度", "Telecentricity"), m_telecentricitySpin), 2, 0);
+    telecentricLensGroup.grid->addWidget(field(QStringLiteral("F/#"), m_teleFNumberSpin), 2, 1);
+    telecentricLensGroup.grid->addWidget(field(localizedText("畸变", "Distortion"), m_teleDistortionSpin), 3, 0);
+    telecentricLensGroup.grid->addWidget(field(localizedText("像面/最大靶面", "Image circle / max sensor"), m_teleImageCircleSpin), 3, 1);
+    telecentricLensGroup.grid->addWidget(field(localizedText("镜头 MP", "Lens MP"), m_teleLensMpSpin), 4, 0);
 
     ParameterGroup lightGroup = makeGroup(
         localizedText("光源约束", "Lighting Constraints"),
@@ -203,7 +221,9 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
 
     inputLayout->addWidget(requestGroup.frame);
     inputLayout->addWidget(cameraGroup.frame);
-    inputLayout->addWidget(lensGroup.frame);
+    inputLayout->addWidget(lensModeGroup.frame);
+    inputLayout->addWidget(fixedLensGroup.frame);
+    inputLayout->addWidget(telecentricLensGroup.frame);
     inputLayout->addWidget(lightGroup.frame);
     inputLayout->addStretch();
     inputScroll->setWidget(inputPanel);
@@ -247,6 +267,9 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
 
     connect(calculateButton, &QPushButton::clicked, this, &PureCalculationPage::refresh);
     connect(resetButton, &QPushButton::clicked, this, &PureCalculationPage::resetDefaults);
+    connect(m_lensModeCombo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            this, [this]() { updateLensParameterVisibility(); });
+    updateLensParameterVisibility();
 }
 
 PureCalculationInput PureCalculationPage::input() const
@@ -288,18 +311,33 @@ PureCalculationInput PureCalculationPage::input() const
     lens.manufacturer = QStringLiteral("Manual");
     lens.lensType = input.telecentricMode ? LensType::ObjectTelecentric : LensType::FixedFocal;
     lens.lensMount = QStringLiteral("C");
-    lens.focalLengthMm = m_focalSpin->value();
-    lens.minWorkingDistanceMm = m_minWdSpin->value();
-    lens.distortionPercent = m_distortionSpin->value();
-    lens.imageCircleMm = m_imageCircleSpin->value();
-    lens.megapixelRating = m_lensMpSpin->value();
-    lens.pmag = m_pmagSpin->value();
-    lens.nominalWorkingDistanceMm = m_nominalWdSpin->value();
-    lens.workingDistanceToleranceMm = m_wdToleranceSpin->value();
-    lens.maxSensorDiagonalMm = m_imageCircleSpin->value();
-    lens.telecentricityDeg = m_telecentricitySpin->value();
-    lens.dofMm = m_dofSpin->value();
-    lens.fNumber = m_fNumberSpin->value();
+    if (input.telecentricMode) {
+        lens.focalLengthMm = 0.0;
+        lens.minWorkingDistanceMm = 0.0;
+        lens.distortionPercent = m_teleDistortionSpin->value();
+        lens.imageCircleMm = m_teleImageCircleSpin->value();
+        lens.megapixelRating = m_teleLensMpSpin->value();
+        lens.pmag = m_pmagSpin->value();
+        lens.nominalWorkingDistanceMm = m_nominalWdSpin->value();
+        lens.workingDistanceToleranceMm = m_wdToleranceSpin->value();
+        lens.maxSensorDiagonalMm = m_teleImageCircleSpin->value();
+        lens.telecentricityDeg = m_telecentricitySpin->value();
+        lens.dofMm = m_dofSpin->value();
+        lens.fNumber = m_teleFNumberSpin->value();
+    } else {
+        lens.focalLengthMm = m_focalSpin->value();
+        lens.minWorkingDistanceMm = m_minWdSpin->value();
+        lens.distortionPercent = m_distortionSpin->value();
+        lens.imageCircleMm = m_imageCircleSpin->value();
+        lens.megapixelRating = m_lensMpSpin->value();
+        lens.pmag = 0.0;
+        lens.nominalWorkingDistanceMm = 0.0;
+        lens.workingDistanceToleranceMm = 0.0;
+        lens.maxSensorDiagonalMm = 0.0;
+        lens.telecentricityDeg = 0.0;
+        lens.dofMm = 0.0;
+        lens.fNumber = m_fNumberSpin->value();
+    }
 
     LightSpec &light = input.light;
     light.model = QStringLiteral("ManualLight");
@@ -401,6 +439,15 @@ void PureCalculationPage::refresh()
     m_output->setHtml(html);
 }
 
+void PureCalculationPage::updateLensParameterVisibility()
+{
+    const bool telecentric = m_lensModeCombo && m_lensModeCombo->currentIndex() == 1;
+    if (m_fixedLensGroup)
+        m_fixedLensGroup->setVisible(!telecentric);
+    if (m_telecentricLensGroup)
+        m_telecentricLensGroup->setVisible(telecentric);
+}
+
 void PureCalculationPage::resetDefaults()
 {
     m_widthSpin->setValue(20.0);
@@ -433,9 +480,14 @@ void PureCalculationPage::resetDefaults()
     m_wdToleranceSpin->setValue(5.0);
     m_dofSpin->setValue(5.0);
     m_telecentricitySpin->setValue(0.1);
+    m_teleFNumberSpin->setValue(8.0);
+    m_teleDistortionSpin->setValue(0.05);
+    m_teleImageCircleSpin->setValue(11.0);
+    m_teleLensMpSpin->setValue(5.0);
     m_lightTypeCombo->setCurrentIndex(1);
     m_lightModeCombo->setCurrentIndex(0);
     m_lightWidthSpin->setValue(100.0);
     m_lightHeightSpin->setValue(100.0);
+    updateLensParameterVisibility();
     refresh();
 }

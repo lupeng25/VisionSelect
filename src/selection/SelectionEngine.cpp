@@ -87,6 +87,11 @@ int fixedFocalReserveCount(int limit)
         return 0;
     return qMin(3, qMax(1, limit / 5));
 }
+
+bool isNearNominalWorkingDistance(double requestWdMm, double nominalWdMm)
+{
+    return qAbs(requestWdMm - nominalWdMm) <= 0.5;
+}
 }
 
 #define ADD_DETAIL_REASON(reasonExpr) do { if (includeDetails) result->score.reasons.append(reasonExpr); } while (false)
@@ -187,6 +192,35 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
             candidates[replacementIndex] = fixedCandidate;
             ++fixedFocalCount;
         }
+
+        if (fixedFocalCount == 0) {
+            for (const PairCandidate &fixedCandidate : fixedFocalCandidates) {
+                if (containsPairCandidate(candidates, fixedCandidate))
+                    continue;
+
+                if (candidates.size() < limit) {
+                    candidates.append(fixedCandidate);
+                    ++fixedFocalCount;
+                    break;
+                }
+
+                int replacementIndex = -1;
+                for (int i = 0; i < candidates.size(); ++i) {
+                    if (candidates.at(i).hardConstraintsPassed)
+                        continue;
+                    if (!lenses.at(candidates.at(i).lensIndex).isTelecentric())
+                        continue;
+                    if (replacementIndex < 0 || betterPairCandidate(candidates.at(replacementIndex), candidates.at(i)))
+                        replacementIndex = i;
+                }
+                if (replacementIndex < 0)
+                    break;
+
+                candidates[replacementIndex] = fixedCandidate;
+                ++fixedFocalCount;
+                break;
+            }
+        }
         std::sort(candidates.begin(), candidates.end(), betterPairCandidate);
     }
 
@@ -223,7 +257,7 @@ double SelectionEngine::targetObjectPixelUm(const SelectionRequest &request)
     switch (request.detectionType) {
     case DetectionType::Measurement:
         featurePixels = 5.0;
-        toleranceFactor = 1.0;
+        toleranceFactor = 1.0 / 5.0;
         break;
     case DetectionType::Positioning:
         featurePixels = 4.0;
@@ -635,9 +669,9 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
 
     if (request.detectionType == DetectionType::Measurement && result->distortionErrorUm > request.measurementToleranceUm) {
         result->score.score -= 18.0;
-        ADD_DETAIL_RISK(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1 um，高于允许误差").arg(um(result->distortionErrorUm)));
+        ADD_DETAIL_RISK(QString::fromUtf8("按未标定 FOV 边缘粗估畸变误差约 %1 um，高于允许误差，需按厂商畸变曲线和标定板复核").arg(um(result->distortionErrorUm)));
     } else if (result->distortionErrorUm > 0.0) {
-        ADD_DETAIL_REASON(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1 um").arg(um(result->distortionErrorUm)));
+        ADD_DETAIL_REASON(QString::fromUtf8("按未标定 FOV 边缘粗估畸变误差约 %1 um，最终测量需标定复核").arg(um(result->distortionErrorUm)));
     }
 
     if (lens.megapixelRating > 0.0) {
@@ -651,7 +685,7 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
                 .arg(result->lensMegapixelUtilizationPercent, 0, 'f', 0));
         } else {
             result->score.score += 5.0;
-            ADD_DETAIL_REASON(QString::fromUtf8("镜头标称 MP 覆盖相机，利用率约 %1%")
+            ADD_DETAIL_REASON(QString::fromUtf8("镜头标称 MP 覆盖相机，利用率约 %1%，仍需按 MTF 曲线复核边缘对比度")
                 .arg(result->lensMegapixelUtilizationPercent, 0, 'f', 0));
         }
     } else {
@@ -665,7 +699,7 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
     }
 
     if (measurementNeedsTelecentric(request)) {
-        result->score.score -= 6.0;
+        result->score.score -= 24.0;
         ADD_DETAIL_RISK(QString::fromUtf8("\351\253\230\347\262\276\345\272\246\346\265\213\351\207\217\346\210\226\351\253\230\345\272\246\346\263\242\345\212\250\345\234\272\346\231\257\357\274\214\346\231\256\351\200\232\351\225\234\345\244\264\345\255\230\345\234\250\351\200\217\350\247\206\350\257\257\345\267\256"));
     } else {
         result->score.score += 10.0;
@@ -747,14 +781,26 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
             .arg(camera.lensMount, lens.lensMount));
     }
 
-    const double tolerance = lens.workingDistanceToleranceMm > 0.0 ? lens.workingDistanceToleranceMm : 5.0;
-    if (qAbs(request.workingDistanceMm - lens.nominalWorkingDistanceMm) <= tolerance) {
-        result->score.score += 12.0;
-        ADD_DETAIL_REASON(QString::fromUtf8("\345\267\245\344\275\234\350\267\235\347\246\273\346\216\245\350\277\221\350\277\234\345\277\203\351\225\234\345\244\264\346\240\207\347\247\260 WD"));
-    } else {
-        ADD_DETAIL_HARD_FAILURE( QString::fromUtf8("工作距离偏离远心镜头标称 WD"));
+    if (lens.nominalWorkingDistanceMm <= 0.0) {
+        ADD_DETAIL_HARD_FAILURE( QString::fromUtf8("远心镜头缺少标称 WD"));
         result->score.score -= 24.0;
-        ADD_DETAIL_RISK(QString::fromUtf8("\350\277\234\345\277\203\351\225\234\345\244\264\351\200\232\345\270\270\345\217\252\345\234\250\346\240\207\347\247\260 WD \351\231\204\350\277\221\345\267\245\344\275\234\357\274\214\345\275\223\345\211\215 WD \345\201\217\345\267\256\350\276\203\345\244\247"));
+        ADD_DETAIL_RISK(QString::fromUtf8("远心镜头必须按厂商标称工作距离安装，当前资料缺少 nominal WD"));
+    } else if (lens.workingDistanceToleranceMm > 0.0) {
+        if (qAbs(request.workingDistanceMm - lens.nominalWorkingDistanceMm) <= lens.workingDistanceToleranceMm) {
+            result->score.score += 12.0;
+            ADD_DETAIL_REASON(QString::fromUtf8("工作距离落在远心镜头标称 WD 容差内"));
+        } else {
+            ADD_DETAIL_HARD_FAILURE( QString::fromUtf8("工作距离偏离远心镜头标称 WD 容差"));
+            result->score.score -= 24.0;
+            ADD_DETAIL_RISK(QString::fromUtf8("远心镜头通常只在标称 WD/远心范围内工作，当前 WD 偏差超过资料容差"));
+        }
+    } else if (isNearNominalWorkingDistance(request.workingDistanceMm, lens.nominalWorkingDistanceMm)) {
+        result->score.score -= 4.0;
+        ADD_DETAIL_RISK(QString::fromUtf8("远心镜头缺少 WD 容差数据，仅按接近标称 WD 粗略保留，需查 datasheet 复核"));
+    } else {
+        ADD_DETAIL_HARD_FAILURE( QString::fromUtf8("工作距离偏离远心镜头标称 WD 且缺少 WD 容差"));
+        result->score.score -= 24.0;
+        ADD_DETAIL_RISK(QString::fromUtf8("远心镜头缺少 WD 容差数据，当前 WD 又不接近标称 WD，不能直接判定可安装"));
     }
 
     if (lens.megapixelRating > 0.0) {
@@ -764,7 +810,7 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
             ADD_DETAIL_RISK(QString::fromUtf8("镜头标称 MP 低于相机像素，需确认远心镜头分辨率/MTF"));
         } else {
             result->score.score += 5.0;
-            ADD_DETAIL_REASON(QString::fromUtf8("镜头标称 MP 覆盖相机，利用率约 %1%")
+            ADD_DETAIL_REASON(QString::fromUtf8("镜头标称 MP 覆盖相机，利用率约 %1%，仍需按 MTF 曲线复核边缘对比度")
                 .arg(result->lensMegapixelUtilizationPercent, 0, 'f', 0));
         }
     }
@@ -777,19 +823,24 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
         ADD_DETAIL_RISK(QString::fromUtf8("\347\233\270\346\234\272\345\203\217\345\205\203\345\260\217\344\272\216\351\225\234\345\244\264\346\216\250\350\215\220\346\234\200\345\260\217\345\203\217\345\205\203\357\274\214\351\234\200\347\241\256\350\256\244\351\225\234\345\244\264\345\210\206\350\276\250\347\216\207/MTF"));
     }
 
-    if (lens.dofMm > 0.0 && lens.dofMm >= request.heightVariationMm * 1.5) {
-        result->score.score += 10.0;
-        ADD_DETAIL_REASON(QString::fromUtf8("\350\277\234\345\277\203 DOF \350\246\206\347\233\226\351\253\230\345\272\246\346\263\242\345\212\250"));
-    } else if (request.heightVariationMm > 0.0) {
-        result->score.score -= 14.0;
-        ADD_DETAIL_RISK(QString::fromUtf8("\350\277\234\345\277\203 DOF \345\217\257\350\203\275\344\270\215\350\266\263\357\274\214\351\234\200\350\246\201\347\241\256\350\256\244\345\205\211\345\234\210\345\222\214\346\231\257\346\267\261"));
+    if (request.heightVariationMm > 0.0) {
+        if (lens.dofMm > 0.0 && lens.dofMm >= request.heightVariationMm * 1.5) {
+            result->score.score += 10.0;
+            ADD_DETAIL_REASON(QString::fromUtf8("远心 DOF 覆盖高度波动"));
+        } else if (lens.dofMm > 0.0) {
+            result->score.score -= 14.0;
+            ADD_DETAIL_RISK(QString::fromUtf8("远心 DOF 可能不足，需要确认光圈和景深"));
+        } else {
+            result->score.score -= 10.0;
+            ADD_DETAIL_RISK(QString::fromUtf8("远心镜头缺少 DOF 数据，无法确认是否覆盖高度波动"));
+        }
     }
 
     if (request.detectionType == DetectionType::Measurement && result->distortionErrorUm > request.measurementToleranceUm) {
         result->score.score -= 12.0;
-        ADD_DETAIL_RISK(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1 um，高于允许误差").arg(um(result->distortionErrorUm)));
+        ADD_DETAIL_RISK(QString::fromUtf8("按未标定 FOV 边缘粗估畸变误差约 %1 um，高于允许误差，需按厂商畸变曲线和标定板复核").arg(um(result->distortionErrorUm)));
     } else if (result->distortionErrorUm > 0.0) {
-        ADD_DETAIL_REASON(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1 um").arg(um(result->distortionErrorUm)));
+        ADD_DETAIL_REASON(QString::fromUtf8("按未标定 FOV 边缘粗估畸变误差约 %1 um，最终测量需标定复核").arg(um(result->distortionErrorUm)));
     }
 
     result->residualTelecentricErrorUm = request.heightVariationMm * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;

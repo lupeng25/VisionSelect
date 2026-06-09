@@ -8,6 +8,7 @@
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QFrame;
 class QSpinBox;
 class QTextEdit;
 
@@ -24,6 +25,8 @@ public slots:
     void resetDefaults();
 
 private:
+    void updateLensParameterVisibility();
+
     QDoubleSpinBox *m_widthSpin = nullptr;
     QDoubleSpinBox *m_heightSpin = nullptr;
     QDoubleSpinBox *m_marginSpin = nullptr;
@@ -43,12 +46,18 @@ private:
     QDoubleSpinBox *m_interfaceBandwidthSpin = nullptr;
     QComboBox *m_shutterCombo = nullptr;
     QComboBox *m_lensModeCombo = nullptr;
+    QFrame *m_fixedLensGroup = nullptr;
+    QFrame *m_telecentricLensGroup = nullptr;
     QDoubleSpinBox *m_focalSpin = nullptr;
     QDoubleSpinBox *m_fNumberSpin = nullptr;
     QDoubleSpinBox *m_minWdSpin = nullptr;
     QDoubleSpinBox *m_distortionSpin = nullptr;
     QDoubleSpinBox *m_imageCircleSpin = nullptr;
     QDoubleSpinBox *m_lensMpSpin = nullptr;
+    QDoubleSpinBox *m_teleFNumberSpin = nullptr;
+    QDoubleSpinBox *m_teleDistortionSpin = nullptr;
+    QDoubleSpinBox *m_teleImageCircleSpin = nullptr;
+    QDoubleSpinBox *m_teleLensMpSpin = nullptr;
     QDoubleSpinBox *m_pmagSpin = nullptr;
     QDoubleSpinBox *m_nominalWdSpin = nullptr;
     QDoubleSpinBox *m_wdToleranceSpin = nullptr;

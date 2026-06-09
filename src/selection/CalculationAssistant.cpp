@@ -233,17 +233,24 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
                     .arg(result.requirement.targetObjectPixelUm, 0, 'f', 2));
             }
 
-            const double tolerance = lens.workingDistanceToleranceMm > 0.0 ? lens.workingDistanceToleranceMm : 5.0;
-            if (lens.nominalWorkingDistanceMm > 0.0
-                && qAbs(input.request.workingDistanceMm - lens.nominalWorkingDistanceMm) > tolerance) {
-                result.risks.append(QString::fromUtf8("当前 WD 偏离远心镜头标称 WD，需确认安装距离"));
+            if (lens.nominalWorkingDistanceMm <= 0.0) {
+                result.risks.append(QString::fromUtf8("远心镜头缺少标称 WD，需查 datasheet 复核安装距离"));
+            } else if (lens.workingDistanceToleranceMm > 0.0) {
+                if (qAbs(input.request.workingDistanceMm - lens.nominalWorkingDistanceMm) > lens.workingDistanceToleranceMm)
+                    result.risks.append(QString::fromUtf8("当前 WD 超出远心镜头标称 WD 容差，需确认安装距离"));
+            } else if (qAbs(input.request.workingDistanceMm - lens.nominalWorkingDistanceMm) <= 0.5) {
+                result.risks.append(QString::fromUtf8("远心镜头缺少 WD 容差数据，仅按接近标称 WD 粗略保留，需查 datasheet 复核"));
+            } else {
+                result.risks.append(QString::fromUtf8("当前 WD 偏离远心镜头标称 WD，且镜头缺少 WD 容差数据"));
             }
 
             if (input.request.heightVariationMm > 0.0) {
                 if (lens.dofMm > 0.0 && lens.dofMm >= input.request.heightVariationMm * 1.5) {
                     result.reasons.append(QString::fromUtf8("远心 DOF 覆盖高度波动"));
-                } else {
+                } else if (lens.dofMm > 0.0) {
                     result.risks.append(QString::fromUtf8("远心 DOF 可能不足以覆盖高度波动"));
+                } else {
+                    result.risks.append(QString::fromUtf8("远心镜头缺少 DOF 数据，无法确认是否覆盖高度波动"));
                 }
             }
 
@@ -420,12 +427,13 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
             estimate.estimatedDofMm = lens.dofMm;
             estimate.distortionErrorUm = SelectionEngine::distortionErrorUm(lens, estimate.effectiveFovWidthMm, estimate.effectiveFovHeightMm);
             estimate.formulaSummary = QString::fromUtf8("FOV = SensorSize / PMAG\357\274\214ObjectPixel = PixelSize / PMAG");
-            const double tolerance = lens.workingDistanceToleranceMm > 0.0 ? lens.workingDistanceToleranceMm : 5.0;
-            estimate.workingDistanceOk = lens.nominalWorkingDistanceMm <= 0.0
-                || qAbs(request.workingDistanceMm - lens.nominalWorkingDistanceMm) <= tolerance;
+            const bool hasNominalWd = lens.nominalWorkingDistanceMm > 0.0;
+            const bool hasWdTolerance = lens.workingDistanceToleranceMm > 0.0;
+            estimate.workingDistanceOk = hasNominalWd
+                && hasWdTolerance
+                && qAbs(request.workingDistanceMm - lens.nominalWorkingDistanceMm) <= lens.workingDistanceToleranceMm;
             estimate.dofOk = request.heightVariationMm <= 0.0
-                || lens.dofMm <= 0.0
-                || lens.dofMm >= request.heightVariationMm * 1.5;
+                || (lens.dofMm > 0.0 && lens.dofMm >= request.heightVariationMm * 1.5);
             estimate.residualTelecentricErrorUm = request.heightVariationMm
                 * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
 
@@ -436,6 +444,15 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
 
             if (estimate.workingDistanceOk) {
                 estimate.score += 10.0;
+            } else if (!hasNominalWd) {
+                estimate.score -= 22.0;
+                estimate.risks.append(QString::fromUtf8("远心镜头缺少标称 WD，需查 datasheet 复核"));
+            } else if (!hasWdTolerance && qAbs(request.workingDistanceMm - lens.nominalWorkingDistanceMm) <= 0.5) {
+                estimate.score -= 6.0;
+                estimate.risks.append(QString::fromUtf8("远心镜头缺少 WD 容差数据，仅按接近标称 WD 粗略保留"));
+            } else if (!hasWdTolerance) {
+                estimate.score -= 22.0;
+                estimate.risks.append(QString::fromUtf8("当前 WD 偏离远心镜头标称 WD，且缺少 WD 容差数据"));
             } else {
                 estimate.score -= 22.0;
                 estimate.risks.append(QString::fromUtf8("\346\240\207\347\247\260 WD %1 \344\270\216\345\275\223\345\211\215\345\267\245\344\275\234\350\267\235\347\246\273\345\201\217\345\267\256\350\276\203\345\244\247")
@@ -444,6 +461,9 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
 
             if (estimate.dofOk) {
                 estimate.score += 8.0;
+            } else if (lens.dofMm <= 0.0 && request.heightVariationMm > 0.0) {
+                estimate.score -= 10.0;
+                estimate.risks.append(QString::fromUtf8("远心镜头缺少 DOF 数据，无法确认是否覆盖高度波动"));
             } else {
                 estimate.score -= 14.0;
                 estimate.risks.append(QString::fromUtf8("DOF \345\217\257\350\203\275\344\270\215\350\266\263\344\273\245\350\246\206\347\233\226\351\253\230\345\272\246\346\263\242\345\212\250"));
