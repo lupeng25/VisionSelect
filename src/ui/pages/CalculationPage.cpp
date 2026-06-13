@@ -125,6 +125,12 @@ void CalculationPage::setCameraEstimates(const QVector<CameraEstimate> &estimate
         QStringList verdict;
         verdict.append(estimate.meetsSampling ? localizedText("像素满足", "Sampling OK") : localizedText("像素不足", "Sampling low"));
         verdict.append(estimate.meetsFps ? localizedText("帧率满足", "FPS OK") : localizedText("帧率不足", "FPS low"));
+        if (estimate.interfaceCapacityMBps <= 0.0)
+            verdict.append(localizedText("带宽未知", "Bandwidth unknown"));
+        else if (!estimate.meetsBandwidth)
+            verdict.append(localizedText("带宽不足", "Bandwidth low"));
+        else if (estimate.bandwidthUtilizationPercent > 90.0)
+            verdict.append(localizedText("带宽接近上限", "Bandwidth tight"));
         if (estimate.globalShutterRecommended)
             verdict.append(localizedText("建议全局快门", "Global shutter recommended"));
 
@@ -138,7 +144,13 @@ void CalculationPage::setCameraEstimates(const QVector<CameraEstimate> &estimate
         m_cameraTable->setItem(row, 7, item(estimate.telecentricFeasible
             ? QStringLiteral("%1 - %2x").arg(estimate.telecentricPmagMin, 0, 'f', 3).arg(estimate.telecentricPmagMax, 0, 'f', 3)
             : localizedText("不建议", "Not recommended")));
-        m_cameraTable->setItem(row, 8, item(QStringLiteral("%1 MB/s").arg(estimate.bandwidthRequiredMBps, 0, 'f', 1)));
+        const QString bandwidthText = estimate.interfaceCapacityMBps > 0.0
+            ? QStringLiteral("%1 / %2 MB/s (%3%)")
+                .arg(estimate.bandwidthRequiredMBps, 0, 'f', 1)
+                .arg(estimate.interfaceCapacityMBps, 0, 'f', 1)
+                .arg(estimate.bandwidthUtilizationPercent, 0, 'f', 0)
+            : QStringLiteral("%1 MB/s").arg(estimate.bandwidthRequiredMBps, 0, 'f', 1);
+        m_cameraTable->setItem(row, 8, item(bandwidthText));
         m_cameraTable->setItem(row, 9, item(verdict.join(localizedText("；", "; "))));
     }
     m_cameraTable->setSortingEnabled(true);

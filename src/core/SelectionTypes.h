@@ -117,6 +117,7 @@ struct LightSpec {
     double activeHeightMm = 0.0;
     QString bestFor;
     QString typeLabel() const;
+    bool isDarkFieldLike() const;
 };
 
 struct CandidateScore {

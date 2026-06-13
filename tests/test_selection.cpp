@@ -39,6 +39,10 @@ private slots:
     void sampleOnlyLightCatalogIsUpgraded();
     void motionExposureAndStrobePreference();
     void dataThroughputAndInterfaceRisk();
+    void cameraEstimatePenalizesInsufficientBandwidth();
+    void globalShutterAliasesAreRecognized();
+    void lowAngleRingLightActsAsDarkField();
+    void directionalDefectLightCoverageUsesLongAxis();
     void hardConstraintsPreferCompatibleResults();
     void hardConstraintFallbackKeepsDiagnosticResult();
     void fixedLensDofAndDistortionRisk();
@@ -712,6 +716,168 @@ void SelectionEngineTest::dataThroughputAndInterfaceRisk()
     QVERIFY2(risks.contains(QStringLiteral("MP")), qPrintable(risks));
     QVERIFY(!results.first().hardConstraintsPassed);
     QVERIFY(results.first().hardFailures.join(QStringLiteral(";")).contains(QString::fromUtf8("接口带宽")));
+}
+
+void SelectionEngineTest::cameraEstimatePenalizesInsufficientBandwidth()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 20.0;
+    request.objectHeightMm = 15.0;
+    request.placementMarginMm = 1.0;
+    request.minFeatureUm = 300.0;
+    request.measurementToleranceUm = 100.0;
+    request.requiredFps = 200.0;
+    request.detectionType = DetectionType::Positioning;
+
+    CameraSpec constrained;
+    constrained.model = QStringLiteral("BANDWIDTH-LIMITED");
+    constrained.manufacturer = QStringLiteral("Test");
+    constrained.resolutionX = 4096;
+    constrained.resolutionY = 4096;
+    constrained.pixelSizeUm = 3.45;
+    constrained.colorMode = QStringLiteral("Mono");
+    constrained.shutterType = QStringLiteral("Global");
+    constrained.maxFps = 250.0;
+    constrained.interfaceType = QStringLiteral("GigE");
+    constrained.bandwidthMBps = 120.0;
+    constrained.bitDepth = 12.0;
+    constrained.lensMount = QStringLiteral("C");
+
+    CameraSpec balanced = constrained;
+    balanced.model = QStringLiteral("BALANCED");
+    balanced.resolutionX = 1280;
+    balanced.resolutionY = 1024;
+    balanced.pixelSizeUm = 4.8;
+    balanced.interfaceType = QStringLiteral("USB3");
+    balanced.bandwidthMBps = 380.0;
+    balanced.bitDepth = 8.0;
+
+    CameraSpec unknownInterface = balanced;
+    unknownInterface.model = QStringLiteral("UNKNOWN-BANDWIDTH");
+    unknownInterface.interfaceType = QStringLiteral("CustomBus");
+    unknownInterface.bandwidthMBps = 0.0;
+
+    const QVector<CameraCalculationEstimate> estimates =
+        CalculationAssistant::estimateCameras(request, {constrained, balanced, unknownInterface}, 3);
+    QCOMPARE(estimates.size(), 3);
+    QCOMPARE(estimates.first().camera.model, QStringLiteral("BALANCED"));
+    QVERIFY(estimates.first().meetsBandwidth);
+
+    bool sawLimited = false;
+    bool sawUnknown = false;
+    for (const CameraCalculationEstimate &estimate : estimates) {
+        if (estimate.camera.model == QStringLiteral("BANDWIDTH-LIMITED")) {
+            sawLimited = true;
+            QVERIFY(!estimate.meetsBandwidth);
+            QVERIFY(estimate.bandwidthUtilizationPercent > 100.0);
+        }
+        if (estimate.camera.model == QStringLiteral("UNKNOWN-BANDWIDTH")) {
+            sawUnknown = true;
+            QCOMPARE(estimate.interfaceCapacityMBps, 0.0);
+            QVERIFY(!estimate.meetsBandwidth);
+            QCOMPARE(estimate.bandwidthUtilizationPercent, 0.0);
+        }
+    }
+    QVERIFY(sawLimited);
+    QVERIFY(sawUnknown);
+}
+
+void SelectionEngineTest::globalShutterAliasesAreRecognized()
+{
+    CameraSpec camera;
+    camera.shutterType = QStringLiteral("Global Shutter");
+    QVERIFY(camera.isGlobalShutter());
+
+    camera.shutterType = QStringLiteral("global shutter CMOS");
+    QVERIFY(camera.isGlobalShutter());
+
+    camera.shutterType = QStringLiteral("GlobalResetRelease");
+    QVERIFY(!camera.isGlobalShutter());
+
+    camera.shutterType = QStringLiteral("Rolling/GlobalResetRelease");
+    QVERIFY(!camera.isGlobalShutter());
+}
+
+void SelectionEngineTest::lowAngleRingLightActsAsDarkField()
+{
+    QCOMPARE(lightTypeFromString(QStringLiteral("Low Angle Ring")), LightType::DarkField);
+    QCOMPARE(lightTypeFromString(QStringLiteral("Dark-field Ring")), LightType::DarkField);
+
+    LightSpec normal;
+    normal.model = QStringLiteral("RING");
+    normal.manufacturer = QStringLiteral("Test");
+    normal.lightType = LightType::Ring;
+    normal.mode = QStringLiteral("Strobe");
+    normal.activeWidthMm = 100.0;
+    normal.activeHeightMm = 100.0;
+    normal.bestFor = QString::fromUtf8("\350\247\222\345\272\246 45\302\260");
+    QVERIFY(!normal.isDarkFieldLike());
+
+    LightSpec lowAngle = normal;
+    lowAngle.model = QStringLiteral("LOW-ANGLE");
+    lowAngle.bestFor = QString::fromUtf8("\350\247\222\345\272\246 90\302\260");
+    QVERIFY(lowAngle.isDarkFieldLike());
+
+    SelectionRequest request;
+    request.objectWidthMm = 40.0;
+    request.objectHeightMm = 30.0;
+    request.placementMarginMm = 2.0;
+    request.minFeatureUm = 100.0;
+    request.measurementToleranceUm = 50.0;
+    request.workingDistanceMm = 120.0;
+    request.detectionType = DetectionType::DefectInspection;
+    request.surfaceType = SurfaceType::ReflectiveMetal;
+    request.reflective = true;
+
+    CameraSpec camera;
+    camera.model = QStringLiteral("CAM");
+    camera.manufacturer = QStringLiteral("Test");
+    camera.resolutionX = 2448;
+    camera.resolutionY = 2048;
+    camera.pixelSizeUm = 3.45;
+    camera.colorMode = QStringLiteral("Mono");
+    camera.shutterType = QStringLiteral("Global");
+    camera.maxFps = 60.0;
+    camera.interfaceType = QStringLiteral("USB3");
+    camera.bandwidthMBps = 500.0;
+    camera.bitDepth = 8.0;
+    camera.lensMount = QStringLiteral("C");
+
+    LensSpec lens;
+    lens.model = QStringLiteral("LENS");
+    lens.manufacturer = QStringLiteral("Test");
+    lens.lensType = LensType::FixedFocal;
+    lens.lensMount = QStringLiteral("C");
+    lens.focalLengthMm = 12.0;
+    lens.minWorkingDistanceMm = 50.0;
+    lens.imageCircleMm = 12.0;
+    lens.fNumber = 4.0;
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, {camera}, {lens}, {normal, lowAngle}, 1);
+    QVERIFY(!results.isEmpty());
+    QCOMPARE(results.first().light.model, QStringLiteral("LOW-ANGLE"));
+}
+
+void SelectionEngineTest::directionalDefectLightCoverageUsesLongAxis()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 100.0;
+    request.objectHeightMm = 60.0;
+    request.placementMarginMm = 5.0;
+    request.detectionType = DetectionType::DefectInspection;
+
+    LightSpec bar;
+    bar.model = QStringLiteral("BAR");
+    bar.manufacturer = QStringLiteral("Test");
+    bar.lightType = LightType::Bar;
+    bar.activeWidthMm = 750.0;
+    bar.activeHeightMm = 16.0;
+
+    QVERIFY(SelectionEngine::lightCoverageMarginPercent(request, bar) > 0.0);
+
+    request.detectionType = DetectionType::Measurement;
+    QVERIFY(SelectionEngine::lightCoverageMarginPercent(request, bar) < 0.0);
 }
 
 void SelectionEngineTest::hardConstraintsPreferCompatibleResults()

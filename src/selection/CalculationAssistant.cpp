@@ -51,6 +51,19 @@ double cameraScore(const SelectionRequest &request,
     score += estimate.meetsFps ? 25.0 : -35.0;
     score += estimate.telecentricFeasible ? 10.0 : -4.0;
 
+    if (estimate.interfaceCapacityMBps <= 0.0) {
+        score -= 12.0;
+    } else if (!estimate.meetsBandwidth) {
+        const double overloadRatio = estimate.bandwidthRequiredMBps / qMax(1.0, estimate.interfaceCapacityMBps);
+        score -= qMin(90.0, 45.0 + overloadRatio * 12.0);
+    } else if (estimate.bandwidthUtilizationPercent > 90.0) {
+        score -= 14.0;
+    } else if (estimate.bandwidthUtilizationPercent > 70.0) {
+        score -= 4.0;
+    } else {
+        score += 12.0;
+    }
+
     if (request.preferMono)
         score += estimate.camera.isMono() ? 8.0 : -8.0;
     if (request.motionSpeedMmS > 20.0)
@@ -345,7 +358,10 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
     const bool reflective = input.request.reflective
         || input.request.surfaceType == SurfaceType::ReflectiveMetal
         || input.request.surfaceType == SurfaceType::GlassTransparent;
-    if (reflective && light.lightType != LightType::Coaxial && light.lightType != LightType::Dome)
+    if (reflective
+        && light.lightType != LightType::Coaxial
+        && light.lightType != LightType::Dome
+        && !(input.request.detectionType == DetectionType::DefectInspection && light.isDarkFieldLike()))
         result.risks.append(QString::fromUtf8("反光/玻璃表面建议优先同轴光或穹顶光"));
     if (input.telecentricMode && input.request.detectionType == DetectionType::Measurement
         && light.lightType != LightType::TelecentricBacklight)
@@ -382,6 +398,12 @@ QVector<CameraCalculationEstimate> CalculationAssistant::estimateCameras(const S
         estimate.telecentricFeasible = estimate.telecentricPmagMax > 0.0
             && estimate.telecentricPmagMin <= estimate.telecentricPmagMax;
         estimate.bandwidthRequiredMBps = SelectionEngine::bandwidthRequiredMBps(camera, qMax(1.0, request.requiredFps));
+        estimate.interfaceCapacityMBps = SelectionEngine::interfaceCapacityMBps(camera);
+        estimate.bandwidthUtilizationPercent = estimate.interfaceCapacityMBps > 0.0
+            ? estimate.bandwidthRequiredMBps / estimate.interfaceCapacityMBps * 100.0
+            : 0.0;
+        estimate.meetsBandwidth = estimate.interfaceCapacityMBps > 0.0
+            && estimate.bandwidthRequiredMBps <= estimate.interfaceCapacityMBps;
         estimate.score = cameraScore(request, requirement, estimate);
         estimates.append(estimate);
     }

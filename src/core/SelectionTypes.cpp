@@ -38,6 +38,51 @@ QString normalizedMount(const QString &value)
         return QStringLiteral("F");
     return v;
 }
+
+double firstNumberAfter(const QString &value, int startIndex)
+{
+    QString number;
+    bool seenDigit = false;
+    for (int i = qMax(0, startIndex); i < value.size(); ++i) {
+        const QChar ch = value.at(i);
+        if (ch.isDigit() || ch == QLatin1Char('.')) {
+            number.append(ch);
+            if (ch.isDigit())
+                seenDigit = true;
+        } else if (seenDigit) {
+            break;
+        }
+    }
+
+    bool ok = false;
+    const double parsed = number.toDouble(&ok);
+    return ok ? parsed : -1.0;
+}
+
+bool textSuggestsDarkFieldLighting(const QString &value)
+{
+    const QString v = value.trimmed().toLower();
+    if (v.isEmpty())
+        return false;
+
+    if (v.contains(QStringLiteral("dark"))
+        || v.contains(QStringLiteral("low angle"))
+        || v.contains(QStringLiteral("low-angle"))
+        || v.contains(QStringLiteral("lowangle"))
+        || v.contains(QString::fromUtf8("\346\232\227\345\234\272"))
+        || v.contains(QString::fromUtf8("\344\275\216\350\247\222"))) {
+        return true;
+    }
+
+    int angleIndex = v.indexOf(QStringLiteral("angle"));
+    int numberStart = angleIndex >= 0 ? angleIndex + QStringLiteral("angle").size() : -1;
+    if (angleIndex < 0) {
+        const QString angleWord = QString::fromUtf8("\350\247\222\345\272\246");
+        angleIndex = value.indexOf(angleWord);
+        numberStart = angleIndex >= 0 ? angleIndex + angleWord.size() : -1;
+    }
+    return numberStart >= 0 && firstNumberAfter(value, numberStart) >= 75.0;
+}
 }
 
 double CameraSpec::sensorWidthMm() const
@@ -62,13 +107,24 @@ double CameraSpec::megapixels() const
 
 bool CameraSpec::isMono() const
 {
-    return colorMode.compare(QStringLiteral("Mono"), Qt::CaseInsensitive) == 0
-        || colorMode.contains(QString::fromUtf8("\351\273\221\347\231\275"), Qt::CaseInsensitive);
+    const QString v = colorMode.trimmed().toLower();
+    return v == QStringLiteral("mono")
+        || v.contains(QStringLiteral("mono"))
+        || v.contains(QStringLiteral("monochrome"))
+        || v.contains(QStringLiteral("black and white"))
+        || v.contains(QStringLiteral("black/white"))
+        || colorMode.contains(QString::fromUtf8("\351\273\221\347\231\275"), Qt::CaseInsensitive)
+        || colorMode.contains(QString::fromUtf8("\345\215\225\350\211\262"), Qt::CaseInsensitive);
 }
 
 bool CameraSpec::isGlobalShutter() const
 {
-    return shutterType.compare(QStringLiteral("Global"), Qt::CaseInsensitive) == 0
+    const QString v = shutterType.trimmed().toLower();
+    if (v.contains(QStringLiteral("rolling")))
+        return false;
+    return v == QStringLiteral("global")
+        || v.contains(QStringLiteral("global shutter"))
+        || v.contains(QStringLiteral("globalshutter"))
         || shutterType.contains(QString::fromUtf8("\345\205\250\345\261\200"), Qt::CaseInsensitive);
 }
 
@@ -85,6 +141,16 @@ QString LensSpec::typeLabel() const
 QString LightSpec::typeLabel() const
 {
     return lightTypeLabel(lightType);
+}
+
+bool LightSpec::isDarkFieldLike() const
+{
+    if (lightType == LightType::DarkField)
+        return true;
+    if (lightType != LightType::Ring && lightType != LightType::Bar)
+        return false;
+    return textSuggestsDarkFieldLighting(model)
+        || textSuggestsDarkFieldLighting(bestFor);
 }
 
 bool SelectionResult::isTelecentric() const
@@ -219,6 +285,7 @@ LensType lensTypeFromString(const QString &value)
 LightType lightTypeFromString(const QString &value)
 {
     const QString v = value.trimmed().toLower();
+    if (textSuggestsDarkFieldLighting(value)) return LightType::DarkField;
     if (v.contains(QStringLiteral("telecentric"))) return LightType::TelecentricBacklight;
     if (v.contains(QStringLiteral("back"))) return LightType::Backlight;
     if (v.contains(QStringLiteral("coax"))) return LightType::Coaxial;

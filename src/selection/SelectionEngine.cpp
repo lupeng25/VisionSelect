@@ -368,6 +368,15 @@ double SelectionEngine::lightCoverageMarginPercent(const SelectionRequest &reque
     const double requiredH = requiredFovHeight(request);
     if (requiredW <= 0.0 || requiredH <= 0.0 || light.activeWidthMm <= 0.0 || light.activeHeightMm <= 0.0)
         return -100.0;
+
+    const bool directionalDefectLight = request.detectionType == DetectionType::DefectInspection
+        && (light.lightType == LightType::Bar || light.isDarkFieldLike());
+    if (directionalDefectLight) {
+        const double requiredLongSide = qMax(requiredW, requiredH);
+        const double activeLongSide = qMax(light.activeWidthMm, light.activeHeightMm);
+        return (activeLongSide / requiredLongSide - 1.0) * 100.0;
+    }
+
     return (qMin(light.activeWidthMm / requiredW, light.activeHeightMm / requiredH) - 1.0) * 100.0;
 }
 
@@ -447,6 +456,7 @@ double SelectionEngine::scoreLight(const SelectionRequest &request,
     const bool reflective = request.reflective
         || request.surfaceType == SurfaceType::ReflectiveMetal
         || request.surfaceType == SurfaceType::GlassTransparent;
+    const bool darkFieldLike = light.isDarkFieldLike();
 
     if (lens.isTelecentric() && light.lightType == LightType::TelecentricBacklight) {
         score += 16.0;
@@ -470,7 +480,7 @@ double SelectionEngine::scoreLight(const SelectionRequest &request,
             reasons->append(QString::fromUtf8("\345\260\272\345\257\270/\350\276\271\347\274\230\346\265\213\351\207\217\344\274\230\345\205\210\350\203\214\345\205\211\345\275\242\346\210\220\347\250\263\345\256\232\350\275\256\345\273\223"));
     }
     if (request.detectionType == DetectionType::DefectInspection
-        && (light.lightType == LightType::Bar || light.lightType == LightType::DarkField)) {
+        && (light.lightType == LightType::Bar || darkFieldLike)) {
         score += 10.0;
         if (reasons)
             reasons->append(QString::fromUtf8("\344\275\216\350\247\222\345\272\246\346\235\241\345\275\242/\346\232\227\345\234\272\345\205\211\351\200\202\345\220\210\345\210\222\347\227\225\345\222\214\347\273\206\345\260\217\347\274\272\351\231\267"));
@@ -508,7 +518,8 @@ double SelectionEngine::scoreLight(const SelectionRequest &request,
     if (reflective
         && light.lightType != LightType::Coaxial
         && light.lightType != LightType::Dome
-        && light.lightType != LightType::TelecentricBacklight) {
+        && light.lightType != LightType::TelecentricBacklight
+        && !(request.detectionType == DetectionType::DefectInspection && darkFieldLike)) {
         score -= 6.0;
         if (reasons)
             reasons->append(QString::fromUtf8("反光/透明表面使用当前光型可能需要额外控反光验证"));

@@ -1028,6 +1028,8 @@ bool CatalogRepository::loadLightRows(const QVector<Row> &rows, const QString &s
         spec.activeWidthMm = number(row, QStringLiteral("active_width_mm"));
         spec.activeHeightMm = number(row, QStringLiteral("active_height_mm"));
         spec.bestFor = text(row, QStringLiteral("best_for"));
+        if (spec.lightType == LightType::Ring && spec.isDarkFieldLike())
+            spec.lightType = LightType::DarkField;
 
         if (!validateLight(spec, sourceName, errorMessage))
             return false;

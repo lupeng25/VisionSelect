@@ -30,6 +30,9 @@ struct CameraCalculationEstimate {
     double telecentricPmagMax = 0.0;
     bool telecentricFeasible = false;
     double bandwidthRequiredMBps = 0.0;
+    double interfaceCapacityMBps = 0.0;
+    double bandwidthUtilizationPercent = 0.0;
+    bool meetsBandwidth = false;
     double score = 0.0;
 };
 
