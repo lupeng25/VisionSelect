@@ -31,6 +31,10 @@ private slots:
     void pureCalculationFixedLens();
     void pureCalculationTelecentric();
     void telecentricMissingCatalogDataIsRisk();
+    void lensTypeParsingRecognizesTelecentricAliases();
+    void lensMountCompatibilityIsConservative();
+    void fixedFocalTargetUsesLimitingAxis();
+    void nonMeasurementRequirementsDoNotForceTelecentric();
     void catalogPersistenceRoundTrip();
     void sampleOnlyLightCatalogIsUpgraded();
     void motionExposureAndStrobePreference();
@@ -378,6 +382,101 @@ void SelectionEngineTest::telecentricMissingCatalogDataIsRisk()
     const QString estimateRisks = estimates.first().risks.join(QStringLiteral(";"));
     QVERIFY2(estimateRisks.contains(QStringLiteral("WD")), qPrintable(estimateRisks));
     QVERIFY2(estimateRisks.contains(QStringLiteral("DOF")), qPrintable(estimateRisks));
+}
+
+void SelectionEngineTest::lensTypeParsingRecognizesTelecentricAliases()
+{
+    QCOMPARE(lensTypeFromString(QStringLiteral("Telecentric")), LensType::ObjectTelecentric);
+    QCOMPARE(lensTypeFromString(QStringLiteral("Object-side telecentric")), LensType::ObjectTelecentric);
+    QCOMPARE(lensTypeFromString(QStringLiteral("Bi-telecentric")), LensType::BiTelecentric);
+    QCOMPARE(lensTypeFromString(QStringLiteral("Non-telecentric fixed focal")), LensType::FixedFocal);
+    QCOMPARE(lensTypeFromString(QString::fromUtf8("\350\277\234\345\277\203")), LensType::ObjectTelecentric);
+    QCOMPARE(lensTypeFromString(QString::fromUtf8("\345\217\214\350\277\234\345\277\203")), LensType::BiTelecentric);
+}
+
+void SelectionEngineTest::lensMountCompatibilityIsConservative()
+{
+    QVERIFY(mountsCompatible(QStringLiteral("C"), QStringLiteral("C")));
+    QVERIFY(mountsCompatible(QStringLiteral("C-mount"), QStringLiteral("C")));
+    QVERIFY(mountsCompatible(QStringLiteral("M72*0.75, flange back length 19.55 mm"), QStringLiteral("M72 x P0.75")));
+    QVERIFY(!mountsCompatible(QStringLiteral("M72"), QStringLiteral("M72 x P0.75")));
+    QVERIFY(!mountsCompatible(QStringLiteral("M72 x 1"), QStringLiteral("M72 x P0.75")));
+    QVERIFY(!mountsCompatible(QString(), QStringLiteral("C")));
+    QVERIFY(!mountsCompatible(QStringLiteral("C"), QString()));
+    QVERIFY(!mountsCompatible(QStringLiteral("None"), QStringLiteral("C")));
+    QVERIFY(!mountsCompatible(QStringLiteral("M42"), QStringLiteral("C")));
+}
+
+void SelectionEngineTest::fixedFocalTargetUsesLimitingAxis()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 20.0;
+    request.objectHeightMm = 80.0;
+    request.placementMarginMm = 0.0;
+    request.minFeatureUm = 500.0;
+    request.measurementToleranceUm = 500.0;
+    request.workingDistanceMm = 100.0;
+    request.heightVariationMm = 0.0;
+    request.requiredFps = 10.0;
+    request.detectionType = DetectionType::DefectInspection;
+    request.surfaceType = SurfaceType::Matte;
+    request.reflective = false;
+
+    CameraSpec camera;
+    camera.model = QStringLiteral("TALL-FOV-CAM");
+    camera.manufacturer = QStringLiteral("Test");
+    camera.resolutionX = 4000;
+    camera.resolutionY = 2000;
+    camera.pixelSizeUm = 5.0;
+    camera.colorMode = QStringLiteral("Mono");
+    camera.shutterType = QStringLiteral("Global");
+    camera.maxFps = 60.0;
+    camera.interfaceType = QStringLiteral("USB3");
+    camera.bandwidthMBps = 500.0;
+    camera.bitDepth = 8.0;
+    camera.lensMount = QStringLiteral("C");
+
+    const double expectedFocalLength = CalculationAssistant::estimatedFixedFocalLengthMm(request, camera);
+
+    LensSpec lens;
+    lens.model = QStringLiteral("LIMITING-AXIS-LENS");
+    lens.manufacturer = QStringLiteral("Test");
+    lens.lensType = LensType::FixedFocal;
+    lens.lensMount = QStringLiteral("C");
+    lens.focalLengthMm = expectedFocalLength;
+    lens.minWorkingDistanceMm = 20.0;
+    lens.imageCircleMm = 25.0;
+    lens.megapixelRating = 10.0;
+    lens.recommendedMinPixelUm = 5.0;
+    lens.fNumber = 4.0;
+
+    LightSpec light;
+    light.model = QStringLiteral("LIGHT");
+    light.manufacturer = QStringLiteral("Test");
+    light.lightType = LightType::Bar;
+    light.mode = QStringLiteral("Continuous");
+    light.activeWidthMm = 200.0;
+    light.activeHeightMm = 120.0;
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, {camera}, {lens}, {light}, 1);
+    QVERIFY(!results.isEmpty());
+    QVERIFY(results.first().hardConstraintsPassed);
+    QVERIFY(qAbs(results.first().estimatedFocalLengthMm - expectedFocalLength) < 0.001);
+}
+
+void SelectionEngineTest::nonMeasurementRequirementsDoNotForceTelecentric()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 10.0;
+    request.objectHeightMm = 10.0;
+    request.placementMarginMm = 1.0;
+    request.minFeatureUm = 5.0;
+    request.measurementToleranceUm = 10.0;
+    request.heightVariationMm = 5.0;
+    request.detectionType = DetectionType::DefectInspection;
+
+    QVERIFY(!CalculationAssistant::estimateRequirement(request).telecentricPreferred);
 }
 
 void SelectionEngineTest::catalogPersistenceRoundTrip()

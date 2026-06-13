@@ -107,7 +107,7 @@ void appendCommonLensJudgement(const SelectionRequest &request,
     if (estimate->mountOk) {
         estimate->score += 8.0;
     } else {
-        estimate->score -= 25.0;
+        estimate->score -= 60.0;
         estimate->risks.append(QString::fromUtf8("\347\233\270\346\234\272\346\216\245\345\217\243 %1 \344\270\216\351\225\234\345\244\264\346\216\245\345\217\243 %2 \344\270\215\345\214\271\351\205\215")
             .arg(camera.lensMount, estimate->lens.lensMount));
     }
@@ -567,8 +567,10 @@ double CalculationAssistant::estimatedFixedFocalLengthMm(const SelectionRequest 
 
 bool CalculationAssistant::telecentricPreferred(const SelectionRequest &request)
 {
-    return (request.detectionType == DetectionType::Measurement
-            && request.measurementToleranceUm > 0.0
+    if (request.detectionType != DetectionType::Measurement)
+        return false;
+
+    return (request.measurementToleranceUm > 0.0
             && request.measurementToleranceUm <= 20.0)
         || request.heightVariationMm >= 1.0
         || SelectionEngine::targetObjectPixelUm(request) <= 5.0;

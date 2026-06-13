@@ -92,6 +92,21 @@ bool isNearNominalWorkingDistance(double requestWdMm, double nominalWdMm)
 {
     return qAbs(requestWdMm - nominalWdMm) <= 0.5;
 }
+
+double estimatedFixedFocalLengthMm(const SelectionRequest &request, const CameraSpec &camera)
+{
+    const double fovW = SelectionEngine::requiredFovWidth(request);
+    const double fovH = SelectionEngine::requiredFovHeight(request);
+    const double sensorW = camera.sensorWidthMm();
+    const double sensorH = camera.sensorHeightMm();
+    if (fovW <= 0.0 || fovH <= 0.0 || sensorW <= 0.0 || sensorH <= 0.0)
+        return 0.0;
+
+    const bool widthLimited = (fovW / fovH) >= (sensorW / sensorH);
+    const double fov = widthLimited ? fovW : fovH;
+    const double sensor = widthLimited ? sensorW : sensorH;
+    return request.workingDistanceMm * sensor / (fov + sensor);
+}
 }
 
 #define ADD_DETAIL_REASON(reasonExpr) do { if (includeDetails) result->score.reasons.append(reasonExpr); } while (false)
@@ -596,8 +611,7 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
     result->effectiveFovWidthMm = fovW;
     result->effectiveFovHeightMm = fovH;
     result->magnification = camera.sensorWidthMm() / qMax(0.001, fovW);
-    result->estimatedFocalLengthMm = request.workingDistanceMm * camera.sensorWidthMm()
-        / (result->requiredFovWidthMm + camera.sensorWidthMm());
+    result->estimatedFocalLengthMm = estimatedFixedFocalLengthMm(request, camera);
     result->objectPixelSizeUm = qMax(fovW * 1000.0 / camera.resolutionX,
                                      fovH * 1000.0 / camera.resolutionY);
     result->estimatedDofMm = estimatedFixedLensDofMm(camera, lens, result->magnification);
@@ -877,8 +891,10 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
 
 bool SelectionEngine::measurementNeedsTelecentric(const SelectionRequest &request)
 {
-    return (request.detectionType == DetectionType::Measurement
-            && request.measurementToleranceUm > 0.0
+    if (request.detectionType != DetectionType::Measurement)
+        return false;
+
+    return (request.measurementToleranceUm > 0.0
             && request.measurementToleranceUm <= 20.0)
         || request.heightVariationMm >= 1.0
         || targetObjectPixelUm(request) <= 5.0;
