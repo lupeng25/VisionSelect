@@ -1,57 +1,25 @@
 #include "ui/pages/CatalogPage.h"
 
-#include "catalog/CatalogRepository.h"
 #include "ui/UiHelpers.h"
 
+#include <QAbstractTableModel>
 #include <QComboBox>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QSpinBox>
 #include <QStringList>
 #include <QTabWidget>
-#include <QTableWidget>
-#include <QTableWidgetItem>
+#include <QTableView>
+#include <QTimer>
 #include <QVBoxLayout>
-#include <QtGlobal>
 
 using namespace UiHelpers;
 
 namespace {
-QString catalogKey(const QString &manufacturer, const QString &model)
-{
-    return manufacturer.trimmed() + QLatin1Char('\n') + model.trimmed();
-}
-
-QString selectedCatalogKey(const QTableWidget *table)
-{
-    if (!table || table->currentRow() < 0)
-        return QString();
-    const QTableWidgetItem *manufacturer = table->item(table->currentRow(), 1);
-    const QTableWidgetItem *model = table->item(table->currentRow(), 0);
-    if (!manufacturer || !model)
-        return QString();
-    return catalogKey(manufacturer->text(), model->text());
-}
-
-void selectCatalogRow(QTableWidget *table, const QString &key, int fallbackRow)
-{
-    if (!table || table->rowCount() <= 0)
-        return;
-    if (!key.isEmpty()) {
-        for (int row = 0; row < table->rowCount(); ++row) {
-            const QTableWidgetItem *manufacturer = table->item(row, 1);
-            const QTableWidgetItem *model = table->item(row, 0);
-            if (manufacturer && model && catalogKey(manufacturer->text(), model->text()) == key) {
-                table->selectRow(row);
-                return;
-            }
-        }
-    }
-    table->selectRow(qBound(0, fallbackRow, table->rowCount() - 1));
-}
-
 QString allManufacturersText()
 {
     return localizedText("全部厂家", "All Manufacturers");
@@ -77,7 +45,7 @@ QString allModesText()
     return localizedText("全部模式", "All Modes");
 }
 
-void fillComboPreservingText(QComboBox *combo, const QString &allText, const QStringList &values)
+void fillComboPreservingText(QComboBox *combo, const QString &allText, QStringList values)
 {
     if (!combo)
         return;
@@ -85,10 +53,9 @@ void fillComboPreservingText(QComboBox *combo, const QString &allText, const QSt
     QSignalBlocker blocker(combo);
     combo->clear();
     combo->addItem(allText);
-    QStringList sorted = values;
-    sorted.removeDuplicates();
-    sorted.sort(Qt::CaseInsensitive);
-    for (const QString &value : sorted) {
+    values.removeDuplicates();
+    values.sort(Qt::CaseInsensitive);
+    for (const QString &value : values) {
         if (!value.trimmed().isEmpty())
             combo->addItem(value);
     }
@@ -96,31 +63,226 @@ void fillComboPreservingText(QComboBox *combo, const QString &allText, const QSt
     combo->setCurrentIndex(index >= 0 ? index : 0);
 }
 
-bool textMatches(const QString &needle, const QStringList &fields)
+void setupTableView(QTableView *view)
 {
-    if (needle.trimmed().isEmpty())
-        return true;
-    const QString lowered = needle.trimmed().toLower();
-    for (const QString &field : fields) {
-        if (field.toLower().contains(lowered))
-            return true;
-    }
-    return false;
+    view->setAlternatingRowColors(true);
+    view->setSelectionBehavior(QAbstractItemView::SelectRows);
+    view->setSelectionMode(QAbstractItemView::SingleSelection);
+    view->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    view->setSortingEnabled(false);
+    view->verticalHeader()->setVisible(false);
+    view->verticalHeader()->setDefaultSectionSize(34);
+    view->horizontalHeader()->setStretchLastSection(true);
+    view->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    view->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    view->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    view->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    view->setTextElideMode(Qt::ElideRight);
+    view->setWordWrap(false);
 }
 
-QVector<int> visibleCatalogIndexes(const QTableWidget *table)
+QString pageText(int total, int offset, int shown)
 {
-    QVector<int> indexes;
-    if (!table)
-        return indexes;
-    for (int row = 0; row < table->rowCount(); ++row) {
-        const int index = rowSourceIndex(table, row);
-        if (index >= 0)
-            indexes.append(index);
+    if (total <= 0)
+        return localizedText("共 0 条", "0 items");
+    const int first = offset + 1;
+    const int last = qMin(total, offset + shown);
+    return localizedText("共 %1 条，当前 %2-%3 条", "%1 items, showing %2-%3")
+        .arg(total)
+        .arg(first)
+        .arg(last);
+}
+
+int totalPages(int total, int pageSize)
+{
+    return qMax(1, (qMax(0, total) + pageSize - 1) / pageSize);
+}
+
+void setupPageSpin(QSpinBox *spin)
+{
+    spin->setKeyboardTracking(false);
+    spin->setMinimum(1);
+    spin->setMaximum(1);
+    spin->setFixedWidth(120);
+}
+
+void updatePageSpin(QSpinBox *spin, int total, int offset, int pageSize)
+{
+    if (!spin)
+        return;
+    const int pages = totalPages(total, pageSize);
+    const int current = qBound(1, offset / pageSize + 1, pages);
+    QSignalBlocker blocker(spin);
+    spin->setRange(1, pages);
+    spin->setValue(current);
+    spin->setPrefix(QStringLiteral("# "));
+    spin->setSuffix(QStringLiteral(" / %1").arg(pages));
+}
+
+QPushButton *secondaryButton(const QString &text)
+{
+    QPushButton *button = new QPushButton(text);
+    button->setObjectName(QStringLiteral("SecondaryButton"));
+    return button;
+}
+}
+
+class CatalogTableModel : public QAbstractTableModel
+{
+public:
+    explicit CatalogTableModel(CatalogDomain domain, QObject *parent = nullptr)
+        : QAbstractTableModel(parent), m_domain(domain)
+    {
     }
-    return indexes;
-}
-}
+
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override
+    {
+        if (parent.isValid())
+            return 0;
+        return m_ids.size();
+    }
+
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override
+    {
+        if (parent.isValid())
+            return 0;
+        if (m_domain == CatalogDomain::Camera)
+            return 10;
+        if (m_domain == CatalogDomain::Lens)
+            return 12;
+        return 8;
+    }
+
+    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override
+    {
+        if (orientation != Qt::Horizontal || role != Qt::DisplayRole)
+            return QVariant();
+        if (m_domain == CatalogDomain::Camera) {
+            const QStringList headers = {localizedText("型号", "Model"), localizedText("厂家", "Manufacturer"), localizedText("分辨率", "Resolution"),
+                localizedText("像元", "Pixel"), localizedText("传感器", "Sensor"), localizedText("靶面", "Format"),
+                localizedText("快门", "Shutter"), QStringLiteral("fps"), localizedText("接口", "Interface"), localizedText("镜头口", "Lens Mount")};
+            return headers.value(section);
+        }
+        if (m_domain == CatalogDomain::Lens) {
+            const QStringList headers = {localizedText("型号", "Model"), localizedText("厂家", "Manufacturer"), localizedText("类型", "Type"),
+                localizedText("接口", "Mount"), localizedText("焦距", "Focal"), QStringLiteral("PMAG"), QStringLiteral("WD"),
+                localizedText("像圈", "Image Circle"), localizedText("远心度", "Telecentricity"), localizedText("畸变", "Distortion"),
+                QStringLiteral("DOF"), localizedText("同轴", "Coaxial")};
+            return headers.value(section);
+        }
+        const QStringList headers = {localizedText("型号", "Model"), localizedText("厂家", "Manufacturer"), localizedText("类型", "Type"),
+            localizedText("颜色", "Color"), localizedText("波长", "Wavelength"), localizedText("模式", "Mode"),
+            localizedText("有效面积", "Active Area"), localizedText("适用场景", "Best For")};
+        return headers.value(section);
+    }
+
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override
+    {
+        if (!index.isValid() || index.row() < 0 || index.row() >= m_ids.size())
+            return QVariant();
+        if (role == Qt::UserRole)
+            return m_ids.at(index.row());
+        if (role != Qt::DisplayRole && role != Qt::ToolTipRole)
+            return QVariant();
+        const QString text = cellText(index.row(), index.column());
+        return text;
+    }
+
+    Qt::ItemFlags flags(const QModelIndex &index) const override
+    {
+        return QAbstractTableModel::flags(index) & ~Qt::ItemIsEditable;
+    }
+
+    qint64 idAt(int row) const
+    {
+        return row >= 0 && row < m_ids.size() ? m_ids.at(row) : -1;
+    }
+
+    void setCameras(const QVector<qint64> &ids, const QVector<CameraSpec> &items)
+    {
+        beginResetModel();
+        m_ids = ids;
+        m_cameras = items;
+        m_lenses.clear();
+        m_lights.clear();
+        endResetModel();
+    }
+
+    void setLenses(const QVector<qint64> &ids, const QVector<LensSpec> &items)
+    {
+        beginResetModel();
+        m_ids = ids;
+        m_lenses = items;
+        m_cameras.clear();
+        m_lights.clear();
+        endResetModel();
+    }
+
+    void setLights(const QVector<qint64> &ids, const QVector<LightSpec> &items)
+    {
+        beginResetModel();
+        m_ids = ids;
+        m_lights = items;
+        m_cameras.clear();
+        m_lenses.clear();
+        endResetModel();
+    }
+
+private:
+    QString cellText(int row, int column) const
+    {
+        if (m_domain == CatalogDomain::Camera) {
+            const CameraSpec &c = m_cameras.at(row);
+            switch (column) {
+            case 0: return c.model;
+            case 1: return c.manufacturer;
+            case 2: return QStringLiteral("%1 x %2").arg(c.resolutionX).arg(c.resolutionY);
+            case 3: return QStringLiteral("%1 um").arg(c.pixelSizeUm, 0, 'f', 2);
+            case 4: return QStringLiteral("%1 x %2 mm").arg(c.sensorWidthMm(), 0, 'f', 2).arg(c.sensorHeightMm(), 0, 'f', 2);
+            case 5: return c.sensorFormat;
+            case 6: return c.shutterType;
+            case 7: return number(c.maxFps, 1);
+            case 8: return c.interfaceType;
+            case 9: return c.lensMount;
+            }
+        } else if (m_domain == CatalogDomain::Lens) {
+            const LensSpec &l = m_lenses.at(row);
+            switch (column) {
+            case 0: return l.model;
+            case 1: return l.manufacturer;
+            case 2: return l.typeLabel();
+            case 3: return l.lensMount;
+            case 4: return l.isTelecentric() ? QStringLiteral("-") : QStringLiteral("%1 mm").arg(l.focalLengthMm, 0, 'f', 1);
+            case 5: return l.isTelecentric() ? QStringLiteral("%1x").arg(l.pmag, 0, 'f', 3) : QStringLiteral("-");
+            case 6: return l.isTelecentric() ? QStringLiteral("%1 mm").arg(l.nominalWorkingDistanceMm, 0, 'f', 1) : QStringLiteral(">=%1 mm").arg(l.minWorkingDistanceMm, 0, 'f', 1);
+            case 7: return QStringLiteral("%1 mm").arg(l.imageCircleMm, 0, 'f', 1);
+            case 8: return l.isTelecentric() ? QStringLiteral("%1 deg").arg(l.telecentricityDeg, 0, 'f', 3) : QStringLiteral("-");
+            case 9: return QStringLiteral("%1%").arg(l.distortionPercent, 0, 'f', 3);
+            case 10: return l.isTelecentric() ? QStringLiteral("%1 mm").arg(l.dofMm, 0, 'f', 1) : QStringLiteral("-");
+            case 11: return boolLabel(l.coaxialIllumination);
+            }
+        } else {
+            const LightSpec &l = m_lights.at(row);
+            switch (column) {
+            case 0: return l.model;
+            case 1: return l.manufacturer;
+            case 2: return l.typeLabel();
+            case 3: return l.color;
+            case 4: return l.wavelengthNm > 0 ? QStringLiteral("%1 nm").arg(l.wavelengthNm) : localizedText("宽谱", "Broadband");
+            case 5: return l.mode;
+            case 6: return QStringLiteral("%1 x %2 mm").arg(l.activeWidthMm, 0, 'f', 0).arg(l.activeHeightMm, 0, 'f', 0);
+            case 7: return l.bestFor;
+            }
+        }
+        return QString();
+    }
+
+    CatalogDomain m_domain;
+    QVector<qint64> m_ids;
+    QVector<CameraSpec> m_cameras;
+    QVector<LensSpec> m_lenses;
+    QVector<LightSpec> m_lights;
+};
 
 CatalogPage::CatalogPage(QWidget *parent)
     : QWidget(parent)
@@ -131,7 +293,12 @@ CatalogPage::CatalogPage(QWidget *parent)
     layout->addWidget(pageHeader(localizedText("参数库", "Catalog"),
         localizedText("维护相机、镜头和光源目录；筛选、导入、导出均保持原有数据格式。", "Maintain camera, lens, and light catalogs while preserving existing import and export formats.")));
 
-    QTabWidget *tabs = new QTabWidget;
+    m_filterTimer = new QTimer(this);
+    m_filterTimer->setSingleShot(true);
+    m_filterTimer->setInterval(250);
+    connect(m_filterTimer, &QTimer::timeout, this, &CatalogPage::refreshCurrentPage);
+
+    m_tabs = new QTabWidget;
 
     QWidget *cameraPage = new QWidget;
     QVBoxLayout *cameraLayout = new QVBoxLayout(cameraPage);
@@ -142,8 +309,7 @@ CatalogPage::CatalogPage(QWidget *parent)
     m_cameraSearchEdit->setPlaceholderText(localizedText("搜索型号/厂家/接口", "Search model / manufacturer / interface"));
     m_cameraManufacturerFilter = new QComboBox;
     m_cameraInterfaceFilter = new QComboBox;
-    QPushButton *clearCameraFilterButton = new QPushButton(localizedText("清空筛选", "Clear Filters"));
-    clearCameraFilterButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *clearCameraFilterButton = secondaryButton(localizedText("清空筛选", "Clear Filters"));
     cameraFilters->addWidget(m_cameraSearchEdit, 2);
     cameraFilters->addWidget(m_cameraManufacturerFilter);
     cameraFilters->addWidget(m_cameraInterfaceFilter);
@@ -151,18 +317,12 @@ CatalogPage::CatalogPage(QWidget *parent)
     cameraLayout->addLayout(cameraFilters);
     QHBoxLayout *cameraActions = new QHBoxLayout;
     QPushButton *addCameraButton = new QPushButton(localizedText("新增相机", "Add Camera"));
-    QPushButton *editCameraButton = new QPushButton(localizedText("编辑", "Edit"));
-    QPushButton *removeCameraButton = new QPushButton(localizedText("删除", "Delete"));
-    QPushButton *importCameraButton = new QPushButton(localizedText("导入 CSV", "Import CSV"));
-    QPushButton *exportCameraButton = new QPushButton(localizedText("导出 CSV", "Export CSV"));
-    QPushButton *exportFilteredCameraButton = new QPushButton(localizedText("导出筛选", "Export Filtered"));
-    QPushButton *resetCameraButton = new QPushButton(localizedText("重置内置", "Reset Built-in"));
-    editCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
-    removeCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
-    importCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
-    exportCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
-    exportFilteredCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
-    resetCameraButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *editCameraButton = secondaryButton(localizedText("编辑", "Edit"));
+    QPushButton *removeCameraButton = secondaryButton(localizedText("删除", "Delete"));
+    QPushButton *importCameraButton = secondaryButton(localizedText("导入 CSV", "Import CSV"));
+    QPushButton *exportCameraButton = secondaryButton(localizedText("导出 CSV", "Export CSV"));
+    QPushButton *exportFilteredCameraButton = secondaryButton(localizedText("导出筛选", "Export Filtered"));
+    QPushButton *resetCameraButton = secondaryButton(localizedText("重置内置", "Reset Built-in"));
     cameraActions->addWidget(addCameraButton);
     cameraActions->addWidget(editCameraButton);
     cameraActions->addWidget(removeCameraButton);
@@ -172,10 +332,24 @@ CatalogPage::CatalogPage(QWidget *parent)
     cameraActions->addWidget(resetCameraButton);
     cameraActions->addStretch();
     cameraLayout->addLayout(cameraActions);
-    m_cameraTable = new QTableWidget;
-    setupTable(m_cameraTable);
+    m_cameraModel = new CatalogTableModel(CatalogDomain::Camera, this);
+    m_cameraTable = new QTableView;
+    setupTableView(m_cameraTable);
+    m_cameraTable->setModel(m_cameraModel);
     cameraLayout->addWidget(m_cameraTable, 1);
-    tabs->addTab(cameraPage, localizedText("相机", "Cameras"));
+    QHBoxLayout *cameraPager = new QHBoxLayout;
+    m_cameraPrevButton = secondaryButton(localizedText("上一页", "Previous"));
+    m_cameraNextButton = secondaryButton(localizedText("下一页", "Next"));
+    m_cameraPageSpin = new QSpinBox;
+    setupPageSpin(m_cameraPageSpin);
+    m_cameraPageLabel = new QLabel;
+    cameraPager->addWidget(m_cameraPageLabel);
+    cameraPager->addStretch();
+    cameraPager->addWidget(m_cameraPageSpin);
+    cameraPager->addWidget(m_cameraPrevButton);
+    cameraPager->addWidget(m_cameraNextButton);
+    cameraLayout->addLayout(cameraPager);
+    m_tabs->addTab(cameraPage, localizedText("相机", "Cameras"));
 
     QWidget *lensPage = new QWidget;
     QVBoxLayout *lensLayout = new QVBoxLayout(lensPage);
@@ -187,8 +361,7 @@ CatalogPage::CatalogPage(QWidget *parent)
     m_lensManufacturerFilter = new QComboBox;
     m_lensTypeFilter = new QComboBox;
     m_lensMountFilter = new QComboBox;
-    QPushButton *clearLensFilterButton = new QPushButton(localizedText("清空筛选", "Clear Filters"));
-    clearLensFilterButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *clearLensFilterButton = secondaryButton(localizedText("清空筛选", "Clear Filters"));
     lensFilters->addWidget(m_lensSearchEdit, 2);
     lensFilters->addWidget(m_lensManufacturerFilter);
     lensFilters->addWidget(m_lensTypeFilter);
@@ -197,18 +370,12 @@ CatalogPage::CatalogPage(QWidget *parent)
     lensLayout->addLayout(lensFilters);
     QHBoxLayout *lensActions = new QHBoxLayout;
     QPushButton *addLensButton = new QPushButton(localizedText("新增镜头", "Add Lens"));
-    QPushButton *editLensButton = new QPushButton(localizedText("编辑", "Edit"));
-    QPushButton *removeLensButton = new QPushButton(localizedText("删除", "Delete"));
-    QPushButton *importLensButton = new QPushButton(localizedText("导入 CSV", "Import CSV"));
-    QPushButton *exportLensButton = new QPushButton(localizedText("导出 CSV", "Export CSV"));
-    QPushButton *exportFilteredLensButton = new QPushButton(localizedText("导出筛选", "Export Filtered"));
-    QPushButton *resetLensButton = new QPushButton(localizedText("重置内置", "Reset Built-in"));
-    editLensButton->setObjectName(QStringLiteral("SecondaryButton"));
-    removeLensButton->setObjectName(QStringLiteral("SecondaryButton"));
-    importLensButton->setObjectName(QStringLiteral("SecondaryButton"));
-    exportLensButton->setObjectName(QStringLiteral("SecondaryButton"));
-    exportFilteredLensButton->setObjectName(QStringLiteral("SecondaryButton"));
-    resetLensButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *editLensButton = secondaryButton(localizedText("编辑", "Edit"));
+    QPushButton *removeLensButton = secondaryButton(localizedText("删除", "Delete"));
+    QPushButton *importLensButton = secondaryButton(localizedText("导入 CSV", "Import CSV"));
+    QPushButton *exportLensButton = secondaryButton(localizedText("导出 CSV", "Export CSV"));
+    QPushButton *exportFilteredLensButton = secondaryButton(localizedText("导出筛选", "Export Filtered"));
+    QPushButton *resetLensButton = secondaryButton(localizedText("重置内置", "Reset Built-in"));
     lensActions->addWidget(addLensButton);
     lensActions->addWidget(editLensButton);
     lensActions->addWidget(removeLensButton);
@@ -218,10 +385,24 @@ CatalogPage::CatalogPage(QWidget *parent)
     lensActions->addWidget(resetLensButton);
     lensActions->addStretch();
     lensLayout->addLayout(lensActions);
-    m_lensTable = new QTableWidget;
-    setupTable(m_lensTable);
+    m_lensModel = new CatalogTableModel(CatalogDomain::Lens, this);
+    m_lensTable = new QTableView;
+    setupTableView(m_lensTable);
+    m_lensTable->setModel(m_lensModel);
     lensLayout->addWidget(m_lensTable, 1);
-    tabs->addTab(lensPage, localizedText("镜头", "Lenses"));
+    QHBoxLayout *lensPager = new QHBoxLayout;
+    m_lensPrevButton = secondaryButton(localizedText("上一页", "Previous"));
+    m_lensNextButton = secondaryButton(localizedText("下一页", "Next"));
+    m_lensPageSpin = new QSpinBox;
+    setupPageSpin(m_lensPageSpin);
+    m_lensPageLabel = new QLabel;
+    lensPager->addWidget(m_lensPageLabel);
+    lensPager->addStretch();
+    lensPager->addWidget(m_lensPageSpin);
+    lensPager->addWidget(m_lensPrevButton);
+    lensPager->addWidget(m_lensNextButton);
+    lensLayout->addLayout(lensPager);
+    m_tabs->addTab(lensPage, localizedText("镜头", "Lenses"));
 
     QWidget *lightPage = new QWidget;
     QVBoxLayout *lightLayout = new QVBoxLayout(lightPage);
@@ -233,8 +414,7 @@ CatalogPage::CatalogPage(QWidget *parent)
     m_lightManufacturerFilter = new QComboBox;
     m_lightTypeFilter = new QComboBox;
     m_lightModeFilter = new QComboBox;
-    QPushButton *clearLightFilterButton = new QPushButton(localizedText("清空筛选", "Clear Filters"));
-    clearLightFilterButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *clearLightFilterButton = secondaryButton(localizedText("清空筛选", "Clear Filters"));
     lightFilters->addWidget(m_lightSearchEdit, 2);
     lightFilters->addWidget(m_lightManufacturerFilter);
     lightFilters->addWidget(m_lightTypeFilter);
@@ -243,18 +423,12 @@ CatalogPage::CatalogPage(QWidget *parent)
     lightLayout->addLayout(lightFilters);
     QHBoxLayout *lightActions = new QHBoxLayout;
     QPushButton *addLightButton = new QPushButton(localizedText("新增光源", "Add Light"));
-    QPushButton *editLightButton = new QPushButton(localizedText("编辑", "Edit"));
-    QPushButton *removeLightButton = new QPushButton(localizedText("删除", "Delete"));
-    QPushButton *importLightButton = new QPushButton(localizedText("导入 CSV", "Import CSV"));
-    QPushButton *exportLightButton = new QPushButton(localizedText("导出 CSV", "Export CSV"));
-    QPushButton *exportFilteredLightButton = new QPushButton(localizedText("导出筛选", "Export Filtered"));
-    QPushButton *resetLightButton = new QPushButton(localizedText("重置内置", "Reset Built-in"));
-    editLightButton->setObjectName(QStringLiteral("SecondaryButton"));
-    removeLightButton->setObjectName(QStringLiteral("SecondaryButton"));
-    importLightButton->setObjectName(QStringLiteral("SecondaryButton"));
-    exportLightButton->setObjectName(QStringLiteral("SecondaryButton"));
-    exportFilteredLightButton->setObjectName(QStringLiteral("SecondaryButton"));
-    resetLightButton->setObjectName(QStringLiteral("SecondaryButton"));
+    QPushButton *editLightButton = secondaryButton(localizedText("编辑", "Edit"));
+    QPushButton *removeLightButton = secondaryButton(localizedText("删除", "Delete"));
+    QPushButton *importLightButton = secondaryButton(localizedText("导入 CSV", "Import CSV"));
+    QPushButton *exportLightButton = secondaryButton(localizedText("导出 CSV", "Export CSV"));
+    QPushButton *exportFilteredLightButton = secondaryButton(localizedText("导出筛选", "Export Filtered"));
+    QPushButton *resetLightButton = secondaryButton(localizedText("重置内置", "Reset Built-in"));
     lightActions->addWidget(addLightButton);
     lightActions->addWidget(editLightButton);
     lightActions->addWidget(removeLightButton);
@@ -264,15 +438,68 @@ CatalogPage::CatalogPage(QWidget *parent)
     lightActions->addWidget(resetLightButton);
     lightActions->addStretch();
     lightLayout->addLayout(lightActions);
-    m_lightTable = new QTableWidget;
-    setupTable(m_lightTable);
+    m_lightModel = new CatalogTableModel(CatalogDomain::Light, this);
+    m_lightTable = new QTableView;
+    setupTableView(m_lightTable);
+    m_lightTable->setModel(m_lightModel);
     lightLayout->addWidget(m_lightTable, 1);
-    tabs->addTab(lightPage, localizedText("光源", "Lights"));
+    QHBoxLayout *lightPager = new QHBoxLayout;
+    m_lightPrevButton = secondaryButton(localizedText("上一页", "Previous"));
+    m_lightNextButton = secondaryButton(localizedText("下一页", "Next"));
+    m_lightPageSpin = new QSpinBox;
+    setupPageSpin(m_lightPageSpin);
+    m_lightPageLabel = new QLabel;
+    lightPager->addWidget(m_lightPageLabel);
+    lightPager->addStretch();
+    lightPager->addWidget(m_lightPageSpin);
+    lightPager->addWidget(m_lightPrevButton);
+    lightPager->addWidget(m_lightNextButton);
+    lightLayout->addLayout(lightPager);
+    m_tabs->addTab(lightPage, localizedText("光源", "Lights"));
 
-    connect(m_cameraSearchEdit, &QLineEdit::textChanged, this, &CatalogPage::refreshCameraTable);
-    connect(m_cameraManufacturerFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CatalogPage::refreshCameraTable);
-    connect(m_cameraInterfaceFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CatalogPage::refreshCameraTable);
+    connect(m_tabs, &QTabWidget::currentChanged, this, [this]() { refreshCurrentPage(); });
+    connect(m_cameraSearchEdit, &QLineEdit::textChanged, this, [this]() { m_cameraOffset = 0; scheduleCurrentRefresh(); });
+    connect(m_lensSearchEdit, &QLineEdit::textChanged, this, [this]() { m_lensOffset = 0; scheduleCurrentRefresh(); });
+    connect(m_lightSearchEdit, &QLineEdit::textChanged, this, [this]() { m_lightOffset = 0; scheduleCurrentRefresh(); });
+    connect(m_cameraManufacturerFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { m_cameraOffset = 0; refreshCameraTable(); });
+    connect(m_cameraInterfaceFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { m_cameraOffset = 0; refreshCameraTable(); });
+    connect(m_cameraPageSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int page) {
+        const int offset = (qMax(1, page) - 1) * kPageSize;
+        if (offset == m_cameraOffset)
+            return;
+        m_cameraOffset = offset;
+        refreshCameraTable();
+    });
+    connect(m_lensManufacturerFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { m_lensOffset = 0; refreshLensTable(); });
+    connect(m_lensTypeFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { m_lensOffset = 0; refreshLensTable(); });
+    connect(m_lensMountFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { m_lensOffset = 0; refreshLensTable(); });
+    connect(m_lensPageSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int page) {
+        const int offset = (qMax(1, page) - 1) * kPageSize;
+        if (offset == m_lensOffset)
+            return;
+        m_lensOffset = offset;
+        refreshLensTable();
+    });
+    connect(m_lightManufacturerFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { m_lightOffset = 0; refreshLightTable(); });
+    connect(m_lightTypeFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { m_lightOffset = 0; refreshLightTable(); });
+    connect(m_lightModeFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { m_lightOffset = 0; refreshLightTable(); });
+    connect(m_lightPageSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int page) {
+        const int offset = (qMax(1, page) - 1) * kPageSize;
+        if (offset == m_lightOffset)
+            return;
+        m_lightOffset = offset;
+        refreshLightTable();
+    });
     connect(clearCameraFilterButton, &QPushButton::clicked, this, &CatalogPage::clearCameraFilters);
+    connect(clearLensFilterButton, &QPushButton::clicked, this, &CatalogPage::clearLensFilters);
+    connect(clearLightFilterButton, &QPushButton::clicked, this, &CatalogPage::clearLightFilters);
+    connect(m_cameraPrevButton, &QPushButton::clicked, this, [this]() { m_cameraOffset = qMax(0, m_cameraOffset - kPageSize); refreshCameraTable(); });
+    connect(m_cameraNextButton, &QPushButton::clicked, this, [this]() { m_cameraOffset += kPageSize; refreshCameraTable(); });
+    connect(m_lensPrevButton, &QPushButton::clicked, this, [this]() { m_lensOffset = qMax(0, m_lensOffset - kPageSize); refreshLensTable(); });
+    connect(m_lensNextButton, &QPushButton::clicked, this, [this]() { m_lensOffset += kPageSize; refreshLensTable(); });
+    connect(m_lightPrevButton, &QPushButton::clicked, this, [this]() { m_lightOffset = qMax(0, m_lightOffset - kPageSize); refreshLightTable(); });
+    connect(m_lightNextButton, &QPushButton::clicked, this, [this]() { m_lightOffset += kPageSize; refreshLightTable(); });
+
     connect(addCameraButton, &QPushButton::clicked, this, &CatalogPage::cameraAddRequested);
     connect(editCameraButton, &QPushButton::clicked, this, &CatalogPage::cameraEditRequested);
     connect(removeCameraButton, &QPushButton::clicked, this, &CatalogPage::cameraRemoveRequested);
@@ -280,13 +507,8 @@ CatalogPage::CatalogPage(QWidget *parent)
     connect(exportCameraButton, &QPushButton::clicked, this, &CatalogPage::cameraExportRequested);
     connect(exportFilteredCameraButton, &QPushButton::clicked, this, &CatalogPage::cameraExportFilteredRequested);
     connect(resetCameraButton, &QPushButton::clicked, this, &CatalogPage::cameraResetRequested);
-    connect(m_cameraTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { emit cameraEditRequested(); });
+    connect(m_cameraTable, &QTableView::doubleClicked, this, [this](const QModelIndex &) { emit cameraEditRequested(); });
 
-    connect(m_lensSearchEdit, &QLineEdit::textChanged, this, &CatalogPage::refreshLensTable);
-    connect(m_lensManufacturerFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CatalogPage::refreshLensTable);
-    connect(m_lensTypeFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CatalogPage::refreshLensTable);
-    connect(m_lensMountFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CatalogPage::refreshLensTable);
-    connect(clearLensFilterButton, &QPushButton::clicked, this, &CatalogPage::clearLensFilters);
     connect(addLensButton, &QPushButton::clicked, this, &CatalogPage::lensAddRequested);
     connect(editLensButton, &QPushButton::clicked, this, &CatalogPage::lensEditRequested);
     connect(removeLensButton, &QPushButton::clicked, this, &CatalogPage::lensRemoveRequested);
@@ -294,13 +516,8 @@ CatalogPage::CatalogPage(QWidget *parent)
     connect(exportLensButton, &QPushButton::clicked, this, &CatalogPage::lensExportRequested);
     connect(exportFilteredLensButton, &QPushButton::clicked, this, &CatalogPage::lensExportFilteredRequested);
     connect(resetLensButton, &QPushButton::clicked, this, &CatalogPage::lensResetRequested);
-    connect(m_lensTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { emit lensEditRequested(); });
+    connect(m_lensTable, &QTableView::doubleClicked, this, [this](const QModelIndex &) { emit lensEditRequested(); });
 
-    connect(m_lightSearchEdit, &QLineEdit::textChanged, this, &CatalogPage::refreshLightTable);
-    connect(m_lightManufacturerFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CatalogPage::refreshLightTable);
-    connect(m_lightTypeFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CatalogPage::refreshLightTable);
-    connect(m_lightModeFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &CatalogPage::refreshLightTable);
-    connect(clearLightFilterButton, &QPushButton::clicked, this, &CatalogPage::clearLightFilters);
     connect(addLightButton, &QPushButton::clicked, this, &CatalogPage::lightAddRequested);
     connect(editLightButton, &QPushButton::clicked, this, &CatalogPage::lightEditRequested);
     connect(removeLightButton, &QPushButton::clicked, this, &CatalogPage::lightRemoveRequested);
@@ -308,199 +525,265 @@ CatalogPage::CatalogPage(QWidget *parent)
     connect(exportLightButton, &QPushButton::clicked, this, &CatalogPage::lightExportRequested);
     connect(exportFilteredLightButton, &QPushButton::clicked, this, &CatalogPage::lightExportFilteredRequested);
     connect(resetLightButton, &QPushButton::clicked, this, &CatalogPage::lightResetRequested);
-    connect(m_lightTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) { emit lightEditRequested(); });
+    connect(m_lightTable, &QTableView::doubleClicked, this, [this](const QModelIndex &) { emit lightEditRequested(); });
 
-    layout->addWidget(tabs, 1);
+    layout->addWidget(m_tabs, 1);
+    updatePageLabel(CatalogDomain::Camera);
+    updatePageLabel(CatalogDomain::Lens);
+    updatePageLabel(CatalogDomain::Light);
 }
 
 void CatalogPage::setCatalog(const CatalogRepository *catalog)
 {
     m_catalog = catalog;
     refreshCatalogFilterOptions();
-    refreshCameraTable();
-    refreshLensTable();
-    refreshLightTable();
+    refreshCurrentPage();
+}
+
+void CatalogPage::refreshCurrentPage()
+{
+    if (!m_tabs)
+        return;
+    if (m_tabs->currentIndex() == 0)
+        refreshCameraTable();
+    else if (m_tabs->currentIndex() == 1)
+        refreshLensTable();
+    else
+        refreshLightTable();
+}
+
+void CatalogPage::scheduleCurrentRefresh()
+{
+    if (m_filterTimer)
+        m_filterTimer->start();
 }
 
 void CatalogPage::refreshCatalogFilterOptions()
 {
-    QStringList cameraManufacturers;
-    QStringList cameraInterfaces;
-    if (m_catalog) {
-        for (const CameraSpec &camera : m_catalog->cameras()) {
-            cameraManufacturers.append(camera.manufacturer);
-            cameraInterfaces.append(camera.interfaceType);
-        }
-    }
-    fillComboPreservingText(m_cameraManufacturerFilter, allManufacturersText(), cameraManufacturers);
-    fillComboPreservingText(m_cameraInterfaceFilter, allInterfacesText(), cameraInterfaces);
+    if (!m_catalog)
+        return;
+    fillComboPreservingText(m_cameraManufacturerFilter, allManufacturersText(), m_catalog->distinctValues(CatalogDomain::Camera, QStringLiteral("manufacturer")));
+    fillComboPreservingText(m_cameraInterfaceFilter, allInterfacesText(), m_catalog->distinctValues(CatalogDomain::Camera, QStringLiteral("interface")));
+    fillComboPreservingText(m_lensManufacturerFilter, allManufacturersText(), m_catalog->distinctValues(CatalogDomain::Lens, QStringLiteral("manufacturer")));
+    fillComboPreservingText(m_lensTypeFilter, allTypesText(), m_catalog->distinctValues(CatalogDomain::Lens, QStringLiteral("lens_type")));
+    fillComboPreservingText(m_lensMountFilter, allMountsText(), m_catalog->distinctValues(CatalogDomain::Lens, QStringLiteral("lens_mount")));
+    fillComboPreservingText(m_lightManufacturerFilter, allManufacturersText(), m_catalog->distinctValues(CatalogDomain::Light, QStringLiteral("manufacturer")));
+    fillComboPreservingText(m_lightTypeFilter, allTypesText(), m_catalog->distinctValues(CatalogDomain::Light, QStringLiteral("light_type")));
+    fillComboPreservingText(m_lightModeFilter, allModesText(), m_catalog->distinctValues(CatalogDomain::Light, QStringLiteral("mode")));
+}
 
-    QStringList lensManufacturers;
-    QStringList lensTypes;
-    QStringList lensMounts;
-    if (m_catalog) {
-        for (const LensSpec &lens : m_catalog->lenses()) {
-            lensManufacturers.append(lens.manufacturer);
-            lensTypes.append(lens.typeLabel());
-            lensMounts.append(lens.lensMount);
-        }
-    }
-    fillComboPreservingText(m_lensManufacturerFilter, allManufacturersText(), lensManufacturers);
-    fillComboPreservingText(m_lensTypeFilter, allTypesText(), lensTypes);
-    fillComboPreservingText(m_lensMountFilter, allMountsText(), lensMounts);
+CatalogQuery CatalogPage::currentCameraQuery() const
+{
+    CatalogQuery query;
+    query.search = m_cameraSearchEdit ? m_cameraSearchEdit->text() : QString();
+    query.manufacturer = m_cameraManufacturerFilter && m_cameraManufacturerFilter->currentIndex() > 0 ? m_cameraManufacturerFilter->currentText() : QString();
+    query.interfaceType = m_cameraInterfaceFilter && m_cameraInterfaceFilter->currentIndex() > 0 ? m_cameraInterfaceFilter->currentText() : QString();
+    query.offset = m_cameraOffset;
+    query.limit = kPageSize;
+    query.sort.field = QStringLiteral("model");
+    query.sort.ascending = true;
+    return query;
+}
 
-    QStringList lightManufacturers;
-    QStringList lightTypes;
-    QStringList lightModes;
-    if (m_catalog) {
-        for (const LightSpec &light : m_catalog->lights()) {
-            lightManufacturers.append(light.manufacturer);
-            lightTypes.append(light.typeLabel());
-            lightModes.append(light.mode);
-        }
-    }
-    fillComboPreservingText(m_lightManufacturerFilter, allManufacturersText(), lightManufacturers);
-    fillComboPreservingText(m_lightTypeFilter, allTypesText(), lightTypes);
-    fillComboPreservingText(m_lightModeFilter, allModesText(), lightModes);
+CatalogQuery CatalogPage::currentLensQuery() const
+{
+    CatalogQuery query;
+    query.search = m_lensSearchEdit ? m_lensSearchEdit->text() : QString();
+    query.manufacturer = m_lensManufacturerFilter && m_lensManufacturerFilter->currentIndex() > 0 ? m_lensManufacturerFilter->currentText() : QString();
+    query.type = m_lensTypeFilter && m_lensTypeFilter->currentIndex() > 0 ? m_lensTypeFilter->currentText() : QString();
+    query.lensMount = m_lensMountFilter && m_lensMountFilter->currentIndex() > 0 ? m_lensMountFilter->currentText() : QString();
+    query.offset = m_lensOffset;
+    query.limit = kPageSize;
+    query.sort.field = QStringLiteral("model");
+    query.sort.ascending = true;
+    return query;
+}
+
+CatalogQuery CatalogPage::currentLightQuery() const
+{
+    CatalogQuery query;
+    query.search = m_lightSearchEdit ? m_lightSearchEdit->text() : QString();
+    query.manufacturer = m_lightManufacturerFilter && m_lightManufacturerFilter->currentIndex() > 0 ? m_lightManufacturerFilter->currentText() : QString();
+    query.type = m_lightTypeFilter && m_lightTypeFilter->currentIndex() > 0 ? m_lightTypeFilter->currentText() : QString();
+    query.mode = m_lightModeFilter && m_lightModeFilter->currentIndex() > 0 ? m_lightModeFilter->currentText() : QString();
+    query.offset = m_lightOffset;
+    query.limit = kPageSize;
+    query.sort.field = QStringLiteral("model");
+    query.sort.ascending = true;
+    return query;
 }
 
 void CatalogPage::refreshCameraTable()
 {
-    if (!m_cameraTable)
+    if (!m_catalog || !m_cameraModel)
         return;
-    const QString previousKey = selectedCatalogKey(m_cameraTable);
-    const int previousRow = m_cameraTable->currentRow();
-    m_cameraTable->setSortingEnabled(false);
-    m_cameraTable->setColumnCount(10);
-    m_cameraTable->setHorizontalHeaderLabels({localizedText("型号", "Model"), localizedText("厂家", "Manufacturer"), localizedText("分辨率", "Resolution"), localizedText("像元", "Pixel"),
-        localizedText("传感器", "Sensor"), localizedText("靶面", "Format"), localizedText("快门", "Shutter"), QStringLiteral("fps"),
-        localizedText("接口", "Interface"), localizedText("镜头口", "Lens Mount")});
-    m_cameraTable->setRowCount(0);
-    const QString search = m_cameraSearchEdit ? m_cameraSearchEdit->text() : QString();
-    const QString manufacturer = m_cameraManufacturerFilter && m_cameraManufacturerFilter->currentIndex() > 0
-        ? m_cameraManufacturerFilter->currentText() : QString();
-    const QString interfaceType = m_cameraInterfaceFilter && m_cameraInterfaceFilter->currentIndex() > 0
-        ? m_cameraInterfaceFilter->currentText() : QString();
-    if (m_catalog) {
-        for (int i = 0; i < m_catalog->cameras().size(); ++i) {
-            const CameraSpec &c = m_catalog->cameras().at(i);
-            if (!manufacturer.isEmpty() && c.manufacturer != manufacturer)
-                continue;
-            if (!interfaceType.isEmpty() && c.interfaceType != interfaceType)
-                continue;
-            if (!textMatches(search, {c.model, c.manufacturer, c.interfaceType, c.lensMount, c.sensorFormat}))
-                continue;
-            const int row = m_cameraTable->rowCount();
-            m_cameraTable->insertRow(row);
-            m_cameraTable->setItem(row, 0, indexedItem(c.model, i));
-            m_cameraTable->setItem(row, 1, item(c.manufacturer));
-            m_cameraTable->setItem(row, 2, item(QStringLiteral("%1 x %2").arg(c.resolutionX).arg(c.resolutionY)));
-            m_cameraTable->setItem(row, 3, item(QStringLiteral("%1 um").arg(c.pixelSizeUm, 0, 'f', 2)));
-            m_cameraTable->setItem(row, 4, item(QStringLiteral("%1 x %2 mm").arg(c.sensorWidthMm(), 0, 'f', 2).arg(c.sensorHeightMm(), 0, 'f', 2)));
-            m_cameraTable->setItem(row, 5, item(c.sensorFormat));
-            m_cameraTable->setItem(row, 6, item(c.shutterType));
-            m_cameraTable->setItem(row, 7, item(number(c.maxFps, 1)));
-            m_cameraTable->setItem(row, 8, item(c.interfaceType));
-            m_cameraTable->setItem(row, 9, item(c.lensMount));
-        }
+    const CatalogPageResult<CameraSpec> page = m_catalog->queryCameras(currentCameraQuery());
+    m_cameraTotal = page.totalCount;
+    if (m_cameraOffset >= m_cameraTotal && m_cameraOffset > 0) {
+        m_cameraOffset = qMax(0, ((m_cameraTotal - 1) / kPageSize) * kPageSize);
+        refreshCameraTable();
+        return;
     }
-    m_cameraTable->setSortingEnabled(true);
-    selectCatalogRow(m_cameraTable, previousKey, previousRow);
+    m_cameraModel->setCameras(page.ids, page.items);
+    updatePageLabel(CatalogDomain::Camera);
+    if (!page.items.isEmpty())
+        m_cameraTable->selectRow(0);
 }
 
 void CatalogPage::refreshLensTable()
 {
-    if (!m_lensTable)
+    if (!m_catalog || !m_lensModel)
         return;
-    const QString previousKey = selectedCatalogKey(m_lensTable);
-    const int previousRow = m_lensTable->currentRow();
-    m_lensTable->setSortingEnabled(false);
-    m_lensTable->setColumnCount(12);
-    m_lensTable->setHorizontalHeaderLabels({localizedText("型号", "Model"), localizedText("厂家", "Manufacturer"), localizedText("类型", "Type"), localizedText("接口", "Mount"),
-        localizedText("焦距", "Focal"), QStringLiteral("PMAG"), QStringLiteral("WD"), localizedText("像圈", "Image Circle"),
-        localizedText("远心度", "Telecentricity"), localizedText("畸变", "Distortion"), QStringLiteral("DOF"), localizedText("同轴", "Coaxial")});
-    m_lensTable->setRowCount(0);
-    const QString search = m_lensSearchEdit ? m_lensSearchEdit->text() : QString();
-    const QString manufacturer = m_lensManufacturerFilter && m_lensManufacturerFilter->currentIndex() > 0
-        ? m_lensManufacturerFilter->currentText() : QString();
-    const QString type = m_lensTypeFilter && m_lensTypeFilter->currentIndex() > 0
-        ? m_lensTypeFilter->currentText() : QString();
-    const QString mount = m_lensMountFilter && m_lensMountFilter->currentIndex() > 0
-        ? m_lensMountFilter->currentText() : QString();
-    if (m_catalog) {
-        for (int i = 0; i < m_catalog->lenses().size(); ++i) {
-            const LensSpec &l = m_catalog->lenses().at(i);
-            if (!manufacturer.isEmpty() && l.manufacturer != manufacturer)
-                continue;
-            if (!type.isEmpty() && l.typeLabel() != type)
-                continue;
-            if (!mount.isEmpty() && l.lensMount != mount)
-                continue;
-            if (!textMatches(search, {l.model, l.manufacturer, l.typeLabel(), l.lensMount, l.notes}))
-                continue;
-            const int row = m_lensTable->rowCount();
-            m_lensTable->insertRow(row);
-            m_lensTable->setItem(row, 0, indexedItem(l.model, i));
-            m_lensTable->setItem(row, 1, item(l.manufacturer));
-            m_lensTable->setItem(row, 2, item(l.typeLabel()));
-            m_lensTable->setItem(row, 3, item(l.lensMount));
-            m_lensTable->setItem(row, 4, item(l.isTelecentric() ? QStringLiteral("-") : QStringLiteral("%1 mm").arg(l.focalLengthMm, 0, 'f', 1)));
-            m_lensTable->setItem(row, 5, item(l.isTelecentric() ? QStringLiteral("%1x").arg(l.pmag, 0, 'f', 3) : QStringLiteral("-")));
-            m_lensTable->setItem(row, 6, item(l.isTelecentric() ? QStringLiteral("%1 mm").arg(l.nominalWorkingDistanceMm, 0, 'f', 1) : QStringLiteral(">=%1 mm").arg(l.minWorkingDistanceMm, 0, 'f', 1)));
-            m_lensTable->setItem(row, 7, item(QStringLiteral("%1 mm").arg(l.imageCircleMm, 0, 'f', 1)));
-            m_lensTable->setItem(row, 8, item(l.isTelecentric() ? QStringLiteral("%1 deg").arg(l.telecentricityDeg, 0, 'f', 3) : QStringLiteral("-")));
-            m_lensTable->setItem(row, 9, item(QStringLiteral("%1%").arg(l.distortionPercent, 0, 'f', 3)));
-            m_lensTable->setItem(row, 10, item(l.isTelecentric() ? QStringLiteral("%1 mm").arg(l.dofMm, 0, 'f', 1) : QStringLiteral("-")));
-            m_lensTable->setItem(row, 11, item(boolLabel(l.coaxialIllumination)));
-        }
+    const CatalogPageResult<LensSpec> page = m_catalog->queryLenses(currentLensQuery());
+    m_lensTotal = page.totalCount;
+    if (m_lensOffset >= m_lensTotal && m_lensOffset > 0) {
+        m_lensOffset = qMax(0, ((m_lensTotal - 1) / kPageSize) * kPageSize);
+        refreshLensTable();
+        return;
     }
-    m_lensTable->setSortingEnabled(true);
-    selectCatalogRow(m_lensTable, previousKey, previousRow);
+    m_lensModel->setLenses(page.ids, page.items);
+    updatePageLabel(CatalogDomain::Lens);
+    if (!page.items.isEmpty())
+        m_lensTable->selectRow(0);
 }
 
 void CatalogPage::refreshLightTable()
 {
-    if (!m_lightTable)
+    if (!m_catalog || !m_lightModel)
         return;
-    const QString previousKey = selectedCatalogKey(m_lightTable);
-    const int previousRow = m_lightTable->currentRow();
-    m_lightTable->setSortingEnabled(false);
-    m_lightTable->setColumnCount(8);
-    m_lightTable->setHorizontalHeaderLabels({localizedText("型号", "Model"), localizedText("厂家", "Manufacturer"), localizedText("类型", "Type"), localizedText("颜色", "Color"),
-        localizedText("波长", "Wavelength"), localizedText("模式", "Mode"), localizedText("有效面积", "Active Area"), localizedText("适用场景", "Best For")});
-    m_lightTable->setRowCount(0);
-    const QString search = m_lightSearchEdit ? m_lightSearchEdit->text() : QString();
-    const QString manufacturer = m_lightManufacturerFilter && m_lightManufacturerFilter->currentIndex() > 0
-        ? m_lightManufacturerFilter->currentText() : QString();
-    const QString type = m_lightTypeFilter && m_lightTypeFilter->currentIndex() > 0
-        ? m_lightTypeFilter->currentText() : QString();
-    const QString mode = m_lightModeFilter && m_lightModeFilter->currentIndex() > 0
-        ? m_lightModeFilter->currentText() : QString();
-    if (m_catalog) {
-        for (int i = 0; i < m_catalog->lights().size(); ++i) {
-            const LightSpec &l = m_catalog->lights().at(i);
-            if (!manufacturer.isEmpty() && l.manufacturer != manufacturer)
-                continue;
-            if (!type.isEmpty() && l.typeLabel() != type)
-                continue;
-            if (!mode.isEmpty() && l.mode != mode)
-                continue;
-            if (!textMatches(search, {l.model, l.manufacturer, l.typeLabel(), l.color, l.mode, l.bestFor}))
-                continue;
-            const int row = m_lightTable->rowCount();
-            m_lightTable->insertRow(row);
-            m_lightTable->setItem(row, 0, indexedItem(l.model, i));
-            m_lightTable->setItem(row, 1, item(l.manufacturer));
-            m_lightTable->setItem(row, 2, item(l.typeLabel()));
-            m_lightTable->setItem(row, 3, item(l.color));
-            m_lightTable->setItem(row, 4, item(l.wavelengthNm > 0 ? QStringLiteral("%1 nm").arg(l.wavelengthNm) : localizedText("宽谱", "Broadband")));
-            m_lightTable->setItem(row, 5, item(l.mode));
-            m_lightTable->setItem(row, 6, item(QStringLiteral("%1 x %2 mm").arg(l.activeWidthMm, 0, 'f', 0).arg(l.activeHeightMm, 0, 'f', 0)));
-            m_lightTable->setItem(row, 7, item(l.bestFor));
-        }
+    const CatalogPageResult<LightSpec> page = m_catalog->queryLights(currentLightQuery());
+    m_lightTotal = page.totalCount;
+    if (m_lightOffset >= m_lightTotal && m_lightOffset > 0) {
+        m_lightOffset = qMax(0, ((m_lightTotal - 1) / kPageSize) * kPageSize);
+        refreshLightTable();
+        return;
     }
-    m_lightTable->setSortingEnabled(true);
-    selectCatalogRow(m_lightTable, previousKey, previousRow);
+    m_lightModel->setLights(page.ids, page.items);
+    updatePageLabel(CatalogDomain::Light);
+    if (!page.items.isEmpty())
+        m_lightTable->selectRow(0);
+}
+
+void CatalogPage::updatePageLabel(CatalogDomain domain)
+{
+    if (domain == CatalogDomain::Camera) {
+        const int shown = m_cameraModel ? m_cameraModel->rowCount() : 0;
+        if (m_cameraPageLabel)
+            m_cameraPageLabel->setText(pageText(m_cameraTotal, m_cameraOffset, shown));
+        updatePageSpin(m_cameraPageSpin, m_cameraTotal, m_cameraOffset, kPageSize);
+        if (m_cameraPrevButton)
+            m_cameraPrevButton->setEnabled(m_cameraOffset > 0);
+        if (m_cameraNextButton)
+            m_cameraNextButton->setEnabled(m_cameraOffset + shown < m_cameraTotal);
+    } else if (domain == CatalogDomain::Lens) {
+        const int shown = m_lensModel ? m_lensModel->rowCount() : 0;
+        if (m_lensPageLabel)
+            m_lensPageLabel->setText(pageText(m_lensTotal, m_lensOffset, shown));
+        updatePageSpin(m_lensPageSpin, m_lensTotal, m_lensOffset, kPageSize);
+        if (m_lensPrevButton)
+            m_lensPrevButton->setEnabled(m_lensOffset > 0);
+        if (m_lensNextButton)
+            m_lensNextButton->setEnabled(m_lensOffset + shown < m_lensTotal);
+    } else {
+        const int shown = m_lightModel ? m_lightModel->rowCount() : 0;
+        if (m_lightPageLabel)
+            m_lightPageLabel->setText(pageText(m_lightTotal, m_lightOffset, shown));
+        updatePageSpin(m_lightPageSpin, m_lightTotal, m_lightOffset, kPageSize);
+        if (m_lightPrevButton)
+            m_lightPrevButton->setEnabled(m_lightOffset > 0);
+        if (m_lightNextButton)
+            m_lightNextButton->setEnabled(m_lightOffset + shown < m_lightTotal);
+    }
+}
+
+qint64 CatalogPage::selectedId(const QTableView *view, const CatalogTableModel *model) const
+{
+    if (!view || !model || !view->selectionModel())
+        return -1;
+    const QModelIndexList rows = view->selectionModel()->selectedRows();
+    if (rows.isEmpty())
+        return -1;
+    return model->idAt(rows.first().row());
+}
+
+qint64 CatalogPage::selectedCameraId() const
+{
+    return selectedId(m_cameraTable, m_cameraModel);
+}
+
+qint64 CatalogPage::selectedLensId() const
+{
+    return selectedId(m_lensTable, m_lensModel);
+}
+
+qint64 CatalogPage::selectedLightId() const
+{
+    return selectedId(m_lightTable, m_lightModel);
+}
+
+int CatalogPage::selectedIndex(CatalogDomain domain) const
+{
+    if (!m_catalog)
+        return -1;
+    if (domain == CatalogDomain::Camera)
+        return m_catalog->cameraIndexById(selectedCameraId());
+    if (domain == CatalogDomain::Lens)
+        return m_catalog->lensIndexById(selectedLensId());
+    return m_catalog->lightIndexById(selectedLightId());
+}
+
+int CatalogPage::selectedCameraCatalogIndex() const
+{
+    return selectedIndex(CatalogDomain::Camera);
+}
+
+int CatalogPage::selectedLensCatalogIndex() const
+{
+    return selectedIndex(CatalogDomain::Lens);
+}
+
+int CatalogPage::selectedLightCatalogIndex() const
+{
+    return selectedIndex(CatalogDomain::Light);
+}
+
+QVector<int> CatalogPage::visibleCameraCatalogIndexes() const
+{
+    QVector<int> indexes;
+    if (!m_catalog || !m_cameraModel)
+        return indexes;
+    for (int row = 0; row < m_cameraModel->rowCount(); ++row) {
+        const int index = m_catalog->cameraIndexById(m_cameraModel->idAt(row));
+        if (index >= 0)
+            indexes.append(index);
+    }
+    return indexes;
+}
+
+QVector<int> CatalogPage::visibleLensCatalogIndexes() const
+{
+    QVector<int> indexes;
+    if (!m_catalog || !m_lensModel)
+        return indexes;
+    for (int row = 0; row < m_lensModel->rowCount(); ++row) {
+        const int index = m_catalog->lensIndexById(m_lensModel->idAt(row));
+        if (index >= 0)
+            indexes.append(index);
+    }
+    return indexes;
+}
+
+QVector<int> CatalogPage::visibleLightCatalogIndexes() const
+{
+    QVector<int> indexes;
+    if (!m_catalog || !m_lightModel)
+        return indexes;
+    for (int row = 0; row < m_lightModel->rowCount(); ++row) {
+        const int index = m_catalog->lightIndexById(m_lightModel->idAt(row));
+        if (index >= 0)
+            indexes.append(index);
+    }
+    return indexes;
 }
 
 void CatalogPage::clearCameraFilters()
@@ -511,6 +794,7 @@ void CatalogPage::clearCameraFilters()
         m_cameraManufacturerFilter->setCurrentIndex(0);
     if (m_cameraInterfaceFilter)
         m_cameraInterfaceFilter->setCurrentIndex(0);
+    m_cameraOffset = 0;
     refreshCameraTable();
 }
 
@@ -524,6 +808,7 @@ void CatalogPage::clearLensFilters()
         m_lensTypeFilter->setCurrentIndex(0);
     if (m_lensMountFilter)
         m_lensMountFilter->setCurrentIndex(0);
+    m_lensOffset = 0;
     refreshLensTable();
 }
 
@@ -537,41 +822,6 @@ void CatalogPage::clearLightFilters()
         m_lightTypeFilter->setCurrentIndex(0);
     if (m_lightModeFilter)
         m_lightModeFilter->setCurrentIndex(0);
+    m_lightOffset = 0;
     refreshLightTable();
-}
-
-int CatalogPage::selectedCameraCatalogIndex() const
-{
-    if (!m_cameraTable)
-        return -1;
-    return rowSourceIndex(m_cameraTable, m_cameraTable->currentRow());
-}
-
-int CatalogPage::selectedLensCatalogIndex() const
-{
-    if (!m_lensTable)
-        return -1;
-    return rowSourceIndex(m_lensTable, m_lensTable->currentRow());
-}
-
-int CatalogPage::selectedLightCatalogIndex() const
-{
-    if (!m_lightTable)
-        return -1;
-    return rowSourceIndex(m_lightTable, m_lightTable->currentRow());
-}
-
-QVector<int> CatalogPage::visibleCameraCatalogIndexes() const
-{
-    return visibleCatalogIndexes(m_cameraTable);
-}
-
-QVector<int> CatalogPage::visibleLensCatalogIndexes() const
-{
-    return visibleCatalogIndexes(m_lensTable);
-}
-
-QVector<int> CatalogPage::visibleLightCatalogIndexes() const
-{
-    return visibleCatalogIndexes(m_lightTable);
 }

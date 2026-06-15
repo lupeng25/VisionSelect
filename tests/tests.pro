@@ -1,4 +1,4 @@
-QT += core gui widgets testlib
+QT += core gui widgets testlib sql
 
 CONFIG += c++14 console testcase warn_on
 TEMPLATE = app
@@ -20,6 +20,7 @@ SOURCES += \
     ../src/report/PdfReportWriter.cpp \
     ../src/selection/CalculationAssistant.cpp \
     ../src/selection/SelectionEngine.cpp \
+    ../src/selection/SelectionService.cpp \
     ../src/three_d/ThreeDCalculation.cpp \
     ../src/three_d/ThreeDCameraMatcher.cpp \
     ../src/three_d/ThreeDCameraRepository.cpp \
@@ -35,6 +36,7 @@ HEADERS += \
     ../src/report/PdfReportWriter.h \
     ../src/selection/CalculationAssistant.h \
     ../src/selection/SelectionEngine.h \
+    ../src/selection/SelectionService.h \
     ../src/three_d/ThreeDCalculation.h \
     ../src/three_d/ThreeDCameraMatcher.h \
     ../src/three_d/ThreeDCameraRepository.h \

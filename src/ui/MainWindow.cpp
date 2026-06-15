@@ -4,7 +4,7 @@
 #include "license/LicenseManager.h"
 #include "report/PdfReportWriter.h"
 #include "selection/CalculationAssistant.h"
-#include "selection/SelectionEngine.h"
+#include "selection/SelectionService.h"
 #include "ui/CatalogDialogs.h"
 #include "ui/UiHelpers.h"
 #include "ui/pages/CalculationPage.h"
@@ -34,6 +34,7 @@
 #include <QTextStream>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QtConcurrent/QtConcurrent>
 
 using namespace UiHelpers;
 
@@ -101,14 +102,33 @@ void replaceStackPage(QStackedWidget *pages, int index, QWidget *page)
         placeholder->deleteLater();
     pages->insertWidget(index, page);
 }
+
+SelectionJobResult runSelectionJob(const QString &storageDirectory, const SelectionRequest &request, int limit)
+{
+    SelectionJobResult result;
+    result.request = request;
+
+    CatalogRepository workerCatalog;
+    workerCatalog.setStorageDirectory(storageDirectory);
+    if (!workerCatalog.initializeDatabase(&result.error))
+        return result;
+
+    SelectionService service(&workerCatalog);
+    result.results = service.select(request, limit, &result.error);
+    return result;
+}
 }
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     QString error;
-    if (!m_catalog.loadDefaults(&error))
+    if (!m_catalog.initializeDatabase(&error))
         QMessageBox::critical(this, tr("Catalog Load Failed"), error);
+
+    m_selectionWatcher = new QFutureWatcher<SelectionJobResult>(this);
+    connect(m_selectionWatcher, &QFutureWatcher<SelectionJobResult>::finished,
+            this, &MainWindow::finishSelectionCalculation);
 
     buildUi();
     connect(&LanguageManager::instance(), &LanguageManager::languageChanged, this, &MainWindow::rebuildPagesForLanguage);
@@ -304,23 +324,37 @@ void MainWindow::refreshSidebarSummary()
 {
     if (m_summaryTitleLabel)
         m_summaryTitleLabel->setText(localizedText("参数库", "Catalog"));
-    if (m_summaryStatusLabel)
-        m_summaryStatusLabel->setText(localizedText("就绪", "Ready"));
-    if (m_summaryLabel)
-        m_summaryLabel->setText(localizedText("推荐和导出可用。",
-                                             "Ready for recommendations and export."));
+    if (selectionCalculationRunning()) {
+        if (m_summaryStatusLabel)
+            m_summaryStatusLabel->setText(localizedText("计算中", "Calculating"));
+        if (m_summaryLabel)
+            m_summaryLabel->setText(localizedText("正在检索候选并生成推荐方案。",
+                                                 "Fetching candidates and scoring recommendations."));
+    } else {
+        if (m_summaryStatusLabel)
+            m_summaryStatusLabel->setText(localizedText("就绪", "Ready"));
+        if (m_summaryLabel)
+            m_summaryLabel->setText(localizedText("推荐和导出可用。",
+                                                 "Ready for recommendations and export."));
+    }
 
     const auto statText = [](const QString &label, int value) {
         return QStringLiteral("<span style=\"color:#9fb0c7; font-size:10px;\">%1</span><br>"
                               "<span style=\"color:#ffffff; font-size:15px; font-weight:800;\">%2</span>")
             .arg(label, QString::number(value));
     };
+    QString countError;
+    const int cameraCount = m_catalog.productCount(CatalogDomain::Camera, &countError);
+    countError.clear();
+    const int lensCount = m_catalog.productCount(CatalogDomain::Lens, &countError);
+    countError.clear();
+    const int lightCount = m_catalog.productCount(CatalogDomain::Light, &countError);
     if (m_cameraCountLabel)
-        m_cameraCountLabel->setText(statText(localizedText("相机", "Cameras"), m_catalog.cameras().size()));
+        m_cameraCountLabel->setText(statText(localizedText("相机", "Cameras"), cameraCount >= 0 ? cameraCount : m_catalog.cameras().size()));
     if (m_lensCountLabel)
-        m_lensCountLabel->setText(statText(localizedText("镜头", "Lenses"), m_catalog.lenses().size()));
+        m_lensCountLabel->setText(statText(localizedText("镜头", "Lenses"), lensCount >= 0 ? lensCount : m_catalog.lenses().size()));
     if (m_lightCountLabel)
-        m_lightCountLabel->setText(statText(localizedText("光源", "Lights"), m_catalog.lights().size()));
+        m_lightCountLabel->setText(statText(localizedText("光源", "Lights"), lightCount >= 0 ? lightCount : m_catalog.lights().size()));
     if (m_languageLabel)
         m_languageLabel->setText(localizedText("界面语言", "Language"));
 }
@@ -398,12 +432,8 @@ void MainWindow::rebuildPagesForLanguage()
     if (hadCatalogPage)
         ensureCatalogPageInitialized();
 
-    if (hadResults) {
-        SelectionEngine engine;
-        m_results = engine.select(m_request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 20);
-        if (m_resultsPage)
-            m_resultsPage->setResults(m_results, m_request);
-    }
+    if (hadResults)
+        startSelectionCalculation(m_request);
 
     retranslateUi();
     setActivePage(currentIndex);
@@ -450,8 +480,10 @@ void MainWindow::setActivePage(int index)
         ensureResultsPage();
     if (index == kCatalogPageIndex)
         ensureCatalogPageInitialized();
-    if (index == kResultsPageIndex && m_results.isEmpty()) {
+    if (index == kResultsPageIndex && m_results.isEmpty() && !selectionCalculationRunning()) {
         calculate();
+    } else if (index == kResultsPageIndex && selectionCalculationRunning() && m_resultsPage) {
+        m_resultsPage->setBusy(m_request);
     }
     m_pages->setCurrentIndex(index);
     for (int i = 0; i < m_navButtons.size(); ++i) {
@@ -554,15 +586,66 @@ void MainWindow::ensureCatalogPageInitialized()
 
 void MainWindow::calculate()
 {
+    if (!m_inputPage)
+        return;
     m_request = m_inputPage->request();
-    SelectionEngine engine;
-    m_results = engine.select(m_request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 20);
+    startSelectionCalculation(m_request);
+}
+
+void MainWindow::startSelectionCalculation(const SelectionRequest &request)
+{
+    if (!m_selectionWatcher)
+        return;
+
+    if (m_selectionWatcher->isRunning()) {
+        m_pendingSelectionRequest = request;
+        m_hasPendingSelectionRequest = true;
+        refreshSidebarSummary();
+        if (m_resultsPage)
+            m_resultsPage->setBusy(request);
+        return;
+    }
+
+    m_request = request;
+    m_results.clear();
+    if (m_resultsPage)
+        m_resultsPage->setBusy(request);
+    if (m_pages && m_pages->currentIndex() == kCalculationPageIndex)
+        refreshCalculationAssistant();
+
+    const QString storageDirectory = m_catalog.storageDirectory();
+    m_selectionWatcher->setFuture(QtConcurrent::run(runSelectionJob, storageDirectory, request, 20));
+    refreshSidebarSummary();
+}
+
+void MainWindow::finishSelectionCalculation()
+{
+    if (!m_selectionWatcher)
+        return;
+
+    const SelectionJobResult result = m_selectionWatcher->result();
+    m_request = result.request;
+    m_results = result.results;
+
+    if (!result.error.isEmpty())
+        showError(result.error);
     if (m_pages && m_pages->currentIndex() == kCalculationPageIndex)
         refreshCalculationAssistant();
     if (m_resultsPage)
         m_resultsPage->setResults(m_results, m_request);
     refreshCatalogTables();
     refreshSidebarSummary();
+
+    if (m_hasPendingSelectionRequest) {
+        const SelectionRequest pending = m_pendingSelectionRequest;
+        m_hasPendingSelectionRequest = false;
+        startSelectionCalculation(pending);
+    }
+}
+
+bool MainWindow::selectionCalculationRunning() const
+{
+    return m_selectionWatcher && m_selectionWatcher->isRunning();
 }
 
 void MainWindow::refreshCalculationAssistant()
@@ -571,7 +654,8 @@ void MainWindow::refreshCalculationAssistant()
         return;
 
     const RequirementEstimate requirement = CalculationAssistant::estimateRequirement(m_request);
-    m_assistantCameraEstimates = CalculationAssistant::estimateCameras(m_request, m_catalog.cameras(), 12);
+    const QVector<CameraSpec> cameraCandidates = m_catalog.selectionCandidateCameras(m_request, 300);
+    m_assistantCameraEstimates = CalculationAssistant::estimateCameras(m_request, cameraCandidates, 12);
 
     m_calculationPage->setSummary(localizedText("需求 FOV：%1 x %2 mm，目标物方像素：%3 um/px，相机下限：%4 x %5（%6 MP）",
                                                 "Required FOV: %1 x %2 mm, target object pixel: %3 um/px, minimum camera: %4 x %5 (%6 MP)")
@@ -621,7 +705,8 @@ void MainWindow::refreshAssistantLensTable()
     }
 
     const CameraSpec camera = m_assistantCameraEstimates.at(m_assistantSelectedCameraRow).camera;
-    m_assistantLensEstimates = CalculationAssistant::estimateLenses(m_request, camera, m_catalog.lenses(), 12);
+    const QVector<LensSpec> lensCandidates = m_catalog.selectionCandidateLenses(m_request, 500);
+    m_assistantLensEstimates = CalculationAssistant::estimateLenses(m_request, camera, lensCandidates, 12);
     m_calculationPage->setLensEstimates(m_assistantLensEstimates);
 
     details += localizedText("\n当前镜头候选基于相机：%1。\n", "\nCurrent lens candidates are based on camera: %1.\n")
@@ -655,6 +740,12 @@ void MainWindow::refreshCatalogTables()
     refreshSidebarSummary();
 }
 
+void MainWindow::handleCatalogMutation()
+{
+    refreshCatalogTables();
+    calculate();
+}
+
 void MainWindow::importCameras()
 {
     const QString path = QFileDialog::getOpenFileName(this, localizedText("导入相机 CSV", "Import Camera CSV"), QString(), QStringLiteral("CSV (*.csv)"));
@@ -665,7 +756,7 @@ void MainWindow::importCameras()
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::importLenses()
@@ -678,7 +769,7 @@ void MainWindow::importLenses()
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::importLights()
@@ -691,7 +782,7 @@ void MainWindow::importLights()
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::exportCameras()
@@ -700,7 +791,7 @@ void MainWindow::exportCameras()
     if (path.isEmpty())
         return;
     QString error;
-    if (!m_catalog.exportCameraCsv(path, &error)) {
+    if (!m_catalog.exportCameraCsvByQuery(path, CatalogQuery(), &error)) {
         showError(error);
         return;
     }
@@ -713,7 +804,7 @@ void MainWindow::exportLenses()
     if (path.isEmpty())
         return;
     QString error;
-    if (!m_catalog.exportLensCsv(path, &error)) {
+    if (!m_catalog.exportLensCsvByQuery(path, CatalogQuery(), &error)) {
         showError(error);
         return;
     }
@@ -726,7 +817,7 @@ void MainWindow::exportLights()
     if (path.isEmpty())
         return;
     QString error;
-    if (!m_catalog.exportLightCsv(path, &error)) {
+    if (!m_catalog.exportLightCsvByQuery(path, CatalogQuery(), &error)) {
         showError(error);
         return;
     }
@@ -739,8 +830,8 @@ void MainWindow::exportFilteredCameras()
     if (path.isEmpty())
         return;
     QString error;
-    const QVector<int> indexes = m_catalogPage ? m_catalogPage->visibleCameraCatalogIndexes() : QVector<int>();
-    if (!m_catalog.exportCameraCsv(path, indexes, &error)) {
+    const CatalogQuery query = m_catalogPage ? m_catalogPage->currentCameraQuery() : CatalogQuery();
+    if (!m_catalog.exportCameraCsvByQuery(path, query, &error)) {
         showError(error);
         return;
     }
@@ -753,8 +844,8 @@ void MainWindow::exportFilteredLenses()
     if (path.isEmpty())
         return;
     QString error;
-    const QVector<int> indexes = m_catalogPage ? m_catalogPage->visibleLensCatalogIndexes() : QVector<int>();
-    if (!m_catalog.exportLensCsv(path, indexes, &error)) {
+    const CatalogQuery query = m_catalogPage ? m_catalogPage->currentLensQuery() : CatalogQuery();
+    if (!m_catalog.exportLensCsvByQuery(path, query, &error)) {
         showError(error);
         return;
     }
@@ -767,8 +858,8 @@ void MainWindow::exportFilteredLights()
     if (path.isEmpty())
         return;
     QString error;
-    const QVector<int> indexes = m_catalogPage ? m_catalogPage->visibleLightCatalogIndexes() : QVector<int>();
-    if (!m_catalog.exportLightCsv(path, indexes, &error)) {
+    const CatalogQuery query = m_catalogPage ? m_catalogPage->currentLightQuery() : CatalogQuery();
+    if (!m_catalog.exportLightCsvByQuery(path, query, &error)) {
         showError(error);
         return;
     }
@@ -797,41 +888,49 @@ void MainWindow::addCamera()
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::editCamera()
 {
-    const int index = m_catalogPage ? m_catalogPage->selectedCameraCatalogIndex() : -1;
-    if (index < 0)
+    const qint64 id = m_catalogPage ? m_catalogPage->selectedCameraId() : -1;
+    if (id < 0)
         return;
-    CameraSpec camera = m_catalog.cameras().at(index);
-    if (!editCameraDialog(this, &camera, tr("Edit Camera")))
-        return;
+    CameraSpec camera;
     QString error;
-    if (!m_catalog.updateCamera(index, camera, &error)) {
+    if (!m_catalog.cameraById(id, &camera, &error)) {
         showError(error);
         return;
     }
-    calculate();
+    if (!editCameraDialog(this, &camera, tr("Edit Camera")))
+        return;
+    if (!m_catalog.updateCameraById(id, camera, &error)) {
+        showError(error);
+        return;
+    }
+    handleCatalogMutation();
 }
 
 void MainWindow::removeCamera()
 {
-    const int index = m_catalogPage ? m_catalogPage->selectedCameraCatalogIndex() : -1;
-    if (index < 0)
+    const qint64 id = m_catalogPage ? m_catalogPage->selectedCameraId() : -1;
+    if (id < 0)
         return;
-    const CameraSpec camera = m_catalog.cameras().at(index);
+    CameraSpec camera;
+    QString error;
+    if (!m_catalog.cameraById(id, &camera, &error)) {
+        showError(error);
+        return;
+    }
     if (QMessageBox::question(this, tr("Delete Camera"),
             tr("Delete camera %1?").arg(productLabel(camera.manufacturer, camera.model))) != QMessageBox::Yes) {
         return;
     }
-    QString error;
-    if (!m_catalog.removeCamera(index, &error)) {
+    if (!m_catalog.removeCameraById(id, &error)) {
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::addLens()
@@ -852,41 +951,49 @@ void MainWindow::addLens()
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::editLens()
 {
-    const int index = m_catalogPage ? m_catalogPage->selectedLensCatalogIndex() : -1;
-    if (index < 0)
+    const qint64 id = m_catalogPage ? m_catalogPage->selectedLensId() : -1;
+    if (id < 0)
         return;
-    LensSpec lens = m_catalog.lenses().at(index);
-    if (!editLensDialog(this, &lens, tr("Edit Lens")))
-        return;
+    LensSpec lens;
     QString error;
-    if (!m_catalog.updateLens(index, lens, &error)) {
+    if (!m_catalog.lensById(id, &lens, &error)) {
         showError(error);
         return;
     }
-    calculate();
+    if (!editLensDialog(this, &lens, tr("Edit Lens")))
+        return;
+    if (!m_catalog.updateLensById(id, lens, &error)) {
+        showError(error);
+        return;
+    }
+    handleCatalogMutation();
 }
 
 void MainWindow::removeLens()
 {
-    const int index = m_catalogPage ? m_catalogPage->selectedLensCatalogIndex() : -1;
-    if (index < 0)
+    const qint64 id = m_catalogPage ? m_catalogPage->selectedLensId() : -1;
+    if (id < 0)
         return;
-    const LensSpec lens = m_catalog.lenses().at(index);
+    LensSpec lens;
+    QString error;
+    if (!m_catalog.lensById(id, &lens, &error)) {
+        showError(error);
+        return;
+    }
     if (QMessageBox::question(this, tr("Delete Lens"),
             tr("Delete lens %1?").arg(productLabel(lens.manufacturer, lens.model))) != QMessageBox::Yes) {
         return;
     }
-    QString error;
-    if (!m_catalog.removeLens(index, &error)) {
+    if (!m_catalog.removeLensById(id, &error)) {
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::addLight()
@@ -906,41 +1013,49 @@ void MainWindow::addLight()
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::editLight()
 {
-    const int index = m_catalogPage ? m_catalogPage->selectedLightCatalogIndex() : -1;
-    if (index < 0)
+    const qint64 id = m_catalogPage ? m_catalogPage->selectedLightId() : -1;
+    if (id < 0)
         return;
-    LightSpec light = m_catalog.lights().at(index);
-    if (!editLightDialog(this, &light, tr("Edit Light")))
-        return;
+    LightSpec light;
     QString error;
-    if (!m_catalog.updateLight(index, light, &error)) {
+    if (!m_catalog.lightById(id, &light, &error)) {
         showError(error);
         return;
     }
-    calculate();
+    if (!editLightDialog(this, &light, tr("Edit Light")))
+        return;
+    if (!m_catalog.updateLightById(id, light, &error)) {
+        showError(error);
+        return;
+    }
+    handleCatalogMutation();
 }
 
 void MainWindow::removeLight()
 {
-    const int index = m_catalogPage ? m_catalogPage->selectedLightCatalogIndex() : -1;
-    if (index < 0)
+    const qint64 id = m_catalogPage ? m_catalogPage->selectedLightId() : -1;
+    if (id < 0)
         return;
-    const LightSpec light = m_catalog.lights().at(index);
+    LightSpec light;
+    QString error;
+    if (!m_catalog.lightById(id, &light, &error)) {
+        showError(error);
+        return;
+    }
     if (QMessageBox::question(this, tr("Delete Light"),
             tr("Delete light %1?").arg(productLabel(light.manufacturer, light.model))) != QMessageBox::Yes) {
         return;
     }
-    QString error;
-    if (!m_catalog.removeLight(index, &error)) {
+    if (!m_catalog.removeLightById(id, &error)) {
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::resetCameras()
@@ -954,7 +1069,7 @@ void MainWindow::resetCameras()
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::resetLenses()
@@ -968,7 +1083,7 @@ void MainWindow::resetLenses()
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::resetLights()
@@ -982,15 +1097,18 @@ void MainWindow::resetLights()
         showError(error);
         return;
     }
-    calculate();
+    handleCatalogMutation();
 }
 
 void MainWindow::exportBomCsv()
 {
-    if (m_results.isEmpty())
-        calculate();
+    if (selectionCalculationRunning()) {
+        showError(tr("Recommendation calculation is still running. Please export after it completes."));
+        return;
+    }
     if (m_results.isEmpty()) {
-        showError(tr("No recommended plan is available; BOM cannot be exported."));
+        calculate();
+        showError(tr("Recommendation calculation has started. Please export after it completes."));
         return;
     }
 
@@ -1046,8 +1164,15 @@ void MainWindow::exportBomCsv()
 
 void MainWindow::exportReportPdf()
 {
-    if (m_results.isEmpty())
+    if (selectionCalculationRunning()) {
+        showError(tr("Recommendation calculation is still running. Please export after it completes."));
+        return;
+    }
+    if (m_results.isEmpty()) {
         calculate();
+        showError(tr("Recommendation calculation has started. Please export after it completes."));
+        return;
+    }
 
     const QString defaultName = QStringLiteral("VisionSelect_%1.pdf")
         .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")));

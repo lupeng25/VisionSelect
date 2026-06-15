@@ -105,6 +105,36 @@ ResultsPage::ResultsPage(QWidget *parent)
     layout->addWidget(m_details);
 }
 
+void ResultsPage::setBusy(const SelectionRequest &request)
+{
+    Q_UNUSED(request)
+    m_results.clear();
+
+    if (m_cardsLayout) {
+        while (QLayoutItem *child = m_cardsLayout->takeAt(0)) {
+            if (child->widget())
+                child->widget()->deleteLater();
+            delete child;
+        }
+        m_cardsLayout->addWidget(metricCard(localizedText("计算中", "Calculating"),
+            localizedText("候选检索", "Candidate Search"),
+            localizedText("正在从产品库检索候选并进行评分。",
+                          "Fetching catalog candidates and scoring recommendations."),
+            QStringLiteral("warn")));
+    }
+
+    if (m_summaryLabel)
+        m_summaryLabel->setText(localizedText("正在计算推荐方案...",
+                                             "Calculating recommended plans..."));
+    if (m_table) {
+        m_table->setSortingEnabled(false);
+        m_table->setRowCount(0);
+    }
+    if (m_details)
+        m_details->setPlainText(localizedText("请稍候，计算完成后会自动更新结果。",
+                                             "Please wait; results will update automatically when calculation completes."));
+}
+
 void ResultsPage::setResults(const QVector<SelectionResult> &results,
                              const SelectionRequest &request)
 {

@@ -17,6 +17,7 @@ class ResultsPage : public QWidget
 
 public:
     explicit ResultsPage(QWidget *parent = nullptr);
+    void setBusy(const SelectionRequest &request);
     void setResults(const QVector<SelectionResult> &results,
                     const SelectionRequest &request);
 

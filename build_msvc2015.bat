@@ -100,6 +100,7 @@ for %%D in (
     Qt5Gui.dll
     Qt5Widgets.dll
     Qt5PrintSupport.dll
+    Qt5Sql.dll
     Qt5Test.dll
     Qt5Svg.dll
     libEGL.dll
@@ -119,6 +120,7 @@ for %%P in (
     iconengines
     styles
     printsupport
+    sqldrivers
 ) do (
     if exist "%QT_DIR%\plugins\%%P\*.dll" (
         if not exist "%BIN_DIR%\%%P" (

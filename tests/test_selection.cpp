@@ -5,14 +5,19 @@
 #include "report/PdfReportWriter.h"
 #include "selection/CalculationAssistant.h"
 #include "selection/SelectionEngine.h"
+#include "selection/SelectionService.h"
 #include "three_d/ThreeDCalculation.h"
 #include "three_d/ThreeDCameraMatcher.h"
 #include "three_d/ThreeDCameraRepository.h"
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QSet>
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QTextStream>
@@ -36,6 +41,15 @@ private slots:
     void fixedFocalTargetUsesLimitingAxis();
     void nonMeasurementRequirementsDoNotForceTelecentric();
     void catalogPersistenceRoundTrip();
+    void sqliteInitializeDatabaseKeepsCompatibilitySnapshotsLazy();
+    void sqliteCatalogQueriesPageAndDistinctValues();
+    void sqliteCatalogIdUpdateDeleteAndFilteredExport();
+    void sqliteAddDuplicateProductsDoesNotReplaceExisting();
+    void sqliteFilteredExportFailsWhenQueryFails();
+    void sqliteSelectionCandidatesFilterBeforeLimit();
+    void sqliteMigrationPreservesLocalCsvRows();
+    void sqliteLightCandidatesUseLensFeatureCache();
+    void catalogPerformanceGate();
     void sampleOnlyLightCatalogIsUpgraded();
     void motionExposureAndStrobePreference();
     void dataThroughputAndInterfaceRisk();
@@ -562,6 +576,496 @@ void SelectionEngineTest::catalogPersistenceRoundTrip()
     QCOMPARE(finalReload.cameras().size(), originalCameraCount);
     QCOMPARE(finalReload.lenses().size(), originalLensCount);
     QCOMPARE(finalReload.lights().size(), originalLightCount);
+}
+
+void SelectionEngineTest::sqliteInitializeDatabaseKeepsCompatibilitySnapshotsLazy()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.initializeDatabase(&error), qPrintable(error));
+    QVERIFY(repo.cameras().isEmpty());
+    QVERIFY(repo.lenses().isEmpty());
+    QVERIFY(repo.lights().isEmpty());
+    QVERIFY(repo.productCount(CatalogDomain::Camera, &error) > 0);
+    QVERIFY(repo.productCount(CatalogDomain::Lens, &error) > 0);
+    QVERIFY(repo.productCount(CatalogDomain::Light, &error) > 0);
+
+    CatalogQuery query;
+    query.limit = 1;
+    const CatalogPageResult<CameraSpec> page = repo.queryCameras(query, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(page.items.size(), 1);
+    CameraSpec camera;
+    QVERIFY2(repo.cameraById(page.ids.first(), &camera, &error), qPrintable(error));
+    QCOMPARE(camera.model, page.items.first().model);
+
+    SelectionService service(&repo);
+    const QVector<SelectionResult> results = service.select(SelectionRequest(), 5, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QVERIFY(!results.isEmpty());
+    QVERIFY(repo.cameras().isEmpty());
+    QVERIFY(repo.lenses().isEmpty());
+    QVERIFY(repo.lights().isEmpty());
+}
+
+void SelectionEngineTest::sqliteCatalogQueriesPageAndDistinctValues()
+{
+    CatalogQuery query;
+    query.limit = 2;
+    query.sort.field = QStringLiteral("model");
+    query.sort.ascending = true;
+    const CatalogPageResult<CameraSpec> page = m_catalog.queryCameras(query);
+    QCOMPARE(page.items.size(), 2);
+    QCOMPARE(page.ids.size(), 2);
+    QVERIFY(page.totalCount >= m_catalog.cameras().size());
+    QVERIFY(page.ids.first() > 0);
+
+    QStringList manufacturers = m_catalog.distinctValues(CatalogDomain::Camera, QStringLiteral("manufacturer"));
+    QVERIFY(!manufacturers.isEmpty());
+    CatalogQuery filtered;
+    filtered.manufacturer = manufacturers.first();
+    filtered.limit = 5;
+    const CatalogPageResult<CameraSpec> filteredPage = m_catalog.queryCameras(filtered);
+    QVERIFY(filteredPage.totalCount > 0);
+    for (const CameraSpec &camera : filteredPage.items)
+        QCOMPARE(camera.manufacturer, manufacturers.first());
+
+    QStringList lightTypes = m_catalog.distinctValues(CatalogDomain::Light, QStringLiteral("light_type"));
+    QVERIFY(!lightTypes.isEmpty());
+}
+
+void SelectionEngineTest::sqliteCatalogIdUpdateDeleteAndFilteredExport()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.loadDefaults(&error), qPrintable(error));
+
+    CameraSpec camera;
+    camera.model = QStringLiteral("SQL-CAM-001");
+    camera.manufacturer = QStringLiteral("SqlTest");
+    camera.resolutionX = 1920;
+    camera.resolutionY = 1080;
+    camera.pixelSizeUm = 3.45;
+    camera.sensorFormat = QStringLiteral("1/2\"");
+    camera.colorMode = QStringLiteral("Mono");
+    camera.shutterType = QStringLiteral("Global");
+    camera.maxFps = 60.0;
+    camera.interfaceType = QStringLiteral("USB3");
+    camera.bandwidthMBps = 380.0;
+    camera.bitDepth = 12.0;
+    camera.lensMount = QStringLiteral("C");
+    QVERIFY2(repo.addCamera(camera, &error), qPrintable(error));
+
+    CatalogQuery query;
+    query.manufacturer = QStringLiteral("SqlTest");
+    query.limit = 1;
+    CatalogPageResult<CameraSpec> page = repo.queryCameras(query, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(page.totalCount, 1);
+    QCOMPARE(page.items.first().model, QStringLiteral("SQL-CAM-001"));
+    const qint64 id = page.ids.first();
+
+    camera.model = QStringLiteral("SQL-CAM-EDITED");
+    QVERIFY2(repo.updateCameraById(id, camera, &error), qPrintable(error));
+    CameraSpec edited;
+    QVERIFY2(repo.cameraById(id, &edited, &error), qPrintable(error));
+    QCOMPARE(edited.model, QStringLiteral("SQL-CAM-EDITED"));
+
+    QTemporaryFile exportFile;
+    QVERIFY(exportFile.open());
+    const QString exportPath = exportFile.fileName();
+    exportFile.close();
+    QVERIFY2(repo.exportCameraCsvByQuery(exportPath, query, &error), qPrintable(error));
+    QFile exported(exportPath);
+    QVERIFY(exported.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString exportedText = QString::fromUtf8(exported.readAll());
+    QVERIFY(exportedText.contains(QStringLiteral("SQL-CAM-EDITED")));
+
+    QVERIFY2(repo.removeCameraById(id, &error), qPrintable(error));
+    page = repo.queryCameras(query, &error);
+    QCOMPARE(page.totalCount, 0);
+}
+
+void SelectionEngineTest::sqliteAddDuplicateProductsDoesNotReplaceExisting()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.loadDefaults(&error), qPrintable(error));
+
+    CameraSpec camera;
+    camera.model = QStringLiteral("DUP-CAM-001");
+    camera.manufacturer = QStringLiteral("DupMaker");
+    camera.resolutionX = 1280;
+    camera.resolutionY = 1024;
+    camera.pixelSizeUm = 3.45;
+    camera.sensorFormat = QStringLiteral("1/2\"");
+    camera.colorMode = QStringLiteral("Mono");
+    camera.shutterType = QStringLiteral("Global");
+    camera.maxFps = 60.0;
+    camera.interfaceType = QStringLiteral("USB3");
+    camera.bandwidthMBps = 380.0;
+    camera.bitDepth = 12.0;
+    camera.lensMount = QStringLiteral("C");
+    QVERIFY2(repo.addCamera(camera, &error), qPrintable(error));
+
+    CameraSpec duplicateCamera = camera;
+    duplicateCamera.resolutionX = 4096;
+    QVERIFY(!repo.addCamera(duplicateCamera, &error));
+    QVERIFY(error.contains(QStringLiteral("Duplicate camera product")));
+
+    CatalogQuery cameraQuery;
+    cameraQuery.manufacturer = QStringLiteral("DupMaker");
+    cameraQuery.search = QStringLiteral("DUP-CAM-001");
+    cameraQuery.limit = 10;
+    error.clear();
+    CatalogPageResult<CameraSpec> cameraPage = repo.queryCameras(cameraQuery, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(cameraPage.totalCount, 1);
+    QCOMPARE(cameraPage.items.first().resolutionX, 1280);
+
+    LensSpec lens;
+    lens.model = QStringLiteral("DUP-LENS-001");
+    lens.manufacturer = QStringLiteral("DupMaker");
+    lens.lensType = LensType::FixedFocal;
+    lens.lensMount = QStringLiteral("C");
+    lens.focalLengthMm = 25.0;
+    lens.minWorkingDistanceMm = 100.0;
+    lens.distortionPercent = 0.05;
+    lens.imageCircleMm = 12.0;
+    lens.megapixelRating = 12.0;
+    QVERIFY2(repo.addLens(lens, &error), qPrintable(error));
+
+    LensSpec duplicateLens = lens;
+    duplicateLens.imageCircleMm = 30.0;
+    QVERIFY(!repo.addLens(duplicateLens, &error));
+    QVERIFY(error.contains(QStringLiteral("Duplicate lens product")));
+
+    CatalogQuery lensQuery;
+    lensQuery.manufacturer = QStringLiteral("DupMaker");
+    lensQuery.search = QStringLiteral("DUP-LENS-001");
+    lensQuery.limit = 10;
+    error.clear();
+    CatalogPageResult<LensSpec> lensPage = repo.queryLenses(lensQuery, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(lensPage.totalCount, 1);
+    QCOMPARE(lensPage.items.first().imageCircleMm, 12.0);
+
+    LightSpec light;
+    light.model = QStringLiteral("DUP-LIGHT-001");
+    light.manufacturer = QStringLiteral("DupMaker");
+    light.lightType = LightType::Backlight;
+    light.color = QStringLiteral("White");
+    light.mode = QStringLiteral("Continuous");
+    light.activeWidthMm = 50.0;
+    light.activeHeightMm = 40.0;
+    QVERIFY2(repo.addLight(light, &error), qPrintable(error));
+
+    LightSpec duplicateLight = light;
+    duplicateLight.activeWidthMm = 200.0;
+    QVERIFY(!repo.addLight(duplicateLight, &error));
+    QVERIFY(error.contains(QStringLiteral("Duplicate light product")));
+
+    CatalogQuery lightQuery;
+    lightQuery.manufacturer = QStringLiteral("DupMaker");
+    lightQuery.search = QStringLiteral("DUP-LIGHT-001");
+    lightQuery.limit = 10;
+    error.clear();
+    CatalogPageResult<LightSpec> lightPage = repo.queryLights(lightQuery, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(lightPage.totalCount, 1);
+    QCOMPARE(lightPage.items.first().activeWidthMm, 50.0);
+}
+
+void SelectionEngineTest::sqliteFilteredExportFailsWhenQueryFails()
+{
+    QTemporaryFile storageFile;
+    QVERIFY(storageFile.open());
+    const QString invalidStoragePath = storageFile.fileName();
+    storageFile.close();
+
+    QTemporaryDir output;
+    QVERIFY(output.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(invalidStoragePath);
+    QString error;
+    CatalogQuery query;
+    const QString exportPath = QDir(output.path()).filePath(QStringLiteral("cameras.csv"));
+    QVERIFY(!repo.exportCameraCsvByQuery(exportPath, query, &error));
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!QFileInfo::exists(exportPath));
+}
+
+void SelectionEngineTest::sqliteSelectionCandidatesFilterBeforeLimit()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.initializeDatabase(&error), qPrintable(error));
+
+    QTemporaryFile cameraCsv;
+    QVERIFY(cameraCsv.open());
+    {
+        QTextStream out(&cameraCsv);
+        out.setCodec("UTF-8");
+        out << "model,manufacturer,resolution_x,resolution_y,pixel_size_um,sensor_format,color_mode,shutter_type,max_fps,interface,bandwidth_mbps,bit_depth,dynamic_range_db,lens_mount\n";
+        for (int i = 0; i < 350; ++i) {
+            out << "LOW-RES-CAM-" << i << ",CandidateFixture,640,480,3.45,1/3in,Mono,Global,500,USB3,380,12,60,C\n";
+        }
+        out << "VALID-HIGH-RES-CAM,CandidateFixture,4096,3000,3.45,1.1in,Mono,Global,25,USB3,380,12,60,C\n";
+    }
+    cameraCsv.close();
+    QVERIFY2(repo.loadCameraCsv(cameraCsv.fileName(), &error), qPrintable(error));
+
+    SelectionRequest request;
+    request.objectWidthMm = 40.0;
+    request.objectHeightMm = 30.0;
+    request.placementMarginMm = 0.0;
+    request.minFeatureUm = 50.0;
+    request.measurementToleranceUm = 50.0;
+    request.requiredFps = 20.0;
+    request.detectionType = DetectionType::Measurement;
+
+    error.clear();
+    const QVector<CameraSpec> cameraCandidates = repo.selectionCandidateCameras(request, 300, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    bool foundCamera = false;
+    for (const CameraSpec &candidate : cameraCandidates)
+        foundCamera = foundCamera || candidate.model == QStringLiteral("VALID-HIGH-RES-CAM");
+    QVERIFY(foundCamera);
+
+    QTemporaryFile lensCsv;
+    QVERIFY(lensCsv.open());
+    {
+        QTextStream out(&lensCsv);
+        out.setCodec("UTF-8");
+        out << "model,manufacturer,lens_type,lens_mount,focal_length_mm,min_wd_mm,distortion_percent,image_circle_mm,megapixel_rating,recommended_min_pixel_um,pmag,nominal_wd_mm,wd_tolerance_mm,max_sensor_diagonal_mm,telecentricity_deg,dof_mm,numerical_aperture,f_number,coaxial_illumination,notes\n";
+        for (int i = 0; i < 600; ++i) {
+            out << "SMALL-CIRCLE-LENS-" << i << ",CandidateFixture,FixedFocal,C,8,50,0.05,4,5,3.45,0,0,0,0,0,4,0.03,2.8,false,small image circle\n";
+        }
+        out << "VALID-LARGE-CIRCLE-LENS,CandidateFixture,FixedFocal,C,25,50,0.05,30,12,3.45,0,0,0,0,0,8,0.03,2.8,false,large image circle\n";
+    }
+    lensCsv.close();
+    QVERIFY2(repo.loadLensCsv(lensCsv.fileName(), &error), qPrintable(error));
+
+    request.allowTelecentric = false;
+    request.workingDistanceMm = 110.0;
+    error.clear();
+    const QVector<LensSpec> lensCandidates = repo.selectionCandidateLenses(request, 500, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    bool foundLens = false;
+    for (const LensSpec &candidate : lensCandidates)
+        foundLens = foundLens || candidate.model == QStringLiteral("VALID-LARGE-CIRCLE-LENS");
+    QVERIFY(foundLens);
+}
+
+void SelectionEngineTest::sqliteLightCandidatesUseLensFeatureCache()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.initializeDatabase(&error), qPrintable(error));
+
+    SelectionRequest request;
+    request.objectWidthMm = 20.0;
+    request.objectHeightMm = 20.0;
+    request.placementMarginMm = 2.0;
+    request.surfaceType = SurfaceType::ReflectiveMetal;
+    request.reflective = true;
+
+    const QVector<LightSpec> coaxialCandidates = repo.selectionCandidateLights(request, false, true, 20, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QVERIFY(!coaxialCandidates.isEmpty());
+    QCOMPARE(coaxialCandidates.first().lightType, LightType::Coaxial);
+
+    const QVector<LightSpec> cached = repo.selectionCandidateLights(request, false, true, 20, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(cached.size(), coaxialCandidates.size());
+    QCOMPARE(cached.first().model, coaxialCandidates.first().model);
+}
+
+void SelectionEngineTest::catalogPerformanceGate()
+{
+    if (qgetenv("VISIONSELECT_PERF_GATE") != "1")
+        QSKIP("Set VISIONSELECT_PERF_GATE=1 to run the optional 100k-row catalog performance gate.");
+
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.initializeDatabase(&error), qPrintable(error));
+
+    const int cameraTarget = 20000;
+    const int lensTarget = 30000;
+    const int lightTarget = 50000;
+
+    QTemporaryFile cameraCsv;
+    QVERIFY(cameraCsv.open());
+    {
+        QTextStream out(&cameraCsv);
+        out.setCodec("UTF-8");
+        out << "model,manufacturer,resolution_x,resolution_y,pixel_size_um,sensor_format,color_mode,shutter_type,max_fps,interface,bandwidth_mbps,bit_depth,dynamic_range_db,lens_mount\n";
+        for (int i = 0; i < cameraTarget; ++i) {
+            out << "PERF-CAM-" << i << ",PerfCam," << (1600 + (i % 8) * 320) << "," << (1200 + (i % 6) * 240)
+                << ",3.45,1/1.8in,Mono,Global," << (30 + (i % 12) * 10) << ",USB3,380,12,60,C\n";
+        }
+    }
+    cameraCsv.close();
+    QVERIFY2(repo.loadCameraCsv(cameraCsv.fileName(), &error), qPrintable(error));
+
+    QTemporaryFile lensCsv;
+    QVERIFY(lensCsv.open());
+    {
+        QTextStream out(&lensCsv);
+        out.setCodec("UTF-8");
+        out << "model,manufacturer,lens_type,lens_mount,focal_length_mm,min_wd_mm,distortion_percent,image_circle_mm,megapixel_rating,recommended_min_pixel_um,pmag,nominal_wd_mm,wd_tolerance_mm,max_sensor_diagonal_mm,telecentricity_deg,dof_mm,numerical_aperture,f_number,coaxial_illumination,notes\n";
+        for (int i = 0; i < lensTarget; ++i) {
+            const bool telecentric = (i % 5) == 0;
+            out << "PERF-LENS-" << i << ",PerfLens," << (telecentric ? "ObjectTelecentric" : "FixedFocal")
+                << ",C," << (12 + (i % 8) * 4) << ",100,0.05," << (11 + (i % 12))
+                << ",12,3.45," << (telecentric ? "0.2" : "0") << ",110,5,22,0.08,8,0.03,2.8,"
+                << ((i % 7) == 0 ? "true" : "false") << ",performance fixture\n";
+        }
+    }
+    lensCsv.close();
+    QVERIFY2(repo.loadLensCsv(lensCsv.fileName(), &error), qPrintable(error));
+
+    QTemporaryFile lightCsv;
+    QVERIFY(lightCsv.open());
+    {
+        QTextStream out(&lightCsv);
+        out.setCodec("UTF-8");
+        out << "model,manufacturer,light_type,color,wavelength_nm,mode,active_width_mm,active_height_mm,best_for\n";
+        for (int i = 0; i < lightTarget; ++i) {
+            const char *type = (i % 6 == 0) ? "Coaxial" : (i % 6 == 1) ? "Dome" : (i % 6 == 2) ? "DarkField" : "Backlight";
+            out << "PERF-LIGHT-" << i << ",PerfLight," << type << ",White,0,"
+                << ((i % 4) == 0 ? "Strobe" : "Continuous") << "," << (40 + (i % 20) * 10)
+                << "," << (40 + (i % 16) * 10) << ",performance fixture\n";
+        }
+    }
+    lightCsv.close();
+    QVERIFY2(repo.loadLightCsv(lightCsv.fileName(), &error), qPrintable(error));
+
+    QElapsedTimer timer;
+    CatalogQuery query;
+    query.manufacturer = QStringLiteral("PerfCam");
+    query.limit = 500;
+    timer.start();
+    const CatalogPageResult<CameraSpec> cameraPage = repo.queryCameras(query, &error);
+    const qint64 filterMs = timer.elapsed();
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(cameraPage.items.size(), 500);
+    QVERIFY2(filterMs < 300, qPrintable(QStringLiteral("Camera filter query took %1 ms").arg(filterMs)));
+
+    query.offset = 5000;
+    timer.restart();
+    repo.queryCameras(query, &error);
+    const qint64 pageMs = timer.elapsed();
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QVERIFY2(pageMs < 200, qPrintable(QStringLiteral("Camera page query took %1 ms").arg(pageMs)));
+
+    SelectionRequest request;
+    timer.restart();
+    SelectionService service(&repo);
+    const QVector<SelectionResult> results = service.select(request, 20, &error);
+    const qint64 selectMs = timer.elapsed();
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QVERIFY(!results.isEmpty());
+    QVERIFY2(selectMs < 2000, qPrintable(QStringLiteral("Selection took %1 ms").arg(selectMs)));
+}
+
+void SelectionEngineTest::sqliteMigrationPreservesLocalCsvRows()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    QFile builtInCameraFile(QStringLiteral(":/data/cameras.csv"));
+    QVERIFY2(builtInCameraFile.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(builtInCameraFile.errorString()));
+    QTextStream builtInIn(&builtInCameraFile);
+    builtInIn.setCodec("UTF-8");
+    const QString header = builtInIn.readLine();
+    const QString builtInRow = builtInIn.readLine();
+    const auto unquoteCsvCell = [](QString value) {
+        value = value.trimmed();
+        if (value.startsWith(QLatin1Char('"')))
+            value.remove(0, 1);
+        if (value.endsWith(QLatin1Char('"')))
+            value.chop(1);
+        value.replace(QStringLiteral("\"\""), QStringLiteral("\""));
+        return value;
+    };
+    const QStringList builtInCells = builtInRow.split(QStringLiteral("\",\""));
+    QVERIFY(builtInCells.size() >= 2);
+    const QString builtInModel = unquoteCsvCell(builtInCells.at(0));
+    const QString builtInManufacturer = unquoteCsvCell(builtInCells.at(1));
+
+    QFile cameraFile(QDir(storage.path()).filePath(QStringLiteral("cameras.csv")));
+    QVERIFY(cameraFile.open(QIODevice::WriteOnly | QIODevice::Text));
+    QTextStream out(&cameraFile);
+    out.setCodec("UTF-8");
+    out << header << "\n";
+    out << builtInRow << "\n";
+    out << "LOCAL-CAM-001,LocalMaker,1280,1024,4.8,1/2in,Mono,Global,100,USB3,380,12,60,C\n";
+    cameraFile.close();
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.loadDefaults(&error), qPrintable(error));
+    QVERIFY(QFileInfo(QDir(storage.path()).filePath(QStringLiteral("catalog.db"))).exists());
+
+    CatalogQuery query;
+    query.search = QStringLiteral("LOCAL-CAM-001");
+    query.limit = 10;
+    const CatalogPageResult<CameraSpec> page = repo.queryCameras(query, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(page.totalCount, 1);
+    QCOMPARE(page.items.first().manufacturer, QStringLiteral("LocalMaker"));
+
+    const QStringList backups = QDir(storage.path()).entryList(QStringList() << QStringLiteral("catalog_migration_backup_*"), QDir::Dirs);
+    QVERIFY(!backups.isEmpty());
+
+    const QString connectionName = QStringLiteral("sqliteMigrationPreservesLocalCsvRows");
+    QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+    db.setDatabaseName(QDir(storage.path()).filePath(QStringLiteral("catalog.db")));
+    QVERIFY2(db.open(), qPrintable(db.lastError().text()));
+    QSqlQuery sourceQuery(db);
+    sourceQuery.prepare(QStringLiteral("SELECT source_kind FROM camera_products WHERE manufacturer=? AND model=?"));
+    sourceQuery.addBindValue(builtInManufacturer);
+    sourceQuery.addBindValue(builtInModel);
+    QVERIFY2(sourceQuery.exec(), qPrintable(sourceQuery.lastError().text()));
+    QVERIFY(sourceQuery.next());
+    QCOMPARE(sourceQuery.value(0).toString(), QStringLiteral("builtin"));
+    sourceQuery.finish();
+
+    sourceQuery.prepare(QStringLiteral("SELECT source_kind FROM camera_products WHERE manufacturer='LocalMaker' AND model='LOCAL-CAM-001'"));
+    QVERIFY2(sourceQuery.exec(), qPrintable(sourceQuery.lastError().text()));
+    QVERIFY(sourceQuery.next());
+    QCOMPARE(sourceQuery.value(0).toString(), QStringLiteral("local"));
+    sourceQuery = QSqlQuery();
+    db.close();
+    db = QSqlDatabase();
+    QSqlDatabase::removeDatabase(connectionName);
 }
 
 void SelectionEngineTest::sampleOnlyLightCatalogIsUpgraded()

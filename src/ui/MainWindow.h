@@ -7,7 +7,9 @@
 #include "ui/pages/CalculationPage.h"
 #include "ui/pages/CatalogPage.h"
 
+#include <QFutureWatcher>
 #include <QMainWindow>
+#include <QString>
 #include <QVector>
 
 class QComboBox;
@@ -18,6 +20,12 @@ class QPushButton;
 class ResultsPage;
 class QStackedWidget;
 class ThreeDCameraPage;
+
+struct SelectionJobResult {
+    SelectionRequest request;
+    QVector<SelectionResult> results;
+    QString error;
+};
 
 class MainWindow : public QMainWindow
 {
@@ -30,6 +38,9 @@ private:
     CatalogRepository m_catalog;
     QVector<SelectionResult> m_results;
     SelectionRequest m_request;
+    QFutureWatcher<SelectionJobResult> *m_selectionWatcher = nullptr;
+    bool m_hasPendingSelectionRequest = false;
+    SelectionRequest m_pendingSelectionRequest;
 
     QStackedWidget *m_pages = nullptr;
     QVector<QPushButton *> m_navButtons;
@@ -77,9 +88,13 @@ private:
     void ensureCatalogPageInitialized();
     void setActivePage(int index);
     void calculate();
+    void startSelectionCalculation(const SelectionRequest &request);
+    void finishSelectionCalculation();
+    bool selectionCalculationRunning() const;
     void refreshCalculationAssistant();
     void refreshAssistantLensTable();
     void refreshCatalogTables();
+    void handleCatalogMutation();
     void importCameras();
     void importLenses();
     void importLights();
