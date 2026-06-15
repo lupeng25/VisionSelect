@@ -84,11 +84,14 @@ function Interface-Bandwidth([string]$text) {
 }
 
 function Normalize-Mount([string]$text) {
-    $t = $text.ToUpperInvariant()
+    $t = $text.ToUpperInvariant().Replace([char]0x00D7, "X").Replace([char]0xFF38, "X")
+    if ($t -match 'M72\s*X\s*P?0\.75') { return "M72 x P0.75" }
+    if ($t -match 'M43\s*X\s*P?0\.5') { return "M43 x P0.5" }
     if ($t -match 'M58') { return "M58" }
     if ($t -match 'M42') { return "M42" }
     if ($t -match 'F-MOUNT|F MOUNT') { return "F" }
-    if ($t -match 'C-MOUNT|C MOUNT|^C$') { return "C" }
+    if ($t -match 'C-MOUNT|C\s*-\s*MOUNT|C MOUNT|^C$|^C口$') { return "C" }
+    if ($t -match 'S-MOUNT|SMOUNT') { return "M12" }
     if ($t -match 'M12') { return "M12" }
     return $text
 }
@@ -114,10 +117,30 @@ function Html-Decode([string]$text) {
     return [System.Net.WebUtility]::HtmlDecode($text).Trim()
 }
 
+function Sensor-DiagonalFromFormat([string]$text) {
+    $t = (Html-Decode $text).Replace([char]0x2033, '"').Replace("''", '"').Replace(" ", "")
+    $t = $t.Trim('"')
+    $formats = @(
+        @('1/4', 4.5), @('1/3', 6.0), @('1/2.9', 6.3), @('1/2.7', 6.7),
+        @('1/2.5', 7.2), @('1/2.3', 7.7), @('1/2', 8.0), @('1/1.8', 9.0),
+        @('1/1.7', 9.5), @('2/3', 11.0), @('1/1.2', 13.3), @('1', 16.0),
+        @('1.1', 17.6), @('1.2', 19.3), @('4/3', 22.0), @('APS-C', 28.0),
+        @('APS-H', 37.0), @('35mm', 44.0)
+    )
+    foreach ($entry in $formats) {
+        if ($t -eq $entry[0] -or $t -like "$($entry[0])`"*") { return [double]$entry[1] }
+    }
+    return 0
+}
+
 function Sensor-DiagonalFromSpec([string]$text) {
     $t = Html-Decode $text
     $m = [regex]::Match($t, 'Full\(([0-9]+(?:\.[0-9]+)?)\)')
     if ($m.Success) { return [double]$m.Groups[1].Value }
+    $m = [regex]::Match($t, '[ØΦφФ]?\s*([0-9]+(?:\.[0-9]+)?)\s*mm', 'IgnoreCase')
+    if ($m.Success) { return [double]$m.Groups[1].Value }
+    $formatDiagonal = Sensor-DiagonalFromFormat $t
+    if ($formatDiagonal -gt 0) { return $formatDiagonal }
     $m = [regex]::Match($t, '^\s*([0-9]+(?:\.[0-9]+)?)')
     if ($m.Success) { return [double]$m.Groups[1].Value }
     return Sensor-DiagonalMm $t
@@ -130,6 +153,35 @@ function Parse-WdPair([string]$text) {
     $m = [regex]::Match($t, '[±卤]\s*([0-9]+(?:\.[0-9]+)?)')
     if ($m.Success) { $tol = [double]$m.Groups[1].Value }
     return @($nominal, $tol)
+}
+
+function Parse-MinWorkingDistanceMm([string]$text) {
+    $t = Html-Decode $text
+    $minWd = First-Number $t 0
+    if ($minWd -gt 0 -and $t -match '(?i)[0-9]\s*m\b' -and $t -notmatch '(?i)mm' -and $minWd -lt 20) {
+        $minWd *= 1000
+    }
+    return $minWd
+}
+
+function Parse-DistortionPercent([string]$text) {
+    $t = Html-Decode $text
+    $value = First-Number $t 0
+    if ($value -gt 0 -and $value -lt 0.1 -and $t -notmatch '%') {
+        return $value * 100.0
+    }
+    return $value
+}
+
+function Megapixels-FromText([string]$text, [bool]$allowBareM = $false) {
+    $pattern = if ($allowBareM) {
+        '(?i)([0-9]+(?:\.[0-9]+)?)\s*(?:MP|M\b)'
+    } else {
+        '(?i)([0-9]+(?:\.[0-9]+)?)\s*MP'
+    }
+    $m = [regex]::Match((Html-Decode $text), $pattern)
+    if ($m.Success) { return [double]$m.Groups[1].Value }
+    return 0
 }
 
 function Format-Number([double]$value) {
@@ -267,10 +319,19 @@ function Param-Map($groups) {
     $m = @{}
     foreach ($g in $groups) {
         foreach ($c in $g.child) {
-            if ($c.attr_name) { $m[$c.attr_name] = [string]$c.attr_value }
+            if ($c.attr_name) { $m[(Clean-Field $c.attr_name)] = Clean-Field ([string]$c.attr_value) }
         }
     }
     return $m
+}
+
+function Param-Value([hashtable]$map, [string[]]$keys) {
+    foreach ($key in $keys) {
+        if ($map.ContainsKey($key) -and ![string]::IsNullOrWhiteSpace($map[$key])) {
+            return $map[$key]
+        }
+    }
+    return ""
 }
 
 function Normalize-ColorMode([string]$model, [string]$color, [string]$typeText, [string]$pixelFormat) {
@@ -456,6 +517,57 @@ function Add-CoolensWwtFixedLens([hashtable]$map, $row, [hashtable]$detail, [str
     Add-FixedLens $map $model $focal $fno $imageCircle 0 $minWd $distortion $mount "COOLENS $series official product detail" "COOLENS"
 }
 
+function Add-IraypleFixedLens([hashtable]$map, $detail) {
+    $model = Clean-Field $detail.data.model
+    $p = Param-Map $detail.data.parameter
+    $focal = First-Number (Param-Value $p @("Focal Length", "镜头焦距")) 0
+    $sensor = Param-Value $p @("Image Sensor Size", "lmage Sensor Size", "像面尺寸")
+    $imageCircle = Sensor-DiagonalFromSpec $sensor
+    $mount = Param-Value $p @("Camera Mount", "安装接口")
+    $focusRange = Param-Value $p @("Focus Range", "对焦范围")
+    $series = Param-Value $p @("Series", "系列")
+    $note = "iRAYPLE official product API; $series"
+    if ([string]::IsNullOrWhiteSpace($mount) -and $series -eq "MH-SP Series" -and $model -match '^MH\d+SP$') {
+        $mount = "C Mount"
+        $note = "$note; camera mount inferred from other MH-SP official records"
+    }
+    $mp = Megapixels-FromText "$series $model"
+    $distortionText = Param-Value $p @("Optical Distortion", "光学畸变", "TV Distortion", "TV畸变")
+    if ([string]::IsNullOrWhiteSpace($model) -or $focal -le 0 -or $imageCircle -le 0) { return }
+
+    Add-FixedLens $map $model $focal `
+        (First-Number (Param-Value $p @("Aperture", "光圈孔径")) 0) `
+        $imageCircle $mp (Parse-MinWorkingDistanceMm $focusRange) `
+        (Parse-DistortionPercent $distortionText) $mount `
+        $note "iRAYPLE"
+}
+
+function Get-DahengLensSpec([string]$url) {
+    $html = (Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 30).Content
+    $spec = @{}
+    $matches = [regex]::Matches($html, '<tr>\s*<td class="td1">\s*(.*?)\s*</td>\s*<td>\s*(.*?)\s*</td>\s*</tr>', 'Singleline')
+    foreach ($match in $matches) {
+        $key = Strip-Html $match.Groups[1].Value
+        $value = Strip-Html $match.Groups[2].Value
+        if (![string]::IsNullOrWhiteSpace($key)) { $spec[$key] = $value }
+    }
+    return $spec
+}
+
+function Add-DahengFixedLens([hashtable]$map, [hashtable]$spec, [string]$sourceUrl) {
+    $model = Clean-Field $spec["Model"]
+    $focal = First-Number $spec["Focal Length(mm)"] 0
+    $imageCircle = Sensor-DiagonalFromFormat $spec["Format(inch)"]
+    $mp = Megapixels-FromText $spec["Resolution"] $true
+    $minWd = First-Number $spec["Min. Working Distance(mm)"] 0
+    if ($minWd -le 0) { $minWd = Parse-MinWorkingDistanceMm $spec["Working Distance(mm)"] }
+    if ([string]::IsNullOrWhiteSpace($model) -or $focal -le 0 -or $imageCircle -le 0) { return }
+
+    Add-FixedLens $map $model $focal (First-Number $spec["Aperture"] 0) $imageCircle $mp $minWd `
+        (First-Number $spec["Distortion(%)"] 0) $spec["Mount"] `
+        "Daheng Imaging official lens specifications; $sourceUrl" "Daheng Imaging"
+}
+
 $cameraMap = @{}
 foreach ($row in (Import-Csv $cameraPath)) { Add-ToMap $cameraMap $row }
 $lensMap = @{}
@@ -582,9 +694,23 @@ if (!$SkipNetwork) {
             foreach ($item in $cfg.data) { $p[$item.name] = [string]$item.value }
             $minWd = First-Number $p["Minimum object distance"] 0
             if ($p["Minimum object distance"] -match '\bm\b' -and $minWd -lt 20) { $minWd = $minWd * 1000 }
-            Add-FixedLens $lensMap $p["Product Model"] (First-Number $p["Focal length"] 0) (First-Number $p["F-number"] 0) (First-Number $p["Image size"] 0) (First-Number $p["Type"] 0) $minWd (First-Number $p["Distortion"] 0) $p["Mount"] "Hikrobot FA lens from official product API" "Hikrobot"
+            Add-FixedLens $lensMap $p["Product Model"] (First-Number $p["Focal length"] 0) (First-Number $p["F-number"] 0) (First-Number $p["Image size"] 0) (Megapixels-FromText $p["Type"] $true) $minWd (First-Number $p["Distortion"] 0) $p["Mount"] "Hikrobot FA lens from official product API" "Hikrobot"
         } catch {
             Write-Warning "Skipped Hikrobot lens id=$($rec.id): $($_.Exception.Message)"
+        }
+    }
+
+    Write-Host "Fetching Hikrobot M12 lenses..."
+    $hikM12LensList = (Invoke-WebRequest -Uri "https://www.hikrobotics.com/en/Api/Foreground/Vision/VisionProductContent?firstModuleId=40&secondaryModuleId=180&page=1&size=100&showEol=false" -UseBasicParsing -TimeoutSec 60).Content | ConvertFrom-Json
+    foreach ($rec in $hikM12LensList.data.VisionProductContent.records) {
+        try {
+            $cfg = (Invoke-WebRequest -Uri "https://www.hikrobotics.com/en/Api/Foreground/Vision/VisionProductConfig?id=$($rec.id)" -UseBasicParsing -TimeoutSec 20).Content | ConvertFrom-Json
+            $p = @{}
+            foreach ($item in $cfg.data) { $p[$item.name] = [string]$item.value }
+            $minWd = First-Number $p["Working Distance Range"] 0
+            Add-FixedLens $lensMap $p["Product Model"] (First-Number $p["Focal length"] 0) (First-Number $p["F-Number"] 0) (First-Number $p["Image Size"] 0) (Megapixels-FromText $p["Type"] $true) $minWd (First-Number $p["TV Distortion"] 0) $p["Mount"] "Hikrobot M12 lens from official product API" "Hikrobot"
+        } catch {
+            Write-Warning "Skipped Hikrobot M12 lens id=$($rec.id): $($_.Exception.Message)"
         }
     }
 
@@ -612,6 +738,49 @@ if (!$SkipNetwork) {
         } catch {
             Write-Warning "Skipped iRAYPLE camera id=$($rec.id): $($_.Exception.Message)"
         }
+    }
+
+    Write-Host "Fetching iRAYPLE lenses..."
+    $iraypleLensCategoryIds = @(121, 187)
+    foreach ($categoryId in $iraypleLensCategoryIds) {
+        try {
+            $firstLensPage = Invoke-Utf8Json "https://www.irayple.com/api/en/vision/productListNew?id=$categoryId&page=1&type=vision"
+            $lensRecords = @()
+            $lensRecords += $firstLensPage.data.list
+            for ($page = 2; $page -le [int]$firstLensPage.data.totalPage; $page++) {
+                $pageData = Invoke-Utf8Json "https://www.irayple.com/api/en/vision/productListNew?id=$categoryId&page=$page&type=vision"
+                $lensRecords += $pageData.data.list
+            }
+            Write-Host "  iRAYPLE category ${categoryId}: $($lensRecords.Count) rows"
+            foreach ($rec in $lensRecords) {
+                try {
+                    $detail = Invoke-Utf8Json "https://www.irayple.com/api/en/product/productDetails?id=$($rec.id)"
+                    Add-IraypleFixedLens $lensMap $detail
+                } catch {
+                    Write-Warning "Skipped iRAYPLE lens id=$($rec.id): $($_.Exception.Message)"
+                }
+            }
+        } catch {
+            Write-Warning "Skipped iRAYPLE lens category ${categoryId}: $($_.Exception.Message)"
+        }
+    }
+
+    Write-Host "Fetching Daheng Imaging fixed-focus lenses..."
+    try {
+        $dahengIndex = (Invoke-WebRequest -Uri "https://en.daheng-imaging.com/index.php?a=xxlists&c=index&catid=449&m=content" -UseBasicParsing -TimeoutSec 30).Content
+        $dahengLinks = [regex]::Matches($dahengIndex, 'show-[0-9]+-[0-9]+-1\.html') |
+            ForEach-Object { "https://en.daheng-imaging.com/$($_.Value)" } |
+            Sort-Object -Unique
+        Write-Host "  Daheng Imaging lens pages: $($dahengLinks.Count)"
+        foreach ($link in $dahengLinks) {
+            try {
+                Add-DahengFixedLens $lensMap (Get-DahengLensSpec $link) $link
+            } catch {
+                Write-Warning "Skipped Daheng Imaging lens page ${link}: $($_.Exception.Message)"
+            }
+        }
+    } catch {
+        Write-Warning "Skipped Daheng Imaging lens catalog: $($_.Exception.Message)"
     }
 
     Write-Host "Fetching COOLENS lens products..."
