@@ -303,7 +303,9 @@ double SelectionEngine::bandwidthRequiredMBps(const CameraSpec &camera, double f
 
 double SelectionEngine::framePayloadMB(const CameraSpec &camera)
 {
-    const double bitsPerFrame = camera.resolutionX * camera.resolutionY * camera.bitDepth;
+    const double bitsPerFrame = static_cast<double>(camera.resolutionX)
+        * static_cast<double>(camera.resolutionY)
+        * camera.bitDepth;
     return bitsPerFrame / 8.0 / 1000000.0;
 }
 

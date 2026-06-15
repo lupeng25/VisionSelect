@@ -41,6 +41,19 @@ QString shortProduct(const QString &manufacturer, const QString &model)
     const QString label = productLabel(manufacturer, model);
     return label.size() > 34 ? label.left(31) + QStringLiteral("...") : label;
 }
+
+QString htmlText(const QString &text)
+{
+    return text.toHtmlEscaped();
+}
+
+QString htmlList(const QStringList &values, const QString &separator)
+{
+    QStringList escaped;
+    for (const QString &value : values)
+        escaped << htmlText(value);
+    return escaped.join(separator);
+}
 }
 
 ResultsPage::ResultsPage(QWidget *parent)
@@ -279,12 +292,12 @@ void ResultsPage::refreshDetails(int row)
 
     const SelectionResult &r = m_results.at(row);
     QString text;
-    text += QStringLiteral("<h3>") + r.schemeTitle + localizedText("：", ": ")
-        + productLabel(r.camera.manufacturer, r.camera.model) + QStringLiteral(" + ")
-        + productLabel(r.lens.manufacturer, r.lens.model) + QStringLiteral(" + ")
-        + productLabel(r.light.manufacturer, r.light.model) + QStringLiteral("</h3>");
-    text += localizedText("<p><b>公式：</b>%1</p>", "<p><b>Formula:</b> %1</p>").arg(r.formulaSummary);
-    text += localizedText("<p><b>适配状态：</b>%1</p>", "<p><b>Compatibility:</b> %1</p>").arg(compatibilityText(r));
+    text += QStringLiteral("<h3>") + htmlText(r.schemeTitle) + localizedText("：", ": ")
+        + htmlText(productLabel(r.camera.manufacturer, r.camera.model)) + QStringLiteral(" + ")
+        + htmlText(productLabel(r.lens.manufacturer, r.lens.model)) + QStringLiteral(" + ")
+        + htmlText(productLabel(r.light.manufacturer, r.light.model)) + QStringLiteral("</h3>");
+    text += localizedText("<p><b>公式：</b>%1</p>", "<p><b>Formula:</b> %1</p>").arg(htmlText(r.formulaSummary));
+    text += localizedText("<p><b>适配状态：</b>%1</p>", "<p><b>Compatibility:</b> %1</p>").arg(htmlText(compatibilityText(r)));
     text += localizedText("<p><b>有效 FOV：</b>%1 x %2 mm；<b>物方像素：</b>%3 um/px；<b>接口带宽需求：</b>%4 MB/s。</p>",
                           "<p><b>Effective FOV:</b> %1 x %2 mm; <b>object pixel:</b> %3 um/px; <b>required bandwidth:</b> %4 MB/s.</p>")
         .arg(r.effectiveFovWidthMm, 0, 'f', 2)
@@ -318,11 +331,12 @@ void ResultsPage::refreshDetails(int row)
             .arg(r.estimatedDofMm, 0, 'f', 2)
             .arg(r.residualTelecentricErrorUm, 0, 'f', 2);
     }
-    text += localizedText("<p><b>推荐理由：</b>%1</p>", "<p><b>Reasons:</b> %1</p>").arg(r.score.reasons.join(localizedText("；", "; ")));
+    text += localizedText("<p><b>推荐理由：</b>%1</p>", "<p><b>Reasons:</b> %1</p>")
+        .arg(htmlList(r.score.reasons, localizedText("；", "; ")));
     const QString riskText = (r.score.risks.isEmpty() && r.hardFailures.isEmpty())
         ? localizedText("无主要风险，仍建议结合厂家 MTF/DOF 与现场光源实测确认。",
                         "No major risk; still verify with vendor MTF/DOF data and on-site lighting tests.")
         : riskSummary(r);
-    text += localizedText("<p><b>风险提示：</b>%1</p>", "<p><b>Risks:</b> %1</p>").arg(riskText);
+    text += localizedText("<p><b>风险提示：</b>%1</p>", "<p><b>Risks:</b> %1</p>").arg(htmlText(riskText));
     m_details->setHtml(text);
 }

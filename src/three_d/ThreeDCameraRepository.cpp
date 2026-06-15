@@ -2,12 +2,14 @@
 
 #include "i18n/LanguageManager.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QSet>
 
@@ -17,6 +19,19 @@ QString text(const char *zhUtf8, const char *enUtf8)
     return LanguageManager::instance().currentLanguage() == QLatin1String("en_US")
         ? QString::fromUtf8(enUtf8)
         : QString::fromUtf8(zhUtf8);
+}
+
+void setError(QString *error, const QString &message);
+
+bool quarantineCorruptUserFile(const QString &path, QString *error)
+{
+    const QString quarantinePath = path + QStringLiteral(".corrupt-")
+        + QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMddHHmmsszzz"));
+    if (QFile::rename(path, quarantinePath))
+        return true;
+    setError(error, text("自定义 3D 相机 JSON 已损坏，且无法隔离文件：%1",
+                         "Custom 3D camera JSON is corrupt and could not be quarantined: %1").arg(path));
+    return false;
 }
 
 double numberValue(const QJsonObject &object, const char *key)
@@ -462,8 +477,8 @@ bool ThreeDCameraRepository::loadUserCameras(QString *error)
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-        setError(error, text("自定义 3D 相机 JSON 格式无效：%1", "Invalid custom 3D camera JSON: %1").arg(parseError.errorString()));
-        return false;
+        file.close();
+        return quarantineCorruptUserFile(path, error);
     }
 
     const QJsonArray array = document.object().value(QStringLiteral("cameras")).toArray();
@@ -498,12 +513,24 @@ bool ThreeDCameraRepository::saveUserCameras(QString *error) const
     root.insert(QStringLiteral("schemaVersion"), 1);
     root.insert(QStringLiteral("cameras"), array);
 
-    QFile file(path);
+    QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         setError(error, text("无法写入自定义 3D 相机数据：%1", "Unable to write custom 3D camera data: %1").arg(path));
         return false;
     }
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    const QByteArray payload = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    if (file.write(payload) != payload.size()) {
+        setError(error, text("无法写入自定义 3D 相机数据：%1", "Unable to write custom 3D camera data: %1").arg(file.errorString()));
+        return false;
+    }
+    if (!file.commit()) {
+        setError(error, text("无法保存自定义 3D 相机数据：%1", "Unable to save custom 3D camera data: %1").arg(file.errorString()));
+        return false;
+    }
+    QFile::setPermissions(path,
+                          QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                              | QFileDevice::ReadUser | QFileDevice::WriteUser
+                              | QFileDevice::ReadGroup | QFileDevice::ReadOther);
     return true;
 }
 

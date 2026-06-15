@@ -47,12 +47,15 @@ private slots:
     void sqliteAddDuplicateProductsDoesNotReplaceExisting();
     void sqliteFilteredExportFailsWhenQueryFails();
     void sqliteSelectionCandidatesFilterBeforeLimit();
+    void sqliteLensCandidateFocalRecallSurvivesImageCircleLimit();
+    void multilineQuotedCsvImports();
     void sqliteMigrationPreservesLocalCsvRows();
     void sqliteLightCandidatesUseLensFeatureCache();
     void catalogPerformanceGate();
     void sampleOnlyLightCatalogIsUpgraded();
     void motionExposureAndStrobePreference();
     void dataThroughputAndInterfaceRisk();
+    void highResolutionFramePayloadDoesNotOverflow();
     void cameraEstimatePenalizesInsufficientBandwidth();
     void globalShutterAliasesAreRecognized();
     void lowAngleRingLightActsAsDarkField();
@@ -69,6 +72,7 @@ private slots:
     void chineseTextIsUnicode();
     void threeDCameraCatalogLoadsFromResource();
     void threeDCameraUserCatalogPersists();
+    void threeDCameraCorruptUserCatalogIsQuarantined();
     void threeDCameraMatcherClassifiesRequirements();
     void threeDMotionSamplingMatchesSpreadsheetExample();
     void threeDMotionSamplingUsesCameraDataAndFlagsRisks();
@@ -874,6 +878,80 @@ void SelectionEngineTest::sqliteSelectionCandidatesFilterBeforeLimit()
     QVERIFY(foundLens);
 }
 
+void SelectionEngineTest::sqliteLensCandidateFocalRecallSurvivesImageCircleLimit()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.initializeDatabase(&error), qPrintable(error));
+
+    QTemporaryFile lensCsv;
+    QVERIFY(lensCsv.open());
+    {
+        QTextStream out(&lensCsv);
+        out.setCodec("UTF-8");
+        out << "model,manufacturer,lens_type,lens_mount,focal_length_mm,min_wd_mm,distortion_percent,image_circle_mm,megapixel_rating,recommended_min_pixel_um,pmag,nominal_wd_mm,wd_tolerance_mm,max_sensor_diagonal_mm,telecentricity_deg,dof_mm,numerical_aperture,f_number,coaxial_illumination,notes\n";
+        for (int i = 1; i <= 600; ++i) {
+            if (i == 300)
+                continue;
+            out << "NOISE-LENS-" << i << ",CandidateFixture,FixedFocal,C,8,50,0.05," << i
+                << ",12,3.45,0,0,0,0,0,8,0.03,2.8,false,image circle ordering noise\n";
+        }
+        out << "MID-CIRCLE-TARGET-FOCAL,CandidateFixture,FixedFocal,C,16,50,0.05,300,12,3.45,0,0,0,0,0,8,0.03,2.8,false,target focal in middle image-circle band\n";
+    }
+    lensCsv.close();
+    QVERIFY2(repo.loadLensCsv(lensCsv.fileName(), &error), qPrintable(error));
+
+    SelectionRequest request;
+    request.objectWidthMm = 40.0;
+    request.objectHeightMm = 30.0;
+    request.placementMarginMm = 0.0;
+    request.workingDistanceMm = 110.0;
+    request.allowTelecentric = false;
+
+    error.clear();
+    const QVector<LensSpec> lensCandidates = repo.selectionCandidateLenses(request, 500, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    bool foundTarget = false;
+    for (const LensSpec &candidate : lensCandidates)
+        foundTarget = foundTarget || candidate.model == QStringLiteral("MID-CIRCLE-TARGET-FOCAL");
+    QVERIFY(foundTarget);
+}
+
+void SelectionEngineTest::multilineQuotedCsvImports()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.initializeDatabase(&error), qPrintable(error));
+
+    QTemporaryFile lensCsv;
+    QVERIFY(lensCsv.open());
+    {
+        QTextStream out(&lensCsv);
+        out.setCodec("UTF-8");
+        out << "model,manufacturer,lens_type,lens_mount,focal_length_mm,min_wd_mm,distortion_percent,image_circle_mm,megapixel_rating,recommended_min_pixel_um,pmag,nominal_wd_mm,wd_tolerance_mm,max_sensor_diagonal_mm,telecentricity_deg,dof_mm,numerical_aperture,f_number,coaxial_illumination,notes\n";
+        out << "MULTILINE-NOTES,ImportFixture,FixedFocal,C,16,50,0.05,18,12,3.45,0,0,0,0,0,8,0.03,2.8,false,\"line one\nline two\"\n";
+    }
+    lensCsv.close();
+    QVERIFY2(repo.loadLensCsv(lensCsv.fileName(), &error), qPrintable(error));
+
+    CatalogQuery query;
+    query.search = QStringLiteral("MULTILINE-NOTES");
+    query.limit = 10;
+    error.clear();
+    const CatalogPageResult<LensSpec> page = repo.queryLenses(query, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(page.items.size(), 1);
+    QCOMPARE(page.items.first().notes, QStringLiteral("line one\nline two"));
+}
+
 void SelectionEngineTest::sqliteLightCandidatesUseLensFeatureCache()
 {
     QTemporaryDir storage;
@@ -1220,6 +1298,19 @@ void SelectionEngineTest::dataThroughputAndInterfaceRisk()
     QVERIFY2(risks.contains(QStringLiteral("MP")), qPrintable(risks));
     QVERIFY(!results.first().hardConstraintsPassed);
     QVERIFY(results.first().hardFailures.join(QStringLiteral(";")).contains(QString::fromUtf8("接口带宽")));
+}
+
+void SelectionEngineTest::highResolutionFramePayloadDoesNotOverflow()
+{
+    CameraSpec camera;
+    camera.model = QStringLiteral("MAX-RES-CAM");
+    camera.resolutionX = 200000;
+    camera.resolutionY = 200000;
+    camera.bitDepth = 12.0;
+
+    const double payloadMB = SelectionEngine::framePayloadMB(camera);
+    QVERIFY(qAbs(payloadMB - 60000.0) < 0.001);
+    QCOMPARE(SelectionEngine::bandwidthRequiredMBps(camera, 2.0), 120000.0);
 }
 
 void SelectionEngineTest::cameraEstimatePenalizesInsufficientBandwidth()
@@ -1869,6 +1960,30 @@ void SelectionEngineTest::threeDCameraUserCatalogPersists()
     removedReloaded.setStorageDirectory(storage.path());
     QVERIFY2(removedReloaded.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
     QCOMPARE(removedReloaded.cameras().size(), builtInCount);
+}
+
+void SelectionEngineTest::threeDCameraCorruptUserCatalogIsQuarantined()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    const QString userPath = QDir(storage.path()).filePath(QStringLiteral("three_d_cameras.json"));
+    QFile file(userPath);
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+    file.write("{\"cameras\":[");
+    file.close();
+
+    ThreeDCameraRepository repository;
+    repository.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repository.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
+    QVERIFY(repository.cameras().size() >= 40);
+    QVERIFY(!QFileInfo::exists(userPath));
+
+    const QStringList quarantined = QDir(storage.path()).entryList(
+        QStringList() << QStringLiteral("three_d_cameras.json.corrupt-*"),
+        QDir::Files);
+    QCOMPARE(quarantined.size(), 1);
 }
 
 void SelectionEngineTest::threeDCameraMatcherClassifiesRequirements()

@@ -93,6 +93,11 @@ QString pageText(int total, int offset, int shown)
         .arg(last);
 }
 
+QString catalogErrorText(const QString &error)
+{
+    return localizedText("加载失败：%1", "Load failed: %1").arg(error);
+}
+
 int totalPages(int total, int pageSize)
 {
     return qMax(1, (qMax(0, total) + pageSize - 1) / pageSize);
@@ -562,14 +567,30 @@ void CatalogPage::refreshCatalogFilterOptions()
 {
     if (!m_catalog)
         return;
-    fillComboPreservingText(m_cameraManufacturerFilter, allManufacturersText(), m_catalog->distinctValues(CatalogDomain::Camera, QStringLiteral("manufacturer")));
-    fillComboPreservingText(m_cameraInterfaceFilter, allInterfacesText(), m_catalog->distinctValues(CatalogDomain::Camera, QStringLiteral("interface")));
-    fillComboPreservingText(m_lensManufacturerFilter, allManufacturersText(), m_catalog->distinctValues(CatalogDomain::Lens, QStringLiteral("manufacturer")));
-    fillComboPreservingText(m_lensTypeFilter, allTypesText(), m_catalog->distinctValues(CatalogDomain::Lens, QStringLiteral("lens_type")));
-    fillComboPreservingText(m_lensMountFilter, allMountsText(), m_catalog->distinctValues(CatalogDomain::Lens, QStringLiteral("lens_mount")));
-    fillComboPreservingText(m_lightManufacturerFilter, allManufacturersText(), m_catalog->distinctValues(CatalogDomain::Light, QStringLiteral("manufacturer")));
-    fillComboPreservingText(m_lightTypeFilter, allTypesText(), m_catalog->distinctValues(CatalogDomain::Light, QStringLiteral("light_type")));
-    fillComboPreservingText(m_lightModeFilter, allModesText(), m_catalog->distinctValues(CatalogDomain::Light, QStringLiteral("mode")));
+    QString filterError;
+    const auto values = [this, &filterError](CatalogDomain domain, const QString &field) {
+        QString error;
+        const QStringList result = m_catalog->distinctValues(domain, field, &error);
+        if (!error.isEmpty() && filterError.isEmpty())
+            filterError = error;
+        return result;
+    };
+
+    fillComboPreservingText(m_cameraManufacturerFilter, allManufacturersText(), values(CatalogDomain::Camera, QStringLiteral("manufacturer")));
+    fillComboPreservingText(m_cameraInterfaceFilter, allInterfacesText(), values(CatalogDomain::Camera, QStringLiteral("interface")));
+    fillComboPreservingText(m_lensManufacturerFilter, allManufacturersText(), values(CatalogDomain::Lens, QStringLiteral("manufacturer")));
+    fillComboPreservingText(m_lensTypeFilter, allTypesText(), values(CatalogDomain::Lens, QStringLiteral("lens_type")));
+    fillComboPreservingText(m_lensMountFilter, allMountsText(), values(CatalogDomain::Lens, QStringLiteral("lens_mount")));
+    fillComboPreservingText(m_lightManufacturerFilter, allManufacturersText(), values(CatalogDomain::Light, QStringLiteral("manufacturer")));
+    fillComboPreservingText(m_lightTypeFilter, allTypesText(), values(CatalogDomain::Light, QStringLiteral("light_type")));
+    fillComboPreservingText(m_lightModeFilter, allModesText(), values(CatalogDomain::Light, QStringLiteral("mode")));
+
+    if (!filterError.isEmpty()) {
+        QLabel *label = m_tabs && m_tabs->currentIndex() == 1 ? m_lensPageLabel
+            : (m_tabs && m_tabs->currentIndex() == 2 ? m_lightPageLabel : m_cameraPageLabel);
+        if (label)
+            label->setText(catalogErrorText(filterError));
+    }
 }
 
 CatalogQuery CatalogPage::currentCameraQuery() const
@@ -617,7 +638,20 @@ void CatalogPage::refreshCameraTable()
 {
     if (!m_catalog || !m_cameraModel)
         return;
-    const CatalogPageResult<CameraSpec> page = m_catalog->queryCameras(currentCameraQuery());
+    QString error;
+    const CatalogPageResult<CameraSpec> page = m_catalog->queryCameras(currentCameraQuery(), &error);
+    if (!error.isEmpty()) {
+        m_cameraTotal = 0;
+        m_cameraModel->setCameras(QVector<qint64>(), QVector<CameraSpec>());
+        if (m_cameraPageLabel)
+            m_cameraPageLabel->setText(catalogErrorText(error));
+        updatePageSpin(m_cameraPageSpin, 0, 0, kPageSize);
+        if (m_cameraPrevButton)
+            m_cameraPrevButton->setEnabled(false);
+        if (m_cameraNextButton)
+            m_cameraNextButton->setEnabled(false);
+        return;
+    }
     m_cameraTotal = page.totalCount;
     if (m_cameraOffset >= m_cameraTotal && m_cameraOffset > 0) {
         m_cameraOffset = qMax(0, ((m_cameraTotal - 1) / kPageSize) * kPageSize);
@@ -634,7 +668,20 @@ void CatalogPage::refreshLensTable()
 {
     if (!m_catalog || !m_lensModel)
         return;
-    const CatalogPageResult<LensSpec> page = m_catalog->queryLenses(currentLensQuery());
+    QString error;
+    const CatalogPageResult<LensSpec> page = m_catalog->queryLenses(currentLensQuery(), &error);
+    if (!error.isEmpty()) {
+        m_lensTotal = 0;
+        m_lensModel->setLenses(QVector<qint64>(), QVector<LensSpec>());
+        if (m_lensPageLabel)
+            m_lensPageLabel->setText(catalogErrorText(error));
+        updatePageSpin(m_lensPageSpin, 0, 0, kPageSize);
+        if (m_lensPrevButton)
+            m_lensPrevButton->setEnabled(false);
+        if (m_lensNextButton)
+            m_lensNextButton->setEnabled(false);
+        return;
+    }
     m_lensTotal = page.totalCount;
     if (m_lensOffset >= m_lensTotal && m_lensOffset > 0) {
         m_lensOffset = qMax(0, ((m_lensTotal - 1) / kPageSize) * kPageSize);
@@ -651,7 +698,20 @@ void CatalogPage::refreshLightTable()
 {
     if (!m_catalog || !m_lightModel)
         return;
-    const CatalogPageResult<LightSpec> page = m_catalog->queryLights(currentLightQuery());
+    QString error;
+    const CatalogPageResult<LightSpec> page = m_catalog->queryLights(currentLightQuery(), &error);
+    if (!error.isEmpty()) {
+        m_lightTotal = 0;
+        m_lightModel->setLights(QVector<qint64>(), QVector<LightSpec>());
+        if (m_lightPageLabel)
+            m_lightPageLabel->setText(catalogErrorText(error));
+        updatePageSpin(m_lightPageSpin, 0, 0, kPageSize);
+        if (m_lightPrevButton)
+            m_lightPrevButton->setEnabled(false);
+        if (m_lightNextButton)
+            m_lightNextButton->setEnabled(false);
+        return;
+    }
     m_lightTotal = page.totalCount;
     if (m_lightOffset >= m_lightTotal && m_lightOffset > 0) {
         m_lightOffset = qMax(0, ((m_lightTotal - 1) / kPageSize) * kPageSize);

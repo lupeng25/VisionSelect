@@ -99,6 +99,66 @@ QString lightCandidateCacheKey(const SelectionRequest &request, bool hasTelecent
         .arg(limit > 0 ? limit : 300);
 }
 
+QVector<double> fixedFocalTargetSamples(const SelectionRequest &request)
+{
+    QVector<double> targets;
+    const double fovW = request.objectWidthMm + request.placementMarginMm * 2.0;
+    const double fovH = request.objectHeightMm + request.placementMarginMm * 2.0;
+    if (request.workingDistanceMm <= 0.0 || fovW <= 0.0 || fovH <= 0.0)
+        return targets;
+
+    static const double sensorWidths[] = { 3.6, 4.8, 6.4, 8.8, 11.3, 14.1, 17.6, 25.6 };
+    static const double sensorHeights[] = { 2.7, 3.6, 4.8, 6.6, 8.5, 10.6, 13.2, 19.2 };
+    for (int i = 0; i < static_cast<int>(sizeof(sensorWidths) / sizeof(sensorWidths[0])); ++i) {
+        const double sensorW = sensorWidths[i];
+        const double sensorH = sensorHeights[i];
+        const bool widthLimited = (fovW / fovH) >= (sensorW / sensorH);
+        const double fov = widthLimited ? fovW : fovH;
+        const double sensor = widthLimited ? sensorW : sensorH;
+        const double focal = request.workingDistanceMm * sensor / (fov + sensor);
+        if (!std::isfinite(focal) || focal <= 0.0)
+            continue;
+        bool duplicate = false;
+        for (double existing : targets) {
+            if (qAbs(existing - focal) < 0.5) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate)
+            targets.append(focal);
+    }
+    return targets;
+}
+
+QString focalProximityOrder(const QVector<double> &targets)
+{
+    if (targets.isEmpty())
+        return QString();
+    QStringList distances;
+    for (int i = 0; i < targets.size(); ++i)
+        distances << QStringLiteral("ABS(focal_length_mm - ?)");
+    const QString distance = distances.size() == 1
+        ? distances.first()
+        : QStringLiteral("MIN(%1)").arg(distances.join(QStringLiteral(", ")));
+    return distance + QStringLiteral(" ASC, image_circle_mm DESC, megapixel_rating DESC, manufacturer ASC, model ASC, id ASC");
+}
+
+bool csvRecordComplete(const QString &record)
+{
+    bool inQuotes = false;
+    for (int i = 0; i < record.size(); ++i) {
+        if (record.at(i) != QLatin1Char('"'))
+            continue;
+        if (inQuotes && i + 1 < record.size() && record.at(i + 1) == QLatin1Char('"')) {
+            ++i;
+            continue;
+        }
+        inQuotes = !inQuotes;
+    }
+    return !inQuotes;
+}
+
 bool nearlyEqual(double left, double right)
 {
     return qAbs(left - right) <= 0.000001;
@@ -2165,7 +2225,8 @@ QVector<LensSpec> CatalogRepository::selectionCandidateLenses(const SelectionReq
 
     bool queryFailed = false;
     const auto runLensQuery = [this, &queryFailed, errorMessage](const QStringList &clauses, const QList<QVariant> &values,
-                                                                const QString &orderBy, int rowLimit) {
+                                                                const QString &orderBy, const QList<QVariant> &orderValues,
+                                                                int rowLimit) {
         QVector<LensSpec> lenses;
         QString sql = QStringLiteral(
             "SELECT id, model, manufacturer, lens_type, lens_mount, focal_length_mm, min_wd_mm, distortion_percent,"
@@ -2179,6 +2240,7 @@ QVector<LensSpec> CatalogRepository::selectionCandidateLenses(const SelectionReq
         QSqlQuery query(m_db);
         query.prepare(sql);
         bindAll(&query, values);
+        bindAll(&query, orderValues);
         query.addBindValue(rowLimit);
         if (!query.exec()) {
             queryFailed = true;
@@ -2209,12 +2271,29 @@ QVector<LensSpec> CatalogRepository::selectionCandidateLenses(const SelectionReq
         "image_circle_mm ASC, megapixel_rating DESC, manufacturer ASC, model ASC, id ASC");
 
     QVector<LensSpec> lenses;
-    const int largeQuota = qMax(1, effectiveLimit / 2);
-    appendUniqueProducts(&lenses, runLensQuery(strictClauses, strictValues, largeImageCircleOrder, largeQuota), effectiveLimit);
+    const int largeQuota = qMax(1, effectiveLimit / 4);
+    appendUniqueProducts(&lenses, runLensQuery(strictClauses, strictValues, largeImageCircleOrder, QList<QVariant>(), largeQuota), effectiveLimit);
     if (queryFailed)
         return lenses;
 
-    appendUniqueProducts(&lenses, runLensQuery(strictClauses, strictValues, smallImageCircleOrder, effectiveLimit), effectiveLimit);
+    const QVector<double> focalTargets = fixedFocalTargetSamples(request);
+    const QString focalOrder = focalProximityOrder(focalTargets);
+    if (!focalOrder.isEmpty()) {
+        QStringList focalClauses = strictClauses;
+        QList<QVariant> focalValues = strictValues;
+        QList<QVariant> orderValues;
+        focalClauses << QStringLiteral("lens_type = 'FixedFocal'")
+                     << QStringLiteral("focal_length_mm > 0");
+        for (double target : focalTargets)
+            orderValues << target;
+        appendUniqueProducts(&lenses, runLensQuery(focalClauses, focalValues, focalOrder, orderValues,
+                                                   qMax(1, effectiveLimit / 2)),
+                             effectiveLimit);
+        if (queryFailed)
+            return lenses;
+    }
+
+    appendUniqueProducts(&lenses, runLensQuery(strictClauses, strictValues, smallImageCircleOrder, QList<QVariant>(), effectiveLimit), effectiveLimit);
     if (queryFailed)
         return lenses;
 
@@ -2222,13 +2301,13 @@ QVector<LensSpec> CatalogRepository::selectionCandidateLenses(const SelectionReq
         QStringList relaxedClauses;
         if (!request.allowTelecentric)
             relaxedClauses << QStringLiteral("lens_type NOT IN ('ObjectTelecentric','BiTelecentric')");
-        appendUniqueProducts(&lenses, runLensQuery(relaxedClauses, QList<QVariant>(), largeImageCircleOrder, effectiveLimit), effectiveLimit);
+        appendUniqueProducts(&lenses, runLensQuery(relaxedClauses, QList<QVariant>(), largeImageCircleOrder, QList<QVariant>(), effectiveLimit), effectiveLimit);
     }
     if (queryFailed)
         return lenses;
 
     if (lenses.size() < effectiveLimit)
-        appendUniqueProducts(&lenses, runLensQuery(QStringList(), QList<QVariant>(), largeImageCircleOrder, effectiveLimit), effectiveLimit);
+        appendUniqueProducts(&lenses, runLensQuery(QStringList(), QList<QVariant>(), largeImageCircleOrder, QList<QVariant>(), effectiveLimit), effectiveLimit);
     return lenses;
 }
 
@@ -2613,20 +2692,35 @@ bool CatalogRepository::readCsvRowsFromDevice(QIODevice *device, const QString &
     in.setCodec("UTF-8");
 
     QStringList headers;
-    int lineNumber = 0;
+    int physicalLineNumber = 0;
+    int recordStartLine = 0;
+    QString record;
     while (!in.atEnd()) {
         QString line = in.readLine();
-        ++lineNumber;
-        if (lineNumber == 1 && line.startsWith(QChar(0xFEFF)))
+        ++physicalLineNumber;
+        if (physicalLineNumber == 1 && line.startsWith(QChar(0xFEFF)))
             line.remove(0, 1);
-        if (line.trimmed().isEmpty())
+        if (record.isEmpty() && line.trimmed().isEmpty())
             continue;
 
-        const QStringList values = parseCsvLine(line);
+        if (record.isEmpty()) {
+            recordStartLine = physicalLineNumber;
+            record = line;
+        } else {
+            record += QLatin1Char('\n');
+            record += line;
+        }
+
+        if (!csvRecordComplete(record))
+            continue;
+
+        const QStringList values = parseCsvLine(record);
         if (headers.isEmpty()) {
             headers = values;
             for (QString &header : headers)
                 header = header.trimmed().toLower();
+            record.clear();
+            recordStartLine = 0;
             continue;
         }
 
@@ -2634,7 +2728,7 @@ bool CatalogRepository::readCsvRowsFromDevice(QIODevice *device, const QString &
             if (errorMessage) {
                 *errorMessage = QString::fromUtf8("%1 \347\254\254 %2 \350\241\214\345\255\227\346\256\265\346\225\260\351\207\217\344\270\215\345\214\271\351\205\215\357\274\232\346\234\237\346\234\233 %3\357\274\214\345\256\236\351\231\205 %4")
                     .arg(sourceName)
-                    .arg(lineNumber)
+                    .arg(recordStartLine)
                     .arg(headers.size())
                     .arg(values.size());
             }
@@ -2645,6 +2739,17 @@ bool CatalogRepository::readCsvRowsFromDevice(QIODevice *device, const QString &
         for (int i = 0; i < headers.size(); ++i)
             row.insert(headers.at(i), values.at(i).trimmed());
         rows->append(row);
+        record.clear();
+        recordStartLine = 0;
+    }
+
+    if (!record.isEmpty()) {
+        if (errorMessage) {
+            *errorMessage = QString::fromUtf8("%1 第 %2 行 CSV 引号字段未闭合")
+                .arg(sourceName)
+                .arg(recordStartLine);
+        }
+        return false;
     }
 
     if (headers.isEmpty()) {
