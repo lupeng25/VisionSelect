@@ -98,15 +98,16 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     ParameterGroup requestGroup = makeGroup(
         localizedText("需求", "Requirements"),
         localizedText("定义工件、精度、节拍和工艺约束。", "Define part size, accuracy, takt, and process constraints."));
-    m_widthSpin = makeSpin(0.1, 2000.0, 20.0, QStringLiteral(" mm"));
-    m_heightSpin = makeSpin(0.1, 2000.0, 20.0, QStringLiteral(" mm"));
-    m_marginSpin = makeSpin(0.0, 200.0, 2.0, QStringLiteral(" mm"));
-    m_minFeatureSpin = makeSpin(0.1, 10000.0, 50.0, QStringLiteral(" um"));
-    m_toleranceSpin = makeSpin(0.1, 10000.0, 10.0, QStringLiteral(" um"));
-    m_wdSpin = makeSpin(5.0, 3000.0, 110.0, QStringLiteral(" mm"));
-    m_heightVariationSpin = makeSpin(0.0, 200.0, 2.0, QStringLiteral(" mm"));
-    m_speedSpin = makeSpin(0.0, 10000.0, 0.0, QStringLiteral(" mm/s"));
-    m_fpsSpin = makeSpin(1.0, 1000.0, 20.0, QStringLiteral(" fps"));
+    const SelectionRequest defaultRequest;
+    m_widthSpin = makeSpin(0.1, 2000.0, defaultRequest.objectWidthMm, QStringLiteral(" mm"));
+    m_heightSpin = makeSpin(0.1, 2000.0, defaultRequest.objectHeightMm, QStringLiteral(" mm"));
+    m_marginSpin = makeSpin(0.0, 200.0, defaultRequest.placementMarginMm, QStringLiteral(" mm"));
+    m_minFeatureSpin = makeSpin(0.1, 10000.0, defaultRequest.minFeatureUm, QStringLiteral(" um"));
+    m_toleranceSpin = makeSpin(0.1, 10000.0, defaultRequest.measurementToleranceUm, QStringLiteral(" um"));
+    m_wdSpin = makeSpin(5.0, 3000.0, defaultRequest.workingDistanceMm, QStringLiteral(" mm"));
+    m_heightVariationSpin = makeSpin(0.0, 200.0, defaultRequest.heightVariationMm, QStringLiteral(" mm"));
+    m_speedSpin = makeSpin(0.0, 10000.0, defaultRequest.motionSpeedMmS, QStringLiteral(" mm/s"));
+    m_fpsSpin = makeSpin(1.0, 1000.0, defaultRequest.requiredFps, QStringLiteral(" fps"));
     m_detectionCombo = new QComboBox;
     m_detectionCombo->addItems({detectionTypeLabel(DetectionType::Measurement),
                                 detectionTypeLabel(DetectionType::Positioning),
@@ -119,9 +120,10 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
                               surfaceTypeLabel(SurfaceType::PCB),
                               surfaceTypeLabel(SurfaceType::Plastic),
                               surfaceTypeLabel(SurfaceType::Mixed)});
-    m_surfaceCombo->setCurrentIndex(1);
+    m_detectionCombo->setCurrentIndex(static_cast<int>(defaultRequest.detectionType));
+    m_surfaceCombo->setCurrentIndex(static_cast<int>(defaultRequest.surfaceType));
     m_reflectiveCheck = new QCheckBox(localizedText("反光/高光表面", "Reflective / glossy surface"));
-    m_reflectiveCheck->setChecked(true);
+    m_reflectiveCheck->setChecked(defaultRequest.reflective);
     requestGroup.grid->addWidget(field(localizedText("工件宽度", "Part width"), m_widthSpin), 0, 0);
     requestGroup.grid->addWidget(field(localizedText("工件高度", "Part height"), m_heightSpin), 0, 1);
     requestGroup.grid->addWidget(field(localizedText("定位/装夹余量", "Positioning / fixture margin"), m_marginSpin), 1, 0);
@@ -450,18 +452,19 @@ void PureCalculationPage::updateLensParameterVisibility()
 
 void PureCalculationPage::resetDefaults()
 {
-    m_widthSpin->setValue(20.0);
-    m_heightSpin->setValue(20.0);
-    m_marginSpin->setValue(2.0);
-    m_minFeatureSpin->setValue(50.0);
-    m_toleranceSpin->setValue(10.0);
-    m_wdSpin->setValue(110.0);
-    m_heightVariationSpin->setValue(2.0);
-    m_speedSpin->setValue(0.0);
-    m_fpsSpin->setValue(20.0);
-    m_detectionCombo->setCurrentIndex(0);
-    m_surfaceCombo->setCurrentIndex(1);
-    m_reflectiveCheck->setChecked(true);
+    const SelectionRequest defaultRequest;
+    m_widthSpin->setValue(defaultRequest.objectWidthMm);
+    m_heightSpin->setValue(defaultRequest.objectHeightMm);
+    m_marginSpin->setValue(defaultRequest.placementMarginMm);
+    m_minFeatureSpin->setValue(defaultRequest.minFeatureUm);
+    m_toleranceSpin->setValue(defaultRequest.measurementToleranceUm);
+    m_wdSpin->setValue(defaultRequest.workingDistanceMm);
+    m_heightVariationSpin->setValue(defaultRequest.heightVariationMm);
+    m_speedSpin->setValue(defaultRequest.motionSpeedMmS);
+    m_fpsSpin->setValue(defaultRequest.requiredFps);
+    m_detectionCombo->setCurrentIndex(static_cast<int>(defaultRequest.detectionType));
+    m_surfaceCombo->setCurrentIndex(static_cast<int>(defaultRequest.surfaceType));
+    m_reflectiveCheck->setChecked(defaultRequest.reflective);
     m_resolutionXSpin->setValue(2448);
     m_resolutionYSpin->setValue(2048);
     m_pixelSizeSpin->setValue(3.45);

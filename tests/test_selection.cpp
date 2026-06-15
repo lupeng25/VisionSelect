@@ -69,6 +69,7 @@ private slots:
     void fixedLensDofAndDistortionRisk();
     void lightCoverageAffectsScore();
     void telecentricMeasurementWins();
+    void defaultRequestHasCompatibleRecommendation();
     void defaultRecommendationsIncludeFixedLensAlternatives();
     void largeFovPrefersFixedFocal();
     void motionPrefersGlobalShutter();
@@ -1925,6 +1926,29 @@ void SelectionEngineTest::telecentricMeasurementWins()
     QVERIFY2(results.first().isTelecentric(), qPrintable(results.first().lens.model));
     QVERIFY(results.first().lens.lensType == LensType::BiTelecentric
             || results.first().lens.lensType == LensType::ObjectTelecentric);
+}
+
+void SelectionEngineTest::defaultRequestHasCompatibleRecommendation()
+{
+    SelectionRequest request;
+    QCOMPARE(request.measurementToleranceUm, 25.0);
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 10);
+    QVERIFY(!results.isEmpty());
+
+    bool hasCompatible = false;
+    QStringList diagnostics;
+    for (const SelectionResult &result : results) {
+        diagnostics.append(QStringLiteral("%1/%2: %3")
+            .arg(result.camera.model, result.lens.model, result.hardFailures.join(QStringLiteral(";"))));
+        if (result.hardConstraintsPassed) {
+            hasCompatible = true;
+            break;
+        }
+    }
+
+    QVERIFY2(hasCompatible, qPrintable(diagnostics.join(QStringLiteral("\n"))));
 }
 
 void SelectionEngineTest::defaultRecommendationsIncludeFixedLensAlternatives()

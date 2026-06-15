@@ -42,13 +42,15 @@ InputPage::InputPage(QWidget *parent)
     layout->setSpacing(14);
 
     QGroupBox *objectBox = new QGroupBox(localizedText("工件与精度", "Part and Accuracy"));
+    const SelectionRequest defaultRequest;
+
     QFormLayout *objectLayout = new QFormLayout(objectBox);
     objectLayout->setLabelAlignment(Qt::AlignLeft);
-    m_widthSpin = makeSpin(0.1, 2000.0, 20.0, QStringLiteral(" mm"));
-    m_heightSpin = makeSpin(0.1, 2000.0, 20.0, QStringLiteral(" mm"));
-    m_marginSpin = makeSpin(0.0, 200.0, 2.0, QStringLiteral(" mm"));
-    m_minFeatureSpin = makeSpin(0.1, 10000.0, 50.0, QStringLiteral(" um"));
-    m_toleranceSpin = makeSpin(0.1, 10000.0, 10.0, QStringLiteral(" um"));
+    m_widthSpin = makeSpin(0.1, 2000.0, defaultRequest.objectWidthMm, QStringLiteral(" mm"));
+    m_heightSpin = makeSpin(0.1, 2000.0, defaultRequest.objectHeightMm, QStringLiteral(" mm"));
+    m_marginSpin = makeSpin(0.0, 200.0, defaultRequest.placementMarginMm, QStringLiteral(" mm"));
+    m_minFeatureSpin = makeSpin(0.1, 10000.0, defaultRequest.minFeatureUm, QStringLiteral(" um"));
+    m_toleranceSpin = makeSpin(0.1, 10000.0, defaultRequest.measurementToleranceUm, QStringLiteral(" um"));
     objectLayout->addRow(localizedText("工件宽度", "Part width"), m_widthSpin);
     objectLayout->addRow(localizedText("工件高度", "Part height"), m_heightSpin);
     objectLayout->addRow(localizedText("定位/装夹余量", "Positioning / fixture margin"), m_marginSpin);
@@ -70,17 +72,18 @@ InputPage::InputPage(QWidget *parent)
                               surfaceTypeLabel(SurfaceType::PCB),
                               surfaceTypeLabel(SurfaceType::Plastic),
                               surfaceTypeLabel(SurfaceType::Mixed)});
-    m_surfaceCombo->setCurrentIndex(1);
-    m_wdSpin = makeSpin(5.0, 3000.0, 110.0, QStringLiteral(" mm"));
-    m_heightVariationSpin = makeSpin(0.0, 200.0, 2.0, QStringLiteral(" mm"));
-    m_speedSpin = makeSpin(0.0, 10000.0, 0.0, QStringLiteral(" mm/s"));
-    m_fpsSpin = makeSpin(1.0, 1000.0, 20.0, QStringLiteral(" fps"));
+    m_detectionCombo->setCurrentIndex(static_cast<int>(defaultRequest.detectionType));
+    m_surfaceCombo->setCurrentIndex(static_cast<int>(defaultRequest.surfaceType));
+    m_wdSpin = makeSpin(5.0, 3000.0, defaultRequest.workingDistanceMm, QStringLiteral(" mm"));
+    m_heightVariationSpin = makeSpin(0.0, 200.0, defaultRequest.heightVariationMm, QStringLiteral(" mm"));
+    m_speedSpin = makeSpin(0.0, 10000.0, defaultRequest.motionSpeedMmS, QStringLiteral(" mm/s"));
+    m_fpsSpin = makeSpin(1.0, 1000.0, defaultRequest.requiredFps, QStringLiteral(" fps"));
     m_reflectiveCheck = new QCheckBox(localizedText("反光/高光表面", "Reflective / glossy surface"));
-    m_reflectiveCheck->setChecked(true);
+    m_reflectiveCheck->setChecked(defaultRequest.reflective);
     m_monoCheck = new QCheckBox(localizedText("优先黑白相机", "Prefer monochrome camera"));
-    m_monoCheck->setChecked(true);
+    m_monoCheck->setChecked(defaultRequest.preferMono);
     m_allowTelecentricCheck = new QCheckBox(localizedText("允许远心镜头", "Allow telecentric lens"));
-    m_allowTelecentricCheck->setChecked(true);
+    m_allowTelecentricCheck->setChecked(defaultRequest.allowTelecentric);
     processLayout->addRow(localizedText("检测类型", "Inspection type"), m_detectionCombo);
     processLayout->addRow(localizedText("表面材质", "Surface material"), m_surfaceCombo);
     processLayout->addRow(localizedText("工作距离", "Working distance"), m_wdSpin);

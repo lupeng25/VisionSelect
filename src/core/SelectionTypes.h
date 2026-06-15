@@ -43,7 +43,7 @@ struct SelectionRequest {
     double objectHeightMm = 20.0;
     double placementMarginMm = 2.0;
     double minFeatureUm = 50.0;
-    double measurementToleranceUm = 10.0;
+    double measurementToleranceUm = 25.0;
     double workingDistanceMm = 110.0;
     double heightVariationMm = 2.0;
     double motionSpeedMmS = 0.0;
