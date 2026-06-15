@@ -120,17 +120,36 @@ bool CameraSpec::isMono() const
 bool CameraSpec::isGlobalShutter() const
 {
     const QString v = shutterType.trimmed().toLower();
+    QString compact = v;
+    compact.remove(QLatin1Char(' '));
+    compact.remove(QLatin1Char('\t'));
+    compact.remove(QLatin1Char('\n'));
+    compact.remove(QLatin1Char('\r'));
+
+    if (compact.contains(QStringLiteral("globalreset"))) {
+        return false;
+    }
+    if (v == QStringLiteral("global")
+        || v.contains(QStringLiteral("global shutter"))
+        || compact.contains(QStringLiteral("globalshutter"))
+        || compact.contains(QStringLiteral("global/rolling"))
+        || compact.contains(QStringLiteral("rolling/global"))
+        || shutterType.contains(QString::fromUtf8("\345\205\250\345\261\200"), Qt::CaseInsensitive)) {
+        return true;
+    }
     if (v.contains(QStringLiteral("rolling")))
         return false;
-    return v == QStringLiteral("global")
-        || v.contains(QStringLiteral("global shutter"))
-        || v.contains(QStringLiteral("globalshutter"))
-        || shutterType.contains(QString::fromUtf8("\345\205\250\345\261\200"), Qt::CaseInsensitive);
+    return false;
 }
 
 bool LensSpec::isTelecentric() const
 {
     return lensType == LensType::ObjectTelecentric || lensType == LensType::BiTelecentric;
+}
+
+bool LensSpec::hasTelecentricity() const
+{
+    return telecentricityDeg >= 0.0;
 }
 
 QString LensSpec::typeLabel() const

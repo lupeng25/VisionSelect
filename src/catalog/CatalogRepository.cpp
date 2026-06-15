@@ -50,6 +50,16 @@ QString likePattern(const QString &value)
     return QLatin1Char('%') + value.trimmed().toLower() + QLatin1Char('%');
 }
 
+double nullableDouble(const QVariant &value, double fallback)
+{
+    return (!value.isValid() || value.isNull()) ? fallback : value.toDouble();
+}
+
+QVariant nullableTelecentricity(double value)
+{
+    return value >= 0.0 ? QVariant(value) : QVariant(QVariant::Double);
+}
+
 QString normalizedQueryType(const QString &value)
 {
     QString v = value.trimmed();
@@ -327,7 +337,7 @@ double targetObjectPixelUmForRequest(const SelectionRequest &request)
     double target = 999999.0;
     if (request.minFeatureUm > 0.0)
         target = qMin(target, request.minFeatureUm / featurePixels);
-    if (request.measurementToleranceUm > 0.0)
+    if (request.detectionType == DetectionType::Measurement && request.measurementToleranceUm > 0.0)
         target = qMin(target, request.measurementToleranceUm * toleranceFactor);
     return qMax(0.5, target);
 }
@@ -972,7 +982,7 @@ bool CatalogRepository::insertLensIntoDatabase(const LensSpec &lens, const QStri
     query.addBindValue(lens.nominalWorkingDistanceMm);
     query.addBindValue(lens.workingDistanceToleranceMm);
     query.addBindValue(lens.maxSensorDiagonalMm);
-    query.addBindValue(lens.telecentricityDeg);
+    query.addBindValue(nullableTelecentricity(lens.telecentricityDeg));
     query.addBindValue(lens.dofMm);
     query.addBindValue(lens.numericalAperture);
     query.addBindValue(lens.fNumber);
@@ -1181,7 +1191,7 @@ bool CatalogRepository::refreshSnapshots(QString *errorMessage)
         spec.nominalWorkingDistanceMm = lensQuery.value(12).toDouble();
         spec.workingDistanceToleranceMm = lensQuery.value(13).toDouble();
         spec.maxSensorDiagonalMm = lensQuery.value(14).toDouble();
-        spec.telecentricityDeg = lensQuery.value(15).toDouble();
+        spec.telecentricityDeg = nullableDouble(lensQuery.value(15), -1.0);
         spec.dofMm = lensQuery.value(16).toDouble();
         spec.numericalAperture = lensQuery.value(17).toDouble();
         spec.fNumber = lensQuery.value(18).toDouble();
@@ -1625,7 +1635,7 @@ LensSpec lensFromQuery(const QSqlQuery &query)
     spec.nominalWorkingDistanceMm = query.value(12).toDouble();
     spec.workingDistanceToleranceMm = query.value(13).toDouble();
     spec.maxSensorDiagonalMm = query.value(14).toDouble();
-    spec.telecentricityDeg = query.value(15).toDouble();
+    spec.telecentricityDeg = nullableDouble(query.value(15), -1.0);
     spec.dofMm = query.value(16).toDouble();
     spec.numericalAperture = query.value(17).toDouble();
     spec.fNumber = query.value(18).toDouble();
@@ -2023,7 +2033,7 @@ bool CatalogRepository::updateLensById(qint64 id, const LensSpec &lens, QString 
     query.addBindValue(lens.nominalWorkingDistanceMm);
     query.addBindValue(lens.workingDistanceToleranceMm);
     query.addBindValue(lens.maxSensorDiagonalMm);
-    query.addBindValue(lens.telecentricityDeg);
+    query.addBindValue(nullableTelecentricity(lens.telecentricityDeg));
     query.addBindValue(lens.dofMm);
     query.addBindValue(lens.numericalAperture);
     query.addBindValue(lens.fNumber);
@@ -2458,7 +2468,8 @@ bool CatalogRepository::writeLensCsv(const QString &filePath, const QVector<Lens
             << QString::number(l.imageCircleMm, 'g', 12) << QString::number(l.megapixelRating, 'g', 12)
             << QString::number(l.recommendedMinPixelUm, 'g', 12) << QString::number(l.pmag, 'g', 12)
             << QString::number(l.nominalWorkingDistanceMm, 'g', 12) << QString::number(l.workingDistanceToleranceMm, 'g', 12)
-            << QString::number(l.maxSensorDiagonalMm, 'g', 12) << QString::number(l.telecentricityDeg, 'g', 12)
+            << QString::number(l.maxSensorDiagonalMm, 'g', 12)
+            << (l.hasTelecentricity() ? QString::number(l.telecentricityDeg, 'g', 12) : QString())
             << QString::number(l.dofMm, 'g', 12) << QString::number(l.numericalAperture, 'g', 12)
             << QString::number(l.fNumber, 'g', 12) << (l.coaxialIllumination ? QStringLiteral("true") : QStringLiteral("false"))
             << l.notes;
@@ -2914,7 +2925,7 @@ bool CatalogRepository::loadLensRows(const QVector<Row> &rows, const QString &so
         spec.nominalWorkingDistanceMm = number(row, QStringLiteral("nominal_wd_mm"));
         spec.workingDistanceToleranceMm = number(row, QStringLiteral("wd_tolerance_mm"));
         spec.maxSensorDiagonalMm = number(row, QStringLiteral("max_sensor_diagonal_mm"));
-        spec.telecentricityDeg = number(row, QStringLiteral("telecentricity_deg"));
+        spec.telecentricityDeg = number(row, QStringLiteral("telecentricity_deg"), -1.0);
         spec.dofMm = number(row, QStringLiteral("dof_mm"));
         spec.numericalAperture = number(row, QStringLiteral("numerical_aperture"));
         spec.fNumber = number(row, QStringLiteral("f_number"));

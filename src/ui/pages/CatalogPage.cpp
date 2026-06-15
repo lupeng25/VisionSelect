@@ -261,7 +261,7 @@ private:
             case 5: return l.isTelecentric() ? QStringLiteral("%1x").arg(l.pmag, 0, 'f', 3) : QStringLiteral("-");
             case 6: return l.isTelecentric() ? QStringLiteral("%1 mm").arg(l.nominalWorkingDistanceMm, 0, 'f', 1) : QStringLiteral(">=%1 mm").arg(l.minWorkingDistanceMm, 0, 'f', 1);
             case 7: return QStringLiteral("%1 mm").arg(l.imageCircleMm, 0, 'f', 1);
-            case 8: return l.isTelecentric() ? QStringLiteral("%1 deg").arg(l.telecentricityDeg, 0, 'f', 3) : QStringLiteral("-");
+            case 8: return l.isTelecentric() && l.hasTelecentricity() ? QStringLiteral("%1 deg").arg(l.telecentricityDeg, 0, 'f', 3) : QStringLiteral("-");
             case 9: return QStringLiteral("%1%").arg(l.distortionPercent, 0, 'f', 3);
             case 10: return l.isTelecentric() ? QStringLiteral("%1 mm").arg(l.dofMm, 0, 'f', 1) : QStringLiteral("-");
             case 11: return boolLabel(l.coaxialIllumination);

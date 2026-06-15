@@ -322,14 +322,20 @@ void ResultsPage::refreshDetails(int row)
         .arg(r.distortionErrorUm, 0, 'f', 2)
         .arg(r.lightCoverageMarginPercent, 0, 'f', 0);
     if (r.isTelecentric()) {
-        text += localizedText("<p><b>远心参数：</b>PMAG %1x，标称 WD %2 mm，远心度 %3 deg，畸变 %4%，DOF %5 mm，残余视差估算 %6 um。</p>",
-                              "<p><b>Telecentric parameters:</b> PMAG %1x, nominal WD %2 mm, telecentricity %3 deg, distortion %4%, DOF %5 mm, residual parallax estimate %6 um.</p>")
+        const QString telecentricityText = r.lens.hasTelecentricity()
+            ? QStringLiteral("%1 deg").arg(r.lens.telecentricityDeg, 0, 'f', 3)
+            : localizedText("未知", "Unknown");
+        const QString residualParallaxText = r.lens.hasTelecentricity()
+            ? QStringLiteral("%1 um").arg(r.residualTelecentricErrorUm, 0, 'f', 2)
+            : localizedText("未知", "Unknown");
+        text += localizedText("<p><b>远心参数：</b>PMAG %1x，标称 WD %2 mm，远心度 %3，畸变 %4%，DOF %5 mm，残余视差估算 %6。</p>",
+                              "<p><b>Telecentric parameters:</b> PMAG %1x, nominal WD %2 mm, telecentricity %3, distortion %4%, DOF %5 mm, residual parallax estimate %6.</p>")
             .arg(r.magnification, 0, 'f', 3)
             .arg(r.lens.nominalWorkingDistanceMm, 0, 'f', 1)
-            .arg(r.lens.telecentricityDeg, 0, 'f', 3)
+            .arg(telecentricityText)
             .arg(r.lens.distortionPercent, 0, 'f', 3)
             .arg(r.estimatedDofMm, 0, 'f', 2)
-            .arg(r.residualTelecentricErrorUm, 0, 'f', 2);
+            .arg(residualParallaxText);
     }
     text += localizedText("<p><b>推荐理由：</b>%1</p>", "<p><b>Reasons:</b> %1</p>")
         .arg(htmlList(r.score.reasons, localizedText("；", "; ")));

@@ -31,6 +31,11 @@ double percentDifference(double actual, double target)
     return qAbs(actual - target) / target;
 }
 
+bool fixedFocalGeometryValid(const SelectionRequest &request, const LensSpec &lens)
+{
+    return request.workingDistanceMm > lens.focalLengthMm;
+}
+
 QString mm(double value, int decimals = 1)
 {
     return QStringLiteral("%1 mm").arg(value, 0, 'f', decimals);
@@ -227,8 +232,13 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
             result.magnification = lens.pmag;
             result.estimatedDofMm = lens.dofMm;
             result.distortionErrorUm = SelectionEngine::distortionErrorUm(lens, result.effectiveFovWidthMm, result.effectiveFovHeightMm);
-            result.residualTelecentricErrorUm = input.request.heightVariationMm
-                * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
+            if (lens.hasTelecentricity()) {
+                result.residualTelecentricErrorUm = input.request.heightVariationMm
+                    * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
+            } else {
+                result.residualTelecentricErrorUm = 0.0;
+                result.risks.append(QString::fromUtf8("远心镜头缺少远心度数据，无法估算高度波动带来的残余视差"));
+            }
             result.lensFormulaSummary = QString::fromUtf8("远心：FOV = SensorSize / PMAG，ObjectPixel = PixelSize / PMAG");
 
             if (result.effectiveFovWidthMm >= result.requirement.requiredFovWidthMm
@@ -267,7 +277,8 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
                 }
             }
 
-            if (input.request.measurementToleranceUm > 0.0
+            if (lens.hasTelecentricity()
+                && input.request.measurementToleranceUm > 0.0
                 && result.residualTelecentricErrorUm > input.request.measurementToleranceUm) {
                 result.risks.append(QString::fromUtf8("残余远心误差约 %1 um，高于允许误差")
                     .arg(result.residualTelecentricErrorUm, 0, 'f', 2));
@@ -276,12 +287,15 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
     } else {
         if (lens.focalLengthMm <= 0.0) {
             result.risks.append(QString::fromUtf8("普通镜头焦距必须大于 0"));
+        } else if (!fixedFocalGeometryValid(input.request, lens)) {
+            result.risks.append(QString::fromUtf8("普通镜头当前 WD 必须大于焦距，薄透镜近似才有有效正倍率"));
+            result.lensFormulaSummary = QString::fromUtf8("普通镜头：当前 WD 必须大于焦距，薄透镜近似才有有效正倍率");
         } else {
             result.effectiveFovWidthMm = result.sensorWidthMm
-                * qMax(1.0, input.request.workingDistanceMm - lens.focalLengthMm)
+                * (input.request.workingDistanceMm - lens.focalLengthMm)
                 / lens.focalLengthMm;
             result.effectiveFovHeightMm = result.sensorHeightMm
-                * qMax(1.0, input.request.workingDistanceMm - lens.focalLengthMm)
+                * (input.request.workingDistanceMm - lens.focalLengthMm)
                 / lens.focalLengthMm;
             result.lensObjectPixelSizeUm = qMax(result.effectiveFovWidthMm * 1000.0 / qMax(1, camera.resolutionX),
                                                 result.effectiveFovHeightMm * 1000.0 / qMax(1, camera.resolutionY));
@@ -456,8 +470,14 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
                 && qAbs(request.workingDistanceMm - lens.nominalWorkingDistanceMm) <= lens.workingDistanceToleranceMm;
             estimate.dofOk = request.heightVariationMm <= 0.0
                 || (lens.dofMm > 0.0 && lens.dofMm >= request.heightVariationMm * 1.5);
-            estimate.residualTelecentricErrorUm = request.heightVariationMm
-                * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
+            if (lens.hasTelecentricity()) {
+                estimate.residualTelecentricErrorUm = request.heightVariationMm
+                    * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
+            } else {
+                estimate.residualTelecentricErrorUm = 0.0;
+                estimate.score -= (telecentricPreferred(request) || request.heightVariationMm > 0.0) ? 10.0 : 4.0;
+                estimate.risks.append(QString::fromUtf8("远心镜头缺少远心度数据，无法估算高度波动带来的残余视差"));
+            }
 
             if (telecentricPreferred(request)) {
                 estimate.score += 18.0;
@@ -491,7 +511,8 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
                 estimate.risks.append(QString::fromUtf8("DOF \345\217\257\350\203\275\344\270\215\350\266\263\344\273\245\350\246\206\347\233\226\351\253\230\345\272\246\346\263\242\345\212\250"));
             }
 
-            if (request.measurementToleranceUm > 0.0
+            if (lens.hasTelecentricity()
+                && request.measurementToleranceUm > 0.0
                 && estimate.residualTelecentricErrorUm > request.measurementToleranceUm) {
                 estimate.score -= 10.0;
                 estimate.risks.append(QString::fromUtf8("\350\277\234\345\277\203\345\272\246\346\256\213\344\275\231\350\247\206\345\267\256\347\272\246 %1\357\274\214\350\266\205\350\277\207\345\205\201\350\256\270\350\257\257\345\267\256")
@@ -500,8 +521,20 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
         } else {
             if (lens.focalLengthMm <= 0.0)
                 continue;
-            estimate.effectiveFovWidthMm = sensorW * qMax(1.0, request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
-            estimate.effectiveFovHeightMm = sensorH * qMax(1.0, request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
+            if (!fixedFocalGeometryValid(request, lens)) {
+                estimate.objectPixelSizeUm = 999999.0;
+                estimate.magnification = 0.0;
+                estimate.workingDistanceOk = false;
+                estimate.dofOk = false;
+                estimate.formulaSummary = QString::fromUtf8("普通镜头：当前 WD 必须大于焦距，薄透镜近似才有有效正倍率");
+                estimate.score -= 50.0;
+                estimate.risks.append(QString::fromUtf8("普通镜头当前 WD 必须大于焦距，无法按固定焦距镜头薄透镜模型得到有效 FOV"));
+                appendCommonLensJudgement(request, requirement, camera, &estimate);
+                estimates.append(estimate);
+                continue;
+            }
+            estimate.effectiveFovWidthMm = sensorW * (request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
+            estimate.effectiveFovHeightMm = sensorH * (request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
             estimate.objectPixelSizeUm = qMax(estimate.effectiveFovWidthMm * 1000.0 / camera.resolutionX,
                                              estimate.effectiveFovHeightMm * 1000.0 / camera.resolutionY);
             estimate.magnification = sensorW / qMax(0.001, estimate.effectiveFovWidthMm);
@@ -578,7 +611,8 @@ double CalculationAssistant::estimatedFixedFocalLengthMm(const SelectionRequest 
     const double fovH = SelectionEngine::requiredFovHeight(request);
     const double sensorW = camera.sensorWidthMm();
     const double sensorH = camera.sensorHeightMm();
-    if (fovW <= 0.0 || fovH <= 0.0 || sensorW <= 0.0 || sensorH <= 0.0)
+    if (fovW <= 0.0 || fovH <= 0.0 || sensorW <= 0.0 || sensorH <= 0.0
+        || request.workingDistanceMm <= 0.0)
         return 0.0;
 
     const bool widthLimited = (fovW / fovH) >= (sensorW / sensorH);

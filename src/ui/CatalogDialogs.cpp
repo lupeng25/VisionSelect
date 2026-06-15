@@ -10,6 +10,7 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QObject>
@@ -184,7 +185,15 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     QDoubleSpinBox *nominalWd = dialogSpin(0.0, 100000.0, lens->nominalWorkingDistanceMm, QStringLiteral(" mm"));
     QDoubleSpinBox *wdTolerance = dialogSpin(0.0, 10000.0, lens->workingDistanceToleranceMm, QStringLiteral(" mm"));
     QDoubleSpinBox *maxSensor = dialogSpin(0.0, 1000.0, lens->maxSensorDiagonalMm, QStringLiteral(" mm"));
-    QDoubleSpinBox *telecentricity = dialogSpin(0.0, 90.0, lens->telecentricityDeg, QStringLiteral(" deg"));
+    QDoubleSpinBox *telecentricity = dialogSpin(0.0, 90.0, lens->hasTelecentricity() ? lens->telecentricityDeg : 0.0, QStringLiteral(" deg"));
+    QCheckBox *telecentricityKnown = new QCheckBox(localizedText("已知", "Known"));
+    telecentricityKnown->setChecked(lens->hasTelecentricity());
+    telecentricity->setEnabled(telecentricityKnown->isChecked());
+    QWidget *telecentricityField = new QWidget;
+    QHBoxLayout *telecentricityLayout = new QHBoxLayout(telecentricityField);
+    telecentricityLayout->setContentsMargins(0, 0, 0, 0);
+    telecentricityLayout->addWidget(telecentricityKnown);
+    telecentricityLayout->addWidget(telecentricity, 1);
     QDoubleSpinBox *dof = dialogSpin(0.0, 100000.0, lens->dofMm, QStringLiteral(" mm"));
     QDoubleSpinBox *na = dialogSpin(0.0, 10.0, lens->numericalAperture, QString(), 4);
     QDoubleSpinBox *fNumber = dialogSpin(0.0, 1000.0, lens->fNumber, QStringLiteral(" F"), 2);
@@ -207,7 +216,7 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     form->addRow(localizedText("标称 WD", "Nominal WD"), nominalWd);
     form->addRow(localizedText("WD 容差", "WD Tolerance"), wdTolerance);
     form->addRow(localizedText("最大靶面", "Max Sensor"), maxSensor);
-    form->addRow(localizedText("远心度", "Telecentricity"), telecentricity);
+    form->addRow(localizedText("远心度", "Telecentricity"), telecentricityField);
     form->addRow(QStringLiteral("DOF"), dof);
     form->addRow(QStringLiteral("NA"), na);
     form->addRow(QStringLiteral("F/#"), fNumber);
@@ -229,12 +238,13 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
         setFieldVisible(nominalWd, !fixedLens);
         setFieldVisible(wdTolerance, !fixedLens);
         setFieldVisible(maxSensor, !fixedLens);
-        setFieldVisible(telecentricity, !fixedLens);
+        setFieldVisible(telecentricityField, !fixedLens);
         setFieldVisible(dof, !fixedLens);
         setFieldVisible(coaxial, !fixedLens);
     };
     QObject::connect(type, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
                      &dialog, refreshLensFields);
+    QObject::connect(telecentricityKnown, &QCheckBox::toggled, telecentricity, &QWidget::setEnabled);
     refreshLensFields();
 
     scroll->setWidget(content);
@@ -263,7 +273,7 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     lens->nominalWorkingDistanceMm = fixedLens ? 0.0 : nominalWd->value();
     lens->workingDistanceToleranceMm = fixedLens ? 0.0 : wdTolerance->value();
     lens->maxSensorDiagonalMm = fixedLens ? 0.0 : maxSensor->value();
-    lens->telecentricityDeg = fixedLens ? 0.0 : telecentricity->value();
+    lens->telecentricityDeg = fixedLens ? -1.0 : (telecentricityKnown->isChecked() ? telecentricity->value() : -1.0);
     lens->dofMm = fixedLens ? 0.0 : dof->value();
     lens->numericalAperture = na->value();
     lens->fNumber = fNumber->value();

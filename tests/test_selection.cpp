@@ -32,10 +32,12 @@ private slots:
     void defaultCatalogManufacturersAreLoaded();
     void calculationAssistantEstimatesRequirements();
     void measurementToleranceUsesPixelBudget();
+    void nonMeasurementToleranceDoesNotTightenSampling();
     void lensAssistantEstimatesLenses();
     void pureCalculationFixedLens();
     void pureCalculationTelecentric();
     void telecentricMissingCatalogDataIsRisk();
+    void missingTelecentricityIsRisk();
     void lensTypeParsingRecognizesTelecentricAliases();
     void lensMountCompatibilityIsConservative();
     void fixedFocalTargetUsesLimitingAxis();
@@ -56,12 +58,14 @@ private slots:
     void motionExposureAndStrobePreference();
     void dataThroughputAndInterfaceRisk();
     void highResolutionFramePayloadDoesNotOverflow();
+    void explicitPixelFormatAffectsPayloadAndBandwidth();
     void cameraEstimatePenalizesInsufficientBandwidth();
     void globalShutterAliasesAreRecognized();
     void lowAngleRingLightActsAsDarkField();
     void directionalDefectLightCoverageUsesLongAxis();
     void hardConstraintsPreferCompatibleResults();
     void hardConstraintFallbackKeepsDiagnosticResult();
+    void fixedFocalRejectsInvalidWorkingDistance();
     void fixedLensDofAndDistortionRisk();
     void lightCoverageAffectsScore();
     void telecentricMeasurementWins();
@@ -189,6 +193,28 @@ void SelectionEngineTest::measurementToleranceUsesPixelBudget()
     QCOMPARE(requirement.requiredResolutionX, 12000);
     QCOMPARE(requirement.requiredResolutionY, 7000);
     QVERIFY(requirement.telecentricPreferred);
+}
+
+void SelectionEngineTest::nonMeasurementToleranceDoesNotTightenSampling()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 30.0;
+    request.objectHeightMm = 20.0;
+    request.placementMarginMm = 0.0;
+    request.minFeatureUm = 300.0;
+    request.measurementToleranceUm = 1.0;
+
+    request.detectionType = DetectionType::DefectInspection;
+    QCOMPARE(SelectionEngine::targetObjectPixelUm(request), 100.0);
+    QCOMPARE(CalculationAssistant::estimateRequirement(request).targetObjectPixelUm, 100.0);
+
+    request.detectionType = DetectionType::OcrCode;
+    QCOMPARE(SelectionEngine::targetObjectPixelUm(request), 75.0);
+    QCOMPARE(CalculationAssistant::estimateRequirement(request).targetObjectPixelUm, 75.0);
+
+    request.detectionType = DetectionType::Positioning;
+    QCOMPARE(SelectionEngine::targetObjectPixelUm(request), 75.0);
+    QCOMPARE(CalculationAssistant::estimateRequirement(request).targetObjectPixelUm, 75.0);
 }
 
 void SelectionEngineTest::lensAssistantEstimatesLenses()
@@ -404,6 +430,82 @@ void SelectionEngineTest::telecentricMissingCatalogDataIsRisk()
     const QString estimateRisks = estimates.first().risks.join(QStringLiteral(";"));
     QVERIFY2(estimateRisks.contains(QStringLiteral("WD")), qPrintable(estimateRisks));
     QVERIFY2(estimateRisks.contains(QStringLiteral("DOF")), qPrintable(estimateRisks));
+}
+
+void SelectionEngineTest::missingTelecentricityIsRisk()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 5.0;
+    request.objectHeightMm = 5.0;
+    request.placementMarginMm = 0.0;
+    request.minFeatureUm = 500.0;
+    request.measurementToleranceUm = 100.0;
+    request.workingDistanceMm = 110.0;
+    request.heightVariationMm = 2.0;
+    request.requiredFps = 10.0;
+    request.detectionType = DetectionType::Measurement;
+
+    CameraSpec camera;
+    camera.model = QStringLiteral("TEST-CAM");
+    camera.manufacturer = QStringLiteral("Test");
+    camera.resolutionX = 2448;
+    camera.resolutionY = 2048;
+    camera.pixelSizeUm = 3.45;
+    camera.shutterType = QStringLiteral("Global");
+    camera.maxFps = 30.0;
+    camera.interfaceType = QStringLiteral("USB3");
+    camera.bandwidthMBps = 500.0;
+    camera.bitDepth = 8.0;
+    camera.lensMount = QStringLiteral("C");
+
+    LensSpec lens;
+    lens.model = QStringLiteral("TEST-MISSING-TELECENTRICITY");
+    lens.manufacturer = QStringLiteral("Test");
+    lens.lensType = LensType::ObjectTelecentric;
+    lens.lensMount = QStringLiteral("C");
+    lens.pmag = 0.2;
+    lens.nominalWorkingDistanceMm = 110.0;
+    lens.workingDistanceToleranceMm = 5.0;
+    lens.dofMm = 5.0;
+    lens.telecentricityDeg = -1.0;
+    lens.distortionPercent = 0.01;
+    lens.imageCircleMm = 12.0;
+    lens.maxSensorDiagonalMm = 12.0;
+    lens.megapixelRating = 12.0;
+    lens.recommendedMinPixelUm = 3.45;
+
+    LightSpec light;
+    light.model = QStringLiteral("TEST-TBL");
+    light.manufacturer = QStringLiteral("Test");
+    light.lightType = LightType::TelecentricBacklight;
+    light.mode = QStringLiteral("Strobe");
+    light.activeWidthMm = 60.0;
+    light.activeHeightMm = 60.0;
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, {camera}, {lens}, {light}, 1);
+    QCOMPARE(results.size(), 1);
+    QVERIFY(results.first().hardConstraintsPassed);
+    QCOMPARE(results.first().residualTelecentricErrorUm, 0.0);
+    const QString resultRisks = results.first().score.risks.join(QStringLiteral(";"));
+    QVERIFY2(!resultRisks.isEmpty(), qPrintable(resultRisks));
+
+    const QVector<LensCalculationEstimate> estimates = CalculationAssistant::estimateLenses(request, camera, {lens}, 1);
+    QCOMPARE(estimates.size(), 1);
+    QCOMPARE(estimates.first().residualTelecentricErrorUm, 0.0);
+    const QString estimateRisks = estimates.first().risks.join(QStringLiteral(";"));
+    QVERIFY2(estimateRisks.contains(QString::fromUtf8("远心度")), qPrintable(estimateRisks));
+
+    PureCalculationInput input;
+    input.request = request;
+    input.camera = camera;
+    input.lens = lens;
+    input.light = light;
+    input.telecentricMode = true;
+    const PureCalculationResult pure = CalculationAssistant::estimatePure(input);
+    QCOMPARE(pure.residualTelecentricErrorUm, 0.0);
+    const QString pureRisks = pure.risks.join(QStringLiteral(";"));
+    QVERIFY2(pureRisks.contains(QString::fromUtf8("远心度")), qPrintable(pureRisks));
 }
 
 void SelectionEngineTest::lensTypeParsingRecognizesTelecentricAliases()
@@ -1310,7 +1412,31 @@ void SelectionEngineTest::highResolutionFramePayloadDoesNotOverflow()
 
     const double payloadMB = SelectionEngine::framePayloadMB(camera);
     QVERIFY(qAbs(payloadMB - 60000.0) < 0.001);
-    QCOMPARE(SelectionEngine::bandwidthRequiredMBps(camera, 2.0), 120000.0);
+    QVERIFY(qAbs(SelectionEngine::bandwidthRequiredMBps(camera, 2.0) - 129600.0) < 0.001);
+}
+
+void SelectionEngineTest::explicitPixelFormatAffectsPayloadAndBandwidth()
+{
+    CameraSpec camera;
+    camera.model = QStringLiteral("PIXEL-FORMAT-CAM");
+    camera.resolutionX = 1000;
+    camera.resolutionY = 1000;
+    camera.bitDepth = 8.0;
+    camera.interfaceType = QStringLiteral("USB3");
+
+    camera.colorMode = QStringLiteral("Mono8");
+    QVERIFY(qAbs(SelectionEngine::framePayloadMB(camera) - 1.0) < 0.001);
+    QVERIFY(qAbs(SelectionEngine::bandwidthRequiredMBps(camera, 100.0) - 105.0) < 0.001);
+
+    camera.colorMode = QStringLiteral("RGB8");
+    QVERIFY(qAbs(SelectionEngine::framePayloadMB(camera) - 3.0) < 0.001);
+    QVERIFY(qAbs(SelectionEngine::bandwidthRequiredMBps(camera, 100.0) - 315.0) < 0.001);
+
+    camera.colorMode = QStringLiteral("Mono16");
+    QVERIFY(qAbs(SelectionEngine::framePayloadMB(camera) - 2.0) < 0.001);
+
+    camera.colorMode = QStringLiteral("YUV422");
+    QVERIFY(qAbs(SelectionEngine::framePayloadMB(camera) - 2.0) < 0.001);
 }
 
 void SelectionEngineTest::cameraEstimatePenalizesInsufficientBandwidth()
@@ -1391,6 +1517,18 @@ void SelectionEngineTest::globalShutterAliasesAreRecognized()
 
     camera.shutterType = QStringLiteral("Rolling/GlobalResetRelease");
     QVERIFY(!camera.isGlobalShutter());
+
+    camera.shutterType = QStringLiteral("Global shutter / Rolling shutter");
+    QVERIFY(camera.isGlobalShutter());
+
+    camera.shutterType = QStringLiteral("Rolling/Global");
+    QVERIFY(camera.isGlobalShutter());
+
+    camera.shutterType = QStringLiteral("Rolling / Global");
+    QVERIFY(camera.isGlobalShutter());
+
+    camera.shutterType = QStringLiteral("Global / Rolling");
+    QVERIFY(camera.isGlobalShutter());
 }
 
 void SelectionEngineTest::lowAngleRingLightActsAsDarkField()
@@ -1586,6 +1724,76 @@ void SelectionEngineTest::hardConstraintFallbackKeepsDiagnosticResult()
     QVERIFY(!results.first().hardConstraintsPassed);
     QVERIFY(results.first().score.score <= 20.0);
     QVERIFY(results.first().hardFailures.join(QStringLiteral(";")).contains(QStringLiteral("FOV")));
+}
+
+void SelectionEngineTest::fixedFocalRejectsInvalidWorkingDistance()
+{
+    SelectionRequest request;
+    request.objectWidthMm = 10.0;
+    request.objectHeightMm = 10.0;
+    request.placementMarginMm = 1.0;
+    request.minFeatureUm = 300.0;
+    request.measurementToleranceUm = 100.0;
+    request.workingDistanceMm = 40.0;
+    request.requiredFps = 10.0;
+    request.detectionType = DetectionType::DefectInspection;
+
+    CameraSpec camera;
+    camera.model = QStringLiteral("CAM");
+    camera.manufacturer = QStringLiteral("Test");
+    camera.resolutionX = 2448;
+    camera.resolutionY = 2048;
+    camera.pixelSizeUm = 3.45;
+    camera.colorMode = QStringLiteral("Mono");
+    camera.shutterType = QStringLiteral("Global");
+    camera.maxFps = 60.0;
+    camera.interfaceType = QStringLiteral("USB3");
+    camera.bandwidthMBps = 500.0;
+    camera.bitDepth = 8.0;
+    camera.lensMount = QStringLiteral("C");
+
+    LensSpec lens;
+    lens.model = QStringLiteral("INVALID-WD-F");
+    lens.manufacturer = QStringLiteral("Test");
+    lens.lensType = LensType::FixedFocal;
+    lens.lensMount = QStringLiteral("C");
+    lens.focalLengthMm = 50.0;
+    lens.minWorkingDistanceMm = 10.0;
+    lens.imageCircleMm = 12.0;
+    lens.megapixelRating = 12.0;
+    lens.recommendedMinPixelUm = 3.45;
+    lens.fNumber = 4.0;
+
+    LightSpec light;
+    light.model = QStringLiteral("LIGHT");
+    light.manufacturer = QStringLiteral("Test");
+    light.lightType = LightType::Bar;
+    light.mode = QStringLiteral("Strobe");
+    light.activeWidthMm = 80.0;
+    light.activeHeightMm = 80.0;
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, {camera}, {lens}, {light}, 1);
+    QCOMPARE(results.size(), 1);
+    QVERIFY(!results.first().hardConstraintsPassed);
+    QVERIFY(results.first().hardFailures.join(QStringLiteral(";")).contains(QStringLiteral("WD")));
+    QVERIFY(!results.first().score.risks.isEmpty());
+
+    const QVector<LensCalculationEstimate> estimates = CalculationAssistant::estimateLenses(request, camera, {lens}, 1);
+    QCOMPARE(estimates.size(), 1);
+    QCOMPARE(estimates.first().effectiveFovWidthMm, 0.0);
+    QVERIFY(!estimates.first().fovOk);
+    QVERIFY(estimates.first().risks.join(QStringLiteral(";")).contains(QStringLiteral("WD")));
+
+    PureCalculationInput input;
+    input.request = request;
+    input.camera = camera;
+    input.lens = lens;
+    input.light = light;
+    input.telecentricMode = false;
+    const PureCalculationResult pure = CalculationAssistant::estimatePure(input);
+    QCOMPARE(pure.effectiveFovWidthMm, 0.0);
+    QVERIFY(pure.risks.join(QStringLiteral(";")).contains(QStringLiteral("WD")));
 }
 
 void SelectionEngineTest::fixedLensDofAndDistortionRisk()

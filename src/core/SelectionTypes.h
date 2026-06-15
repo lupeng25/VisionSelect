@@ -95,7 +95,7 @@ struct LensSpec {
     double nominalWorkingDistanceMm = 0.0;
     double workingDistanceToleranceMm = 0.0;
     double maxSensorDiagonalMm = 0.0;
-    double telecentricityDeg = 0.0;
+    double telecentricityDeg = -1.0;
     double dofMm = 0.0;
     double numericalAperture = 0.0;
     double fNumber = 0.0;
@@ -103,6 +103,7 @@ struct LensSpec {
     QString notes;
 
     bool isTelecentric() const;
+    bool hasTelecentricity() const;
     QString typeLabel() const;
 };
 

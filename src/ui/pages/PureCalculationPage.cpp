@@ -334,7 +334,7 @@ PureCalculationInput PureCalculationPage::input() const
         lens.nominalWorkingDistanceMm = 0.0;
         lens.workingDistanceToleranceMm = 0.0;
         lens.maxSensorDiagonalMm = 0.0;
-        lens.telecentricityDeg = 0.0;
+        lens.telecentricityDeg = -1.0;
         lens.dofMm = 0.0;
         lens.fNumber = m_fNumberSpin->value();
     }

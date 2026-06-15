@@ -16,6 +16,77 @@ double percentDifference(double actual, double target)
     return qAbs(actual - target) / target;
 }
 
+double effectiveBitsPerPixel(const CameraSpec &camera)
+{
+    const double nominalBits = camera.bitDepth > 0.0 ? camera.bitDepth : 8.0;
+    const QString mode = camera.colorMode.trimmed().toLower();
+
+    if (mode.contains(QStringLiteral("rgba16")) || mode.contains(QStringLiteral("bgra16")))
+        return 64.0;
+    if (mode.contains(QStringLiteral("rgba12")) || mode.contains(QStringLiteral("bgra12")))
+        return 48.0;
+    if (mode.contains(QStringLiteral("rgba10")) || mode.contains(QStringLiteral("bgra10")))
+        return 40.0;
+    if (mode.contains(QStringLiteral("rgba8")) || mode.contains(QStringLiteral("bgra8")))
+        return 32.0;
+
+    if (mode.contains(QStringLiteral("rgb16")) || mode.contains(QStringLiteral("bgr16")))
+        return 48.0;
+    if (mode.contains(QStringLiteral("rgb12")) || mode.contains(QStringLiteral("bgr12")))
+        return 36.0;
+    if (mode.contains(QStringLiteral("rgb10")) || mode.contains(QStringLiteral("bgr10")))
+        return 30.0;
+    if (mode.contains(QStringLiteral("rgb8")) || mode.contains(QStringLiteral("bgr8")))
+        return 24.0;
+
+    if (mode.contains(QStringLiteral("mono16")))
+        return 16.0;
+    if (mode.contains(QStringLiteral("mono12")))
+        return 12.0;
+    if (mode.contains(QStringLiteral("mono10")))
+        return 10.0;
+    if (mode.contains(QStringLiteral("mono8")))
+        return 8.0;
+
+    if (mode.contains(QStringLiteral("bayer16")))
+        return 16.0;
+    if (mode.contains(QStringLiteral("bayer12")))
+        return 12.0;
+    if (mode.contains(QStringLiteral("bayer10")))
+        return 10.0;
+    if (mode.contains(QStringLiteral("bayer8")))
+        return 8.0;
+
+    if (mode.contains(QStringLiteral("yuv422")) || mode.contains(QStringLiteral("yuyv")))
+        return 16.0;
+    if (mode.contains(QStringLiteral("rgba")) || mode.contains(QStringLiteral("bgra")))
+        return nominalBits * 4.0;
+    if (mode.contains(QStringLiteral("rgb")) || mode.contains(QStringLiteral("bgr")))
+        return nominalBits * 3.0;
+
+    return nominalBits;
+}
+
+double transportOverheadFactor(const CameraSpec &camera)
+{
+    const QString interfaceName = camera.interfaceType.trimmed().toLower();
+    if (interfaceName.contains(QStringLiteral("gige")))
+        return 1.10;
+    if (interfaceName.contains(QStringLiteral("usb3")))
+        return 1.05;
+    if (interfaceName.contains(QStringLiteral("cameralink"))
+        || interfaceName.contains(QStringLiteral("coaxpress"))
+        || interfaceName.contains(QStringLiteral("cxp"))) {
+        return 1.03;
+    }
+    return 1.08;
+}
+
+bool fixedFocalGeometryValid(const SelectionRequest &request, const LensSpec &lens)
+{
+    return request.workingDistanceMm > lens.focalLengthMm;
+}
+
 QString mm(double value)
 {
     return QString::number(value, 'f', 2);
@@ -291,27 +362,27 @@ double SelectionEngine::targetObjectPixelUm(const SelectionRequest &request)
     double target = 999999.0;
     if (request.minFeatureUm > 0.0)
         target = qMin(target, request.minFeatureUm / featurePixels);
-    if (request.measurementToleranceUm > 0.0)
+    if (request.detectionType == DetectionType::Measurement && request.measurementToleranceUm > 0.0)
         target = qMin(target, request.measurementToleranceUm * toleranceFactor);
     return qMax(0.5, target);
 }
 
 double SelectionEngine::bandwidthRequiredMBps(const CameraSpec &camera, double fps)
 {
-    return framePayloadMB(camera) * fps;
+    return framePayloadMB(camera) * fps * transportOverheadFactor(camera);
 }
 
 double SelectionEngine::framePayloadMB(const CameraSpec &camera)
 {
     const double bitsPerFrame = static_cast<double>(camera.resolutionX)
         * static_cast<double>(camera.resolutionY)
-        * camera.bitDepth;
+        * effectiveBitsPerPixel(camera);
     return bitsPerFrame / 8.0 / 1000000.0;
 }
 
 double SelectionEngine::storagePerHourGB(const CameraSpec &camera, double fps)
 {
-    return bandwidthRequiredMBps(camera, fps) * 3600.0 / 1024.0;
+    return framePayloadMB(camera) * fps * 3600.0 / 1024.0;
 }
 
 double SelectionEngine::interfaceCapacityMBps(const CameraSpec &camera)
@@ -619,8 +690,17 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
         return;
     }
 
-    const double fovW = camera.sensorWidthMm() * qMax(1.0, request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
-    const double fovH = camera.sensorHeightMm() * qMax(1.0, request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
+    if (!fixedFocalGeometryValid(request, lens)) {
+        if (includeDetails)
+            result->formulaSummary = QString::fromUtf8("普通镜头：当前 WD 必须大于焦距，薄透镜近似才有有效正倍率");
+        result->score.score -= 60.0;
+        ADD_DETAIL_HARD_FAILURE(QString::fromUtf8("普通镜头当前 WD 不大于焦距"));
+        ADD_DETAIL_RISK(QString::fromUtf8("当前工作距离不大于镜头焦距，无法按固定焦距镜头薄透镜模型得到有效 FOV"));
+        return;
+    }
+
+    const double fovW = camera.sensorWidthMm() * (request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
+    const double fovH = camera.sensorHeightMm() * (request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
     result->effectiveFovWidthMm = fovW;
     result->effectiveFovHeightMm = fovH;
     result->magnification = camera.sensorWidthMm() / qMax(0.001, fovW);
@@ -694,7 +774,9 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
         }
     }
 
-    if (request.detectionType == DetectionType::Measurement && result->distortionErrorUm > request.measurementToleranceUm) {
+    if (request.detectionType == DetectionType::Measurement
+        && request.measurementToleranceUm > 0.0
+        && result->distortionErrorUm > request.measurementToleranceUm) {
         result->score.score -= 18.0;
         ADD_DETAIL_RISK(QString::fromUtf8("按未标定 FOV 边缘粗估畸变误差约 %1 um，高于允许误差，需按厂商畸变曲线和标定板复核").arg(um(result->distortionErrorUm)));
     } else if (result->distortionErrorUm > 0.0) {
@@ -863,21 +945,28 @@ void SelectionEngine::scoreTelecentricLens(const SelectionRequest &request,
         }
     }
 
-    if (request.detectionType == DetectionType::Measurement && result->distortionErrorUm > request.measurementToleranceUm) {
+    if (request.detectionType == DetectionType::Measurement
+        && request.measurementToleranceUm > 0.0
+        && result->distortionErrorUm > request.measurementToleranceUm) {
         result->score.score -= 12.0;
         ADD_DETAIL_RISK(QString::fromUtf8("按未标定 FOV 边缘粗估畸变误差约 %1 um，高于允许误差，需按厂商畸变曲线和标定板复核").arg(um(result->distortionErrorUm)));
     } else if (result->distortionErrorUm > 0.0) {
         ADD_DETAIL_REASON(QString::fromUtf8("按未标定 FOV 边缘粗估畸变误差约 %1 um，最终测量需标定复核").arg(um(result->distortionErrorUm)));
     }
 
-    result->residualTelecentricErrorUm = request.heightVariationMm * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
-    if (request.measurementToleranceUm > 0.0
-        && result->residualTelecentricErrorUm > request.measurementToleranceUm) {
-        result->score.score -= 12.0;
-        ADD_DETAIL_RISK(QString::fromUtf8("\346\214\211\350\277\234\345\277\203\345\272\246\344\274\260\347\256\227\347\232\204\346\256\213\344\275\231\350\247\206\345\267\256\347\272\246 %1 um\357\274\214\351\253\230\344\272\216\345\205\201\350\256\270\350\257\257\345\267\256")
-            .arg(um(result->residualTelecentricErrorUm)));
+    if (lens.hasTelecentricity()) {
+        result->residualTelecentricErrorUm = request.heightVariationMm * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
+        if (request.measurementToleranceUm > 0.0
+            && result->residualTelecentricErrorUm > request.measurementToleranceUm) {
+            result->score.score -= 12.0;
+            ADD_DETAIL_RISK(QString::fromUtf8("\346\214\211\350\277\234\345\277\203\345\272\246\344\274\260\347\256\227\347\232\204\346\256\213\344\275\231\350\247\206\345\267\256\347\272\246 %1 um\357\274\214\351\253\230\344\272\216\345\205\201\350\256\270\350\257\257\345\267\256")
+                .arg(um(result->residualTelecentricErrorUm)));
+        } else {
+            result->score.score += 5.0;
+        }
     } else {
-        result->score.score += 5.0;
+        result->score.score -= measurementNeedsTelecentric(request) || request.heightVariationMm > 0.0 ? 10.0 : 4.0;
+        ADD_DETAIL_RISK(QString::fromUtf8("远心镜头缺少远心度数据，无法估算高度波动带来的残余视差"));
     }
 
     if (lens.lensType == LensType::BiTelecentric) {
