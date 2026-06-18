@@ -55,6 +55,25 @@ function First-Number([string]$text, [double]$default = 0) {
     return $default
 }
 
+function Max-Number([string]$text, [double]$default = 0) {
+    if ([string]::IsNullOrWhiteSpace($text)) { return $default }
+    $matches = [regex]::Matches($text, '[0-9]+(?:\.[0-9]+)?')
+    if ($matches.Count -eq 0) { return $default }
+    $max = [double]$matches[0].Value
+    foreach ($m in $matches) {
+        $value = [double]$m.Value
+        if ($value -gt $max) { $max = $value }
+    }
+    return $max
+}
+
+function Max-BitDepth([string]$text, [double]$default = 0) {
+    if ([string]::IsNullOrWhiteSpace($text)) { return $default }
+    $t = [regex]::Replace($text, '(?i)\b[0-9A-Z_]*422[0-9A-Z_]*\b', ' ')
+    $t = [regex]::Replace($t, '(?i)\bfloat\s+[0-9]+(?:\.[0-9]+)?\b', ' ')
+    return Max-Number $t $default
+}
+
 function Parse-Resolution([string]$text) {
     $m = [regex]::Match($text, '([0-9]{2,})\D+([0-9]{2,})')
     if (!$m.Success) { return @(0, 0) }
@@ -150,7 +169,10 @@ function Parse-WdPair([string]$text) {
     $t = Html-Decode $text
     $nominal = First-Number $t 0
     $tol = 0
-    $m = [regex]::Match($t, '[±卤]\s*([0-9]+(?:\.[0-9]+)?)')
+    $m = [regex]::Match($t, "$([char]0x00b1)\s*([0-9]+(?:\.[0-9]+)?)")
+    if (!$m.Success) {
+        $m = [regex]::Match($t, "$([char]0x5364)\s*([0-9]+(?:\.[0-9]+)?)")
+    }
     if ($m.Success) { $tol = [double]$m.Groups[1].Value }
     return @($nominal, $tol)
 }
@@ -195,7 +217,6 @@ function Parse-DofMm([string]$text) {
     $t = Html-Decode $text
     $dof = First-Number $t 0
     if ($dof -le 0) { return 0 }
-    if ($t -match '[±卤]') { return $dof * 2.0 }
     return $dof
 }
 
@@ -227,17 +248,17 @@ function Get-CoolensProductFields([string]$productId, [string]$listId) {
             $fields["dof"] = $value
         } elseif ($upper.Contains("F/#")) {
             $fields["fno"] = $value
-        } elseif ($label.Contains("焦距")) {
+        } elseif ($label.Contains("$([char]0x7126)$([char]0x8ddd)")) {
             $fields["focal"] = $value
-        } elseif ($label.Contains("接口")) {
+        } elseif ($label.Contains("$([char]0x63a5)$([char]0x53e3)")) {
             $fields["mount"] = $value
-        } elseif ($label.Contains("支持") -and ($upper.Contains("CCD") -or $label.Contains("尺寸"))) {
+        } elseif ($label.Contains("$([char]0x652f)$([char]0x6301)") -and ($upper.Contains("CCD") -or $label.Contains("$([char]0x5c3a)$([char]0x5bf8)"))) {
             $fields["sensor"] = $value
-        } elseif ($label.Contains("分辨率")) {
+        } elseif ($label.Contains("$([char]0x5206)$([char]0x8fa8)$([char]0x7387)")) {
             $fields["objectResolution"] = $value
-        } elseif ($label.Contains("%") -and ($upper.Contains("MAX") -or $label.Contains("畸变"))) {
+        } elseif ($label.Contains("%") -and ($upper.Contains("MAX") -or $label.Contains("$([char]0x7578)$([char]0x53d8)"))) {
             $fields["distortion"] = $value
-        } elseif (($upper.Contains("MAX") -or $label.Contains("远心度")) -and !$label.Contains("%")) {
+        } elseif (($upper.Contains("MAX") -or $label.Contains("$([char]0x8fdc)$([char]0x5fc3)$([char]0x5ea6)")) -and !$label.Contains("%")) {
             $fields["telecentricity"] = $value
         }
     }
@@ -266,7 +287,7 @@ function Update-CoolensLensDetail([hashtable]$map, [string]$model, [hashtable]$d
     if ($detail.ContainsKey("dof")) {
         $dof = Parse-DofMm $detail["dof"]
         $currentDof = First-Number ([string]$row.dof_mm) 0
-        $looksLikeHalfDof = $detail["dof"] -match '±' -and [math]::Abs(($currentDof * 2.0) - $dof) -lt 0.0000001
+        $looksLikeHalfDof = $false
         if ($dof -gt 0 -and ($currentDof -le 0 -or $looksLikeHalfDof -or [math]::Abs($currentDof - $dof) -gt 0.0000001)) {
             $row.dof_mm = Format-Number $dof
         }
@@ -303,7 +324,9 @@ function Infer-Mount([string]$model, [string]$mountText) {
 
 function Is-Yes([string]$text) {
     $t = Html-Decode $text
-    return $t -match '(?i)^\s*(是|有|yes|true|1)\s*$'
+    return $t -match '(?i)^\s*(yes|true|1)\s*$' -or
+        $t.Contains("$([char]0x662f)") -or
+        $t.Contains("$([char]0x6709)")
 }
 
 function Invoke-Utf8Json([string]$uri) {
@@ -679,7 +702,9 @@ if (!$SkipNetwork) {
             $color = Normalize-ColorMode $p["Product Model"] $color $p["Type"] $p["Pixel format"]
             $iface = $p["Data interface"]
             if (!$iface) { $iface = $p["Port"] }
-            Add-Camera $cameraMap $p["Product Model"] $r[0] $r[1] $pixel $sensor $color $shutter $fps $iface (First-Number $p["Bit depth"] 12) (First-Number $p["Dynamic range"] 0) $p["Lens mount"] "Hikrobot"
+            $bitDepthText = Param-Value $p @("Bit depth", "Bit Depth")
+            if (!$bitDepthText) { $bitDepthText = $p["Pixel format"] }
+            Add-Camera $cameraMap $p["Product Model"] $r[0] $r[1] $pixel $sensor $color $shutter $fps $iface (Max-BitDepth $bitDepthText 12) (First-Number $p["Dynamic range"] 0) $p["Lens mount"] "Hikrobot"
         } catch {
             Write-Warning "Skipped Hikrobot camera id=$($rec.id): $($_.Exception.Message)"
         }
@@ -734,7 +759,7 @@ if (!$SkipNetwork) {
             $fps = First-Number $p["Frame Rate"] 0
             $sensor = $p["Image Sensor"]
             $color = Normalize-ColorMode $detail.data.model $p["Mono/Color"] "" $p["Image Format"]
-            Add-Camera $cameraMap $detail.data.model $r[0] $r[1] $pixel $sensor $color $p["Shutter"] $fps $p["Port"] (First-Number $p["Bit Depth"] 12) (First-Number $p["Dynamic Range"] 0) $p["Lens Mount"] "iRAYPLE"
+            Add-Camera $cameraMap $detail.data.model $r[0] $r[1] $pixel $sensor $color $p["Shutter"] $fps $p["Port"] (Max-BitDepth $p["Bit Depth"] 12) (First-Number $p["Dynamic Range"] 0) $p["Lens Mount"] "iRAYPLE"
         } catch {
             Write-Warning "Skipped iRAYPLE camera id=$($rec.id): $($_.Exception.Message)"
         }
