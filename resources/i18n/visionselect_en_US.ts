@@ -5,11 +5,11 @@
     <name>LicenseDialog</name>
     <message>
         <source>VisionSelect License</source>
-        <translation>VisionSelect License</translation>
+        <translation type="vanished">VisionSelect License</translation>
     </message>
     <message>
         <source>Enter a valid offline license key to continue.</source>
-        <translation>Enter a valid offline license key to continue.</translation>
+        <translation type="vanished">Enter a valid offline license key to continue.</translation>
     </message>
     <message>
         <source>Machine code</source>
@@ -107,35 +107,35 @@
     </message>
     <message>
         <source>Requirements · Calculation · Selection</source>
-        <translation>Requirements · Calculation · Selection</translation>
+        <translation type="vanished">Requirements · Calculation · Selection</translation>
     </message>
     <message>
         <source>Workspace</source>
-        <translation>Workspace</translation>
+        <translation type="vanished">Workspace</translation>
     </message>
     <message>
         <source>Requirement Input</source>
-        <translation>Requirement Input</translation>
+        <translation type="vanished">Requirement Input</translation>
     </message>
     <message>
         <source>Pure Calculation</source>
-        <translation>Pure Calculation</translation>
+        <translation type="vanished">Pure Calculation</translation>
     </message>
     <message>
         <source>Product Calculation Assistant</source>
-        <translation>Product Calculation Assistant</translation>
+        <translation type="vanished">Product Calculation Assistant</translation>
     </message>
     <message>
         <source>3D Camera Assistant</source>
-        <translation>3D Camera Assistant</translation>
+        <translation type="vanished">3D Camera Assistant</translation>
     </message>
     <message>
         <source>Recommended Results</source>
-        <translation>Recommended Results</translation>
+        <translation type="vanished">Recommended Results</translation>
     </message>
     <message>
         <source>Catalog</source>
-        <translation>Catalog</translation>
+        <translation type="vanished">Catalog</translation>
     </message>
     <message>
         <source>License Info</source>
@@ -259,7 +259,7 @@ Expires: %4</translation>
     </message>
     <message>
         <source>No recommended plan is available; BOM cannot be exported.</source>
-        <translation>No recommended plan is available; BOM cannot be exported.</translation>
+        <translation type="vanished">No recommended plan is available; BOM cannot be exported.</translation>
     </message>
     <message>
         <source>Export BOM CSV</source>
@@ -280,6 +280,14 @@ Expires: %4</translation>
     <message>
         <source>Light</source>
         <translation>Light</translation>
+    </message>
+    <message>
+        <source>Recommendation calculation is still running. Please export after it completes.</source>
+        <translation>Recommendation calculation is still running. Please export after it completes.</translation>
+    </message>
+    <message>
+        <source>Recommendation calculation has started. Please export after it completes.</source>
+        <translation>Recommendation calculation has started. Please export after it completes.</translation>
     </message>
 </context>
 <context>

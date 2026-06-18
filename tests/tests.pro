@@ -13,6 +13,7 @@ win32: LIBS += -lbcrypt
 SOURCES += \
     test_selection.cpp \
     ../src/catalog/CatalogRepository.cpp \
+    ../src/core/Localization.cpp \
     ../src/core/SelectionTypes.cpp \
     ../src/i18n/LanguageManager.cpp \
     ../src/license/LicenseIssuer.cpp \
@@ -29,6 +30,7 @@ SOURCES += \
 
 HEADERS += \
     ../src/catalog/CatalogRepository.h \
+    ../src/core/Localization.h \
     ../src/core/SelectionTypes.h \
     ../src/i18n/LanguageManager.h \
     ../src/license/LicenseIssuer.h \

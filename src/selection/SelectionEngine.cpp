@@ -1,5 +1,7 @@
 #include "selection/SelectionEngine.h"
 
+#include "core/Localization.h"
+
 #include <algorithm>
 #include <QtMath>
 
@@ -114,6 +116,17 @@ void addHardFailure(SelectionResult *result, const QString &reason)
     result->hardConstraintsPassed = false;
     if (!result->hardFailures.contains(reason))
         result->hardFailures.append(reason);
+}
+
+void localizeSelectionResult(SelectionResult *result)
+{
+    if (!result)
+        return;
+    result->schemeTitle = CoreI18n::localizedDiagnostic(result->schemeTitle);
+    result->formulaSummary = CoreI18n::localizedDiagnostic(result->formulaSummary);
+    result->hardFailures = CoreI18n::localizedDiagnostics(result->hardFailures);
+    result->score.reasons = CoreI18n::localizedDiagnostics(result->score.reasons);
+    result->score.risks = CoreI18n::localizedDiagnostics(result->score.risks);
 }
 
 struct PairCandidate
@@ -491,6 +504,8 @@ SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
         result.score.score = 0.0;
     if (!result.hardConstraintsPassed)
         result.score.score = qMin(result.score.score, 20.0);
+    if (includeDetails)
+        localizeSelectionResult(&result);
     return result;
 }
 

@@ -1,5 +1,7 @@
 #include "catalog/CatalogRepository.h"
 
+#include "core/Localization.h"
+
 #include <QDir>
 #include <QDateTime>
 #include <QFile>
@@ -19,6 +21,24 @@
 #include <cmath>
 
 namespace {
+class ScopedErrorLocalizer
+{
+public:
+    explicit ScopedErrorLocalizer(QString *errorMessage)
+        : m_errorMessage(errorMessage)
+    {
+    }
+
+    ~ScopedErrorLocalizer()
+    {
+        if (m_errorMessage && !m_errorMessage->isEmpty())
+            *m_errorMessage = CoreI18n::localizedDiagnostic(*m_errorMessage);
+    }
+
+private:
+    QString *m_errorMessage = nullptr;
+};
+
 QString sqlErrorText(const QSqlQuery &query)
 {
     return query.lastError().text();
@@ -31,6 +51,7 @@ QString sqlErrorText(const QSqlDatabase &db)
 
 bool execSql(const QSqlDatabase &db, const QString &sql, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QSqlQuery query(db);
     if (!query.exec(sql)) {
         if (errorMessage)
@@ -371,12 +392,14 @@ QString CatalogRepository::storageDirectory() const
 
 bool CatalogRepository::loadDefaults(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return initializeDatabase(errorMessage)
         && refreshSnapshots(errorMessage);
 }
 
 bool CatalogRepository::initializeDatabase(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return ensureDatabase(errorMessage)
         && appendMissingBuiltInRows(errorMessage);
 }
@@ -413,6 +436,7 @@ QString CatalogRepository::lightStoragePath() const
 
 bool CatalogRepository::openDatabase(QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QDir dir(effectiveStorageDirectory());
     if (!dir.exists() && !QDir().mkpath(dir.absolutePath())) {
         if (errorMessage)
@@ -442,6 +466,7 @@ bool CatalogRepository::openDatabase(QString *errorMessage) const
 
 bool CatalogRepository::ensureDatabase(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const bool existed = QFileInfo::exists(databasePath());
     if (!openDatabase(errorMessage))
         return false;
@@ -469,6 +494,7 @@ bool CatalogRepository::ensureDatabase(QString *errorMessage)
 
 bool CatalogRepository::createSchema(QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
 
@@ -582,6 +608,7 @@ bool CatalogRepository::createSchema(QString *errorMessage) const
 
 bool CatalogRepository::backupLocalCsvFiles(QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const QStringList paths = {cameraStoragePath(), lensStoragePath(), lightStoragePath()};
     bool hasAny = false;
     for (const QString &path : paths)
@@ -613,6 +640,7 @@ bool CatalogRepository::backupLocalCsvFiles(QString *errorMessage) const
 
 bool CatalogRepository::migrateInitialDatabase(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!backupLocalCsvFiles(errorMessage))
         return false;
 
@@ -689,6 +717,7 @@ bool CatalogRepository::migrateInitialDatabase(QString *errorMessage)
 
 bool CatalogRepository::appendMissingBuiltInRows(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<Row> rows;
     QVector<CameraSpec> cameras;
     if (!readCsvRows(QStringLiteral(":/data/cameras.csv"), &rows, errorMessage)
@@ -723,6 +752,7 @@ bool CatalogRepository::appendMissingBuiltInRows(QString *errorMessage)
 
 bool CatalogRepository::ensureLocalCatalogs(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QDir dir(effectiveStorageDirectory());
     if (!dir.exists() && !QDir().mkpath(dir.absolutePath())) {
         if (errorMessage)
@@ -748,6 +778,7 @@ bool CatalogRepository::ensureLocalCatalogs(QString *errorMessage)
 
 bool CatalogRepository::copyResourceToFile(const QString &resourcePath, const QString &filePath, bool overwrite, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QFileInfo targetInfo(filePath);
     if (!QDir().mkpath(targetInfo.absolutePath())) {
         if (errorMessage)
@@ -775,6 +806,7 @@ bool CatalogRepository::copyResourceToFile(const QString &resourcePath, const QS
 
 bool CatalogRepository::appendMissingResourceRows(const QString &resourcePath, const QString &filePath, const QString &keyColumn, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<Row> localRows;
     QVector<Row> resourceRows;
     if (!readCsvRows(filePath, &localRows, errorMessage)
@@ -870,6 +902,7 @@ bool CatalogRepository::appendMissingResourceRows(const QString &resourcePath, c
 
 bool CatalogRepository::parseCameraSpecs(const QVector<Row> &rows, const QString &sourceName, QVector<CameraSpec> *cameras, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!cameras)
         return false;
     const QVector<CameraSpec> previous = m_cameras;
@@ -884,6 +917,7 @@ bool CatalogRepository::parseCameraSpecs(const QVector<Row> &rows, const QString
 
 bool CatalogRepository::parseLensSpecs(const QVector<Row> &rows, const QString &sourceName, QVector<LensSpec> *lenses, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!lenses)
         return false;
     const QVector<LensSpec> previous = m_lenses;
@@ -898,6 +932,7 @@ bool CatalogRepository::parseLensSpecs(const QVector<Row> &rows, const QString &
 
 bool CatalogRepository::parseLightSpecs(const QVector<Row> &rows, const QString &sourceName, QVector<LightSpec> *lights, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!lights)
         return false;
     const QVector<LightSpec> previous = m_lights;
@@ -912,6 +947,7 @@ bool CatalogRepository::parseLightSpecs(const QVector<Row> &rows, const QString 
 
 bool CatalogRepository::insertCameraIntoDatabase(const CameraSpec &camera, const QString &sourceKind, bool replaceExisting, qint64 *id, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
     const QString command = replaceExisting ? QStringLiteral("INSERT OR REPLACE") : QStringLiteral("INSERT OR IGNORE");
@@ -955,6 +991,7 @@ bool CatalogRepository::insertCameraIntoDatabase(const CameraSpec &camera, const
 
 bool CatalogRepository::insertLensIntoDatabase(const LensSpec &lens, const QString &sourceKind, bool replaceExisting, qint64 *id, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
     const QString command = replaceExisting ? QStringLiteral("INSERT OR REPLACE") : QStringLiteral("INSERT OR IGNORE");
@@ -1005,6 +1042,7 @@ bool CatalogRepository::insertLensIntoDatabase(const LensSpec &lens, const QStri
 
 bool CatalogRepository::insertLightIntoDatabase(const LightSpec &light, const QString &sourceKind, bool replaceExisting, qint64 *id, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
     const QString command = replaceExisting ? QStringLiteral("INSERT OR REPLACE") : QStringLiteral("INSERT OR IGNORE");
@@ -1043,6 +1081,7 @@ bool CatalogRepository::insertLightIntoDatabase(const LightSpec &light, const QS
 
 bool CatalogRepository::replaceCamerasInDatabase(const QVector<CameraSpec> &cameras, const QString &sourceKind, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
     if (!m_db.transaction()) {
@@ -1070,6 +1109,7 @@ bool CatalogRepository::replaceCamerasInDatabase(const QVector<CameraSpec> &came
 
 bool CatalogRepository::replaceLensesInDatabase(const QVector<LensSpec> &lenses, const QString &sourceKind, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
     if (!m_db.transaction()) {
@@ -1097,6 +1137,7 @@ bool CatalogRepository::replaceLensesInDatabase(const QVector<LensSpec> &lenses,
 
 bool CatalogRepository::replaceLightsInDatabase(const QVector<LightSpec> &lights, const QString &sourceKind, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     m_lightCandidateCache.clear();
     if (!openDatabase(errorMessage))
         return false;
@@ -1125,6 +1166,7 @@ bool CatalogRepository::replaceLightsInDatabase(const QVector<LightSpec> &lights
 
 bool CatalogRepository::refreshSnapshots(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
 
@@ -1228,11 +1270,13 @@ bool CatalogRepository::refreshSnapshots(QString *errorMessage)
 
 bool CatalogRepository::refreshSnapshotsIfLoaded(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return m_snapshotsLoaded ? refreshSnapshots(errorMessage) : true;
 }
 
 bool CatalogRepository::loadCameraCsv(const QString &filePath, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<Row> rows;
     QVector<CameraSpec> cameras;
     if (!readCsvRows(filePath, &rows, errorMessage)
@@ -1246,6 +1290,7 @@ bool CatalogRepository::loadCameraCsv(const QString &filePath, QString *errorMes
 
 bool CatalogRepository::loadLensCsv(const QString &filePath, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<Row> rows;
     QVector<LensSpec> lenses;
     if (!readCsvRows(filePath, &rows, errorMessage)
@@ -1259,6 +1304,7 @@ bool CatalogRepository::loadLensCsv(const QString &filePath, QString *errorMessa
 
 bool CatalogRepository::loadLightCsv(const QString &filePath, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<Row> rows;
     QVector<LightSpec> lights;
     if (!readCsvRows(filePath, &rows, errorMessage)
@@ -1272,21 +1318,25 @@ bool CatalogRepository::loadLightCsv(const QString &filePath, QString *errorMess
 
 bool CatalogRepository::exportCameraCsv(const QString &filePath, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return writeCameraCsv(filePath, m_cameras, errorMessage);
 }
 
 bool CatalogRepository::exportLensCsv(const QString &filePath, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return writeLensCsv(filePath, m_lenses, errorMessage);
 }
 
 bool CatalogRepository::exportLightCsv(const QString &filePath, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return writeLightCsv(filePath, m_lights, errorMessage);
 }
 
 bool CatalogRepository::exportCameraCsv(const QString &filePath, const QVector<int> &indexes, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<CameraSpec> selected;
     for (int index : indexes) {
         if (index >= 0 && index < m_cameras.size())
@@ -1297,6 +1347,7 @@ bool CatalogRepository::exportCameraCsv(const QString &filePath, const QVector<i
 
 bool CatalogRepository::exportLensCsv(const QString &filePath, const QVector<int> &indexes, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<LensSpec> selected;
     for (int index : indexes) {
         if (index >= 0 && index < m_lenses.size())
@@ -1307,6 +1358,7 @@ bool CatalogRepository::exportLensCsv(const QString &filePath, const QVector<int
 
 bool CatalogRepository::exportLightCsv(const QString &filePath, const QVector<int> &indexes, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<LightSpec> selected;
     for (int index : indexes) {
         if (index >= 0 && index < m_lights.size())
@@ -1317,6 +1369,7 @@ bool CatalogRepository::exportLightCsv(const QString &filePath, const QVector<in
 
 bool CatalogRepository::resetCamerasToBuiltIn(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<Row> rows;
     QVector<CameraSpec> cameras;
     return readCsvRows(QStringLiteral(":/data/cameras.csv"), &rows, errorMessage)
@@ -1327,6 +1380,7 @@ bool CatalogRepository::resetCamerasToBuiltIn(QString *errorMessage)
 
 bool CatalogRepository::resetLensesToBuiltIn(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<Row> rows;
     QVector<LensSpec> lenses;
     return readCsvRows(QStringLiteral(":/data/lenses.csv"), &rows, errorMessage)
@@ -1337,6 +1391,7 @@ bool CatalogRepository::resetLensesToBuiltIn(QString *errorMessage)
 
 bool CatalogRepository::resetLightsToBuiltIn(QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QVector<Row> rows;
     QVector<LightSpec> lights;
     return readCsvRows(QStringLiteral(":/data/lights.csv"), &rows, errorMessage)
@@ -1347,6 +1402,7 @@ bool CatalogRepository::resetLightsToBuiltIn(QString *errorMessage)
 
 bool CatalogRepository::addCamera(const CameraSpec &camera, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!validateCamera(camera, QString::fromUtf8("\346\226\260\345\242\236\347\233\270\346\234\272"), errorMessage))
         return false;
     if (!openDatabase(errorMessage))
@@ -1371,6 +1427,7 @@ bool CatalogRepository::addCamera(const CameraSpec &camera, QString *errorMessag
 
 bool CatalogRepository::updateCamera(int index, const CameraSpec &camera, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (index < 0 || index >= m_cameras.size()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("\347\233\270\346\234\272\350\241\214\345\217\267\346\227\240\346\225\210");
@@ -1383,6 +1440,7 @@ bool CatalogRepository::updateCamera(int index, const CameraSpec &camera, QStrin
 
 bool CatalogRepository::removeCamera(int index, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (index < 0 || index >= m_cameras.size()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("\347\233\270\346\234\272\350\241\214\345\217\267\346\227\240\346\225\210");
@@ -1393,6 +1451,7 @@ bool CatalogRepository::removeCamera(int index, QString *errorMessage)
 
 bool CatalogRepository::addLens(const LensSpec &lens, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!validateLens(lens, QString::fromUtf8("\346\226\260\345\242\236\351\225\234\345\244\264"), errorMessage))
         return false;
     if (!openDatabase(errorMessage))
@@ -1417,6 +1476,7 @@ bool CatalogRepository::addLens(const LensSpec &lens, QString *errorMessage)
 
 bool CatalogRepository::updateLens(int index, const LensSpec &lens, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (index < 0 || index >= m_lenses.size()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("\351\225\234\345\244\264\350\241\214\345\217\267\346\227\240\346\225\210");
@@ -1429,6 +1489,7 @@ bool CatalogRepository::updateLens(int index, const LensSpec &lens, QString *err
 
 bool CatalogRepository::removeLens(int index, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (index < 0 || index >= m_lenses.size()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("\351\225\234\345\244\264\350\241\214\345\217\267\346\227\240\346\225\210");
@@ -1439,6 +1500,7 @@ bool CatalogRepository::removeLens(int index, QString *errorMessage)
 
 bool CatalogRepository::addLight(const LightSpec &light, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!validateLight(light, QString::fromUtf8("新增光源"), errorMessage))
         return false;
     if (!openDatabase(errorMessage))
@@ -1463,6 +1525,7 @@ bool CatalogRepository::addLight(const LightSpec &light, QString *errorMessage)
 
 bool CatalogRepository::updateLight(int index, const LightSpec &light, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (index < 0 || index >= m_lights.size()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("光源行号无效");
@@ -1475,6 +1538,7 @@ bool CatalogRepository::updateLight(int index, const LightSpec &light, QString *
 
 bool CatalogRepository::removeLight(int index, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (index < 0 || index >= m_lights.size()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("光源行号无效");
@@ -1493,16 +1557,19 @@ QString CatalogRepository::summary() const
 
 bool CatalogRepository::saveCameras(QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return writeCameraCsv(cameraStoragePath(), m_cameras, errorMessage);
 }
 
 bool CatalogRepository::saveLenses(QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return writeLensCsv(lensStoragePath(), m_lenses, errorMessage);
 }
 
 bool CatalogRepository::saveLights(QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return writeLightCsv(lightStoragePath(), m_lights, errorMessage);
 }
 
@@ -1662,6 +1729,7 @@ LightSpec lightFromQuery(const QSqlQuery &query)
 
 CatalogPageResult<CameraSpec> CatalogRepository::queryCameras(const CatalogQuery &catalogQuery, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     CatalogPageResult<CameraSpec> result;
     if (!openDatabase(errorMessage))
         return result;
@@ -1706,6 +1774,7 @@ CatalogPageResult<CameraSpec> CatalogRepository::queryCameras(const CatalogQuery
 
 CatalogPageResult<LensSpec> CatalogRepository::queryLenses(const CatalogQuery &catalogQuery, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     CatalogPageResult<LensSpec> result;
     if (!openDatabase(errorMessage))
         return result;
@@ -1751,6 +1820,7 @@ CatalogPageResult<LensSpec> CatalogRepository::queryLenses(const CatalogQuery &c
 
 CatalogPageResult<LightSpec> CatalogRepository::queryLights(const CatalogQuery &catalogQuery, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     CatalogPageResult<LightSpec> result;
     if (!openDatabase(errorMessage))
         return result;
@@ -1794,6 +1864,7 @@ CatalogPageResult<LightSpec> CatalogRepository::queryLights(const CatalogQuery &
 
 bool CatalogRepository::exportCameraCsvByQuery(const QString &filePath, const CatalogQuery &query, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     CatalogQuery all = query;
     all.limit = 0;
     QString queryError;
@@ -1808,6 +1879,7 @@ bool CatalogRepository::exportCameraCsvByQuery(const QString &filePath, const Ca
 
 bool CatalogRepository::exportLensCsvByQuery(const QString &filePath, const CatalogQuery &query, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     CatalogQuery all = query;
     all.limit = 0;
     QString queryError;
@@ -1822,6 +1894,7 @@ bool CatalogRepository::exportLensCsvByQuery(const QString &filePath, const Cata
 
 bool CatalogRepository::exportLightCsvByQuery(const QString &filePath, const CatalogQuery &query, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     CatalogQuery all = query;
     all.limit = 0;
     QString queryError;
@@ -1836,6 +1909,7 @@ bool CatalogRepository::exportLightCsvByQuery(const QString &filePath, const Cat
 
 QStringList CatalogRepository::distinctValues(CatalogDomain domain, const QString &field, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QString table;
     QString column;
     if (domain == CatalogDomain::Camera) {
@@ -1876,6 +1950,7 @@ QStringList CatalogRepository::distinctValues(CatalogDomain domain, const QStrin
 
 int CatalogRepository::productCount(CatalogDomain domain, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QString table;
     if (domain == CatalogDomain::Camera)
         table = QStringLiteral("camera_products");
@@ -1897,6 +1972,7 @@ int CatalogRepository::productCount(CatalogDomain domain, QString *errorMessage)
 
 bool CatalogRepository::cameraById(qint64 id, CameraSpec *camera, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const int index = cameraIndexById(id);
     if (index >= 0 && camera) {
         *camera = m_cameras.at(index);
@@ -1922,6 +1998,7 @@ bool CatalogRepository::cameraById(qint64 id, CameraSpec *camera, QString *error
 
 bool CatalogRepository::lensById(qint64 id, LensSpec *lens, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const int index = lensIndexById(id);
     if (index >= 0 && lens) {
         *lens = m_lenses.at(index);
@@ -1948,6 +2025,7 @@ bool CatalogRepository::lensById(qint64 id, LensSpec *lens, QString *errorMessag
 
 bool CatalogRepository::lightById(qint64 id, LightSpec *light, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const int index = lightIndexById(id);
     if (index >= 0 && light) {
         *light = m_lights.at(index);
@@ -1972,6 +2050,7 @@ bool CatalogRepository::lightById(qint64 id, LightSpec *light, QString *errorMes
 
 bool CatalogRepository::updateCameraById(qint64 id, const CameraSpec &camera, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!validateCamera(camera, camera.model, errorMessage) || !openDatabase(errorMessage))
         return false;
     QSqlQuery query(m_db);
@@ -2008,6 +2087,7 @@ bool CatalogRepository::updateCameraById(qint64 id, const CameraSpec &camera, QS
 
 bool CatalogRepository::updateLensById(qint64 id, const LensSpec &lens, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!validateLens(lens, lens.model, errorMessage) || !openDatabase(errorMessage))
         return false;
     QSqlQuery query(m_db);
@@ -2052,6 +2132,7 @@ bool CatalogRepository::updateLensById(qint64 id, const LensSpec &lens, QString 
 
 bool CatalogRepository::updateLightById(qint64 id, const LightSpec &light, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!validateLight(light, light.model, errorMessage) || !openDatabase(errorMessage))
         return false;
     QSqlQuery query(m_db);
@@ -2084,6 +2165,7 @@ bool CatalogRepository::updateLightById(qint64 id, const LightSpec &light, QStri
 
 bool CatalogRepository::removeCameraById(qint64 id, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
     QSqlQuery query(m_db);
@@ -2099,6 +2181,7 @@ bool CatalogRepository::removeCameraById(qint64 id, QString *errorMessage)
 
 bool CatalogRepository::removeLensById(qint64 id, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
     QSqlQuery query(m_db);
@@ -2114,6 +2197,7 @@ bool CatalogRepository::removeLensById(qint64 id, QString *errorMessage)
 
 bool CatalogRepository::removeLightById(qint64 id, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
     QSqlQuery query(m_db);
@@ -2145,6 +2229,7 @@ int CatalogRepository::lightIndexById(qint64 id) const
 
 QVector<CameraSpec> CatalogRepository::selectionCandidateCameras(const SelectionRequest &request, int limit, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const int effectiveLimit = limit > 0 ? limit : 300;
     if (!openDatabase(errorMessage))
         return QVector<CameraSpec>();
@@ -2229,6 +2314,7 @@ QVector<CameraSpec> CatalogRepository::selectionCandidateCameras(const Selection
 
 QVector<LensSpec> CatalogRepository::selectionCandidateLenses(const SelectionRequest &request, int limit, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const int effectiveLimit = limit > 0 ? limit : 500;
     if (!openDatabase(errorMessage))
         return QVector<LensSpec>();
@@ -2323,12 +2409,14 @@ QVector<LensSpec> CatalogRepository::selectionCandidateLenses(const SelectionReq
 
 QVector<LightSpec> CatalogRepository::selectionCandidateLights(const SelectionRequest &request, int limit, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     return selectionCandidateLights(request, false, false, limit, errorMessage);
 }
 
 QVector<LightSpec> CatalogRepository::selectionCandidateLights(const SelectionRequest &request, bool hasTelecentricLens, bool hasCoaxialLens,
                                                                int limit, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const int effectiveLimit = limit > 0 ? limit : 300;
     const QString cacheKey = lightCandidateCacheKey(request, hasTelecentricLens, hasCoaxialLens, effectiveLimit);
     if (m_lightCandidateCache.contains(cacheKey))
@@ -2387,6 +2475,7 @@ QVector<LightSpec> CatalogRepository::selectionCandidateLights(const SelectionRe
 
 bool CatalogRepository::writeCameraCsv(const QString &filePath, const QVector<CameraSpec> &cameras, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QFileInfo info(filePath);
     if (!QDir().mkpath(info.absolutePath())) {
         if (errorMessage)
@@ -2429,6 +2518,7 @@ bool CatalogRepository::writeCameraCsv(const QString &filePath, const QVector<Ca
 
 bool CatalogRepository::writeLensCsv(const QString &filePath, const QVector<LensSpec> &lenses, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QFileInfo info(filePath);
     if (!QDir().mkpath(info.absolutePath())) {
         if (errorMessage)
@@ -2482,6 +2572,7 @@ bool CatalogRepository::writeLensCsv(const QString &filePath, const QVector<Lens
 
 bool CatalogRepository::writeLightCsv(const QString &filePath, const QVector<LightSpec> &lights, QString *errorMessage) const
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QFileInfo info(filePath);
     if (!QDir().mkpath(info.absolutePath())) {
         if (errorMessage)
@@ -2565,6 +2656,7 @@ QString CatalogRepository::lightTypeKey(LightType type)
 
 bool CatalogRepository::validateCamera(const CameraSpec &camera, const QString &sourceName, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (camera.model.trimmed().isEmpty() || camera.resolutionX <= 0 || camera.resolutionY <= 0 || camera.pixelSizeUm <= 0.0) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("%1 \347\233\270\346\234\272\346\225\260\346\215\256\346\227\240\346\225\210\357\274\232\345\236\213\345\217\267\343\200\201\345\210\206\350\276\250\347\216\207\343\200\201\345\203\217\345\205\203\345\260\272\345\257\270\345\277\205\351\241\273\346\234\211\346\225\210").arg(sourceName);
@@ -2575,6 +2667,7 @@ bool CatalogRepository::validateCamera(const CameraSpec &camera, const QString &
 
 bool CatalogRepository::validateLens(const LensSpec &lens, const QString &sourceName, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (lens.model.trimmed().isEmpty() || lens.imageCircleMm <= 0.0) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("%1 \351\225\234\345\244\264\346\225\260\346\215\256\346\227\240\346\225\210\357\274\232\345\236\213\345\217\267\345\222\214\345\203\217\345\234\206\345\277\205\351\241\273\346\234\211\346\225\210").arg(sourceName);
@@ -2595,6 +2688,7 @@ bool CatalogRepository::validateLens(const LensSpec &lens, const QString &source
 
 bool CatalogRepository::validateLight(const LightSpec &light, const QString &sourceName, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (light.model.trimmed().isEmpty() || light.activeWidthMm <= 0.0 || light.activeHeightMm <= 0.0) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("%1 光源数据无效：型号和有效照明尺寸必须有效").arg(sourceName);
@@ -2687,12 +2781,14 @@ QString CatalogRepository::normalizeLensMount(const QString &value)
 
 bool CatalogRepository::readCsvRows(const QString &filePath, QVector<Row> *rows, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     QFile file(filePath);
     return readCsvRowsFromDevice(&file, filePath, rows, errorMessage);
 }
 
 bool CatalogRepository::readCsvRowsFromDevice(QIODevice *device, const QString &sourceName, QVector<Row> *rows, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (!device->open(QIODevice::ReadOnly | QIODevice::Text)) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\346\211\223\345\274\200 CSV\357\274\232%1").arg(sourceName);
@@ -2799,6 +2895,7 @@ QStringList CatalogRepository::parseCsvLine(const QString &line)
 
 bool CatalogRepository::ensureColumns(const QVector<Row> &rows, const QStringList &required, const QString &sourceName, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     if (rows.isEmpty()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("%1 \346\262\241\346\234\211\346\225\260\346\215\256\350\241\214").arg(sourceName);
@@ -2846,6 +2943,7 @@ QString CatalogRepository::firstText(const Row &row, const QStringList &keys)
 
 bool CatalogRepository::loadCameraRows(const QVector<Row> &rows, const QString &sourceName, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const QStringList required = {
         QStringLiteral("model"),
         QStringLiteral("resolution_x"),
@@ -2896,6 +2994,7 @@ bool CatalogRepository::loadCameraRows(const QVector<Row> &rows, const QString &
 
 bool CatalogRepository::loadLensRows(const QVector<Row> &rows, const QString &sourceName, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const QStringList required = {
         QStringLiteral("model"),
         QStringLiteral("lens_type"),
@@ -2956,6 +3055,7 @@ bool CatalogRepository::loadLensRows(const QVector<Row> &rows, const QString &so
 
 bool CatalogRepository::loadLightRows(const QVector<Row> &rows, const QString &sourceName, QString *errorMessage)
 {
+    ScopedErrorLocalizer localizeError(errorMessage);
     const QStringList required = {
         QStringLiteral("model"),
         QStringLiteral("light_type"),

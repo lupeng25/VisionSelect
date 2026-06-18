@@ -1,5 +1,7 @@
 #include "LicenseGeneratorWindow.h"
 
+#include "core/Localization.h"
+
 #include <QApplication>
 #include <QClipboard>
 #include <QComboBox>
@@ -189,6 +191,7 @@ bool LicenseGeneratorWindow::loadPrivateKey()
 
     QString error;
     if (!m_issuer.loadPrivateKeyFile(path, &error)) {
+        error = CoreI18n::localizedDiagnosticForLanguage(error, m_language);
         setStatus(text("私钥加载失败：", "Private key load failed: ") + error, false);
         return false;
     }
@@ -212,6 +215,7 @@ void LicenseGeneratorWindow::generateLicense()
     QString error;
     LicenseIssueResult result;
     if (!m_issuer.issue(request, &result, &error)) {
+        error = CoreI18n::localizedDiagnosticForLanguage(error, m_language);
         QMessageBox::warning(this, text("生成失败", "Generation Failed"), error);
         return;
     }

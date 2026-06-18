@@ -17,6 +17,7 @@ TRANSLATIONS += \
 SOURCES += \
     ../src/main.cpp \
     ../src/catalog/CatalogRepository.cpp \
+    ../src/core/Localization.cpp \
     ../src/core/SelectionTypes.cpp \
     ../src/i18n/LanguageManager.cpp \
     ../src/license/LicenseManager.cpp \
@@ -41,6 +42,7 @@ SOURCES += \
 
 HEADERS += \
     ../src/catalog/CatalogRepository.h \
+    ../src/core/Localization.h \
     ../src/core/SelectionTypes.h \
     ../src/i18n/LanguageManager.h \
     ../src/license/LicenseManager.h \

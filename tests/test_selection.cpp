@@ -1,4 +1,5 @@
 #include "catalog/CatalogRepository.h"
+#include "core/Localization.h"
 #include "i18n/LanguageManager.h"
 #include "license/LicenseIssuer.h"
 #include "license/LicenseManager.h"
@@ -88,6 +89,8 @@ private slots:
     void licenseIssuerRejectsInvalidInput();
     void machineCodeGenerationIsStable();
     void languageManagerSwitchesAvailableLanguages();
+    void generatedDiagnosticsFollowLanguage();
+    void licenseIssuerErrorsFollowLanguage();
     void invalidTelecentricCsvFails();
     void invalidLightCsvFails();
     void pdfReportWrites();
@@ -100,6 +103,38 @@ private:
 namespace {
 const char *kTestPrivateKeyXml =
     "<RSAKeyValue><Modulus>5hzYFnHq3/1l3dpJFHV8XBnUejhF6oIE5lVzrDcKm1rq5bLIOTKmRgJmjaa9had4v8w1W3jIX1E/OU5y50KE2YDqHJvAPkiOT7Zpka5U7+pypzLEH5zQfyeaKKgQsXxgoGq3z6DtKv/1mfz5xq0jv5Nr4Ouv/Xep5LNuk8eG7nE=</Modulus><Exponent>AQAB</Exponent><P>9Ml93yaFiAybA4/iVgWhudDbZRLiE9tO042H97yuw5oXeEBF4KNFrsPXT5hjAutCaiMpxXeFbDZlwtleEiLm6w==</P><Q>8KdFsZm6HVMz2nkuB1UHAjhoVwlfQeUvJbZbVjsSTF9Rh5+BeloVC+U/K9C8/C0o1odg5fa3IBxl6gueUaKhEw==</Q><DP>4dmiVCijnWIcCA5SQxIRJHNqaXghtTZsJU55O/8PtBNRQjbzAg9CtLumxZ6RA9lyPqFQ4gujw7Lw8vVBETS4nw==</DP><DQ>0AYYJaSYED9a5HC5zBbA3zd5Yjs0v5ZoQfY3T/vyHliK9mx4FRaHeOfqymo+4tH6qi8OINs6gyRpKH5wlWq6Rw==</DQ><InverseQ>xbFUUJeQ4X+QFiIQCq/YmJcCgbj5Qz/+5gbH1sz1Food2SipieeYQojiMERCAmD8VgSOKVXdKHmzEjeikvBPbA==</InverseQ><D>g3HejZOtEx3wXnYeYK1ryECI+vfCGF8E5X3SgYE/cdbRbzxc2y9vg3ZDlo60m/A6LXU81W99JdWHQ/jn8eoxb+fDvXVnHdGg8sCm/7d9/8MnOEXDRllZbxNE/ICm1k9V9nX1yWQJxPKQ7l3Ify3UEurivZ4e8VB9hDITzoKRKzE=</D></RSAKeyValue>";
+
+bool containsCjk(const QString &value)
+{
+    for (const QChar ch : value) {
+        const ushort u = ch.unicode();
+        if ((u >= 0x3400 && u <= 0x9fff) || (u >= 0xf900 && u <= 0xfaff))
+            return true;
+    }
+    return false;
+}
+
+class LanguageGuard
+{
+public:
+    LanguageGuard()
+        : m_previous(LanguageManager::instance().currentLanguage())
+    {
+    }
+
+    ~LanguageGuard()
+    {
+        LanguageManager::instance().setLanguage(m_previous);
+    }
+
+    bool setLanguage(const QString &languageCode)
+    {
+        return LanguageManager::instance().setLanguage(languageCode);
+    }
+
+private:
+    QString m_previous;
+};
 }
 
 void SelectionEngineTest::initTestCase()
@@ -803,6 +838,9 @@ void SelectionEngineTest::sqliteCatalogIdUpdateDeleteAndFilteredExport()
 
 void SelectionEngineTest::sqliteAddDuplicateProductsDoesNotReplaceExisting()
 {
+    LanguageGuard language;
+    QVERIFY(language.setLanguage(QStringLiteral("en_US")));
+
     QTemporaryDir storage;
     QVERIFY(storage.isValid());
 
@@ -2468,6 +2506,9 @@ void SelectionEngineTest::licenseIssuerParsesXmlAndSignsCompatibleKey()
 
 void SelectionEngineTest::licenseIssuerRejectsInvalidInput()
 {
+    LanguageGuard language;
+    QVERIFY(language.setLanguage(QStringLiteral("en_US")));
+
     LicenseIssuer issuer;
     QString error;
     LicenseIssueRequest request;
@@ -2498,15 +2539,99 @@ void SelectionEngineTest::machineCodeGenerationIsStable()
 
 void SelectionEngineTest::languageManagerSwitchesAvailableLanguages()
 {
+    LanguageGuard language;
     LanguageManager &manager = LanguageManager::instance();
-    const QString previous = manager.currentLanguage();
     QVERIFY(manager.availableLanguages().contains(QStringLiteral("zh_CN")));
     QVERIFY(manager.availableLanguages().contains(QStringLiteral("en_US")));
     QVERIFY(manager.setLanguage(QStringLiteral("en_US")));
     QCOMPARE(manager.currentLanguage(), QStringLiteral("en_US"));
     QVERIFY(manager.setLanguage(QStringLiteral("zh_CN")));
     QCOMPARE(manager.currentLanguage(), QStringLiteral("zh_CN"));
-    manager.setLanguage(previous);
+}
+
+void SelectionEngineTest::generatedDiagnosticsFollowLanguage()
+{
+    LanguageGuard language;
+    QVERIFY(language.setLanguage(QStringLiteral("en_US")));
+
+    SelectionRequest request;
+    request.objectWidthMm = 20.0;
+    request.objectHeightMm = 20.0;
+    request.placementMarginMm = 2.0;
+    request.requiredFps = 20.0;
+    request.motionSpeedMmS = 100.0;
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 3);
+    QVERIFY(!results.isEmpty());
+    const SelectionResult &top = results.first();
+    QStringList selectionParts;
+    selectionParts << top.schemeTitle << top.formulaSummary << top.hardFailures << top.score.reasons << top.score.risks;
+    const QString selectionText = selectionParts.join(QStringLiteral("; "));
+    QVERIFY2(!containsCjk(selectionText), qPrintable(selectionText));
+
+    const QVector<LensCalculationEstimate> lensEstimates = CalculationAssistant::estimateLenses(request, top.camera, m_catalog.lenses(), 5);
+    QVERIFY(!lensEstimates.isEmpty());
+    QStringList lensText;
+    for (const LensCalculationEstimate &estimate : lensEstimates) {
+        lensText << estimate.formulaSummary << estimate.reasons << estimate.risks;
+        for (const QString &part : estimate.reasons)
+            QVERIFY2(!containsCjk(part), qPrintable(part));
+        for (const QString &part : estimate.risks)
+            QVERIFY2(!containsCjk(part), qPrintable(part));
+    }
+    QVERIFY2(!containsCjk(lensText.join(QStringLiteral("; "))), qPrintable(lensText.join(QStringLiteral("; "))));
+
+    PureCalculationInput input;
+    input.request = request;
+    input.camera = top.camera;
+    input.lens = top.lens;
+    input.light = top.light;
+    input.telecentricMode = top.lens.isTelecentric();
+    const PureCalculationResult pure = CalculationAssistant::estimatePure(input);
+    const QString pureText = (QStringList() << pure.lensFormulaSummary << pure.reasons << pure.risks).join(QStringLiteral("; "));
+    QVERIFY2(!containsCjk(pureText), qPrintable(pureText));
+
+    QTemporaryFile file;
+    QVERIFY(file.open());
+    file.write("model,manufacturer,light_type,color,wavelength_nm,mode,active_width_mm,active_height_mm,best_for\n");
+    file.write(",BadMaker,Ring,White,0,Continuous,0,100,Bad row\n");
+    file.flush();
+    CatalogRepository repo;
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.loadDefaults(&error), qPrintable(error));
+    QVERIFY(!repo.loadLightCsv(file.fileName(), &error));
+    QVERIFY2(error.contains(QStringLiteral("Light data is invalid")), qPrintable(error));
+    QVERIFY2(!containsCjk(error), qPrintable(error));
+
+    const QString dynamicValueError = CoreI18n::localizedDiagnostic(
+        QString::fromUtf8("中文品牌 光源数据无效：型号和有效照明尺寸必须有效"));
+    QVERIFY2(dynamicValueError.contains(QStringLiteral("Light data is invalid")), qPrintable(dynamicValueError));
+    QVERIFY2(dynamicValueError.contains(QString::fromUtf8("中文品牌")), qPrintable(dynamicValueError));
+}
+
+void SelectionEngineTest::licenseIssuerErrorsFollowLanguage()
+{
+    LanguageGuard language;
+
+    LicenseIssuer issuer;
+    LicenseIssueRequest request;
+    LicenseIssueResult result;
+    QString error;
+
+    QVERIFY(language.setLanguage(QStringLiteral("zh_CN")));
+    QVERIFY(!issuer.issue(request, &result, &error));
+    QVERIFY2(error.contains(QString::fromUtf8("私钥")), qPrintable(error));
+    QVERIFY2(!error.contains(QStringLiteral("Private key")), qPrintable(error));
+
+    QVERIFY(language.setLanguage(QStringLiteral("en_US")));
+    QVERIFY(!issuer.issue(request, &result, &error));
+    QVERIFY2(error.contains(QStringLiteral("Private key")), qPrintable(error));
+    QVERIFY2(!containsCjk(error), qPrintable(error));
+
 }
 
 void SelectionEngineTest::invalidTelecentricCsvFails()
@@ -2531,6 +2656,9 @@ void SelectionEngineTest::invalidTelecentricCsvFails()
 
 void SelectionEngineTest::invalidLightCsvFails()
 {
+    LanguageGuard language;
+    QVERIFY(language.setLanguage(QStringLiteral("zh_CN")));
+
     QTemporaryFile file;
     QVERIFY(file.open());
     file.write("model,manufacturer,light_type,color,wavelength_nm,mode,active_width_mm,active_height_mm,best_for\n");

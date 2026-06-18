@@ -5,11 +5,11 @@
     <name>LicenseDialog</name>
     <message>
         <source>VisionSelect License</source>
-        <translation>VisionSelect 授权注册</translation>
+        <translation type="vanished">VisionSelect 授权注册</translation>
     </message>
     <message>
         <source>Enter a valid offline license key to continue.</source>
-        <translation>请输入有效的离线注册码后继续使用。</translation>
+        <translation type="vanished">请输入有效的离线注册码后继续使用。</translation>
     </message>
     <message>
         <source>Machine code</source>
@@ -107,35 +107,35 @@
     </message>
     <message>
         <source>Requirements · Calculation · Selection</source>
-        <translation>需求 · 计算 · 选型</translation>
+        <translation type="vanished">需求 · 计算 · 选型</translation>
     </message>
     <message>
         <source>Workspace</source>
-        <translation>工作台</translation>
+        <translation type="vanished">工作台</translation>
     </message>
     <message>
         <source>Requirement Input</source>
-        <translation>需求输入</translation>
+        <translation type="vanished">需求输入</translation>
     </message>
     <message>
         <source>Pure Calculation</source>
-        <translation>纯计算</translation>
+        <translation type="vanished">纯计算</translation>
     </message>
     <message>
         <source>Product Calculation Assistant</source>
-        <translation>产品计算助手</translation>
+        <translation type="vanished">产品计算助手</translation>
     </message>
     <message>
         <source>3D Camera Assistant</source>
-        <translation>3D 相机助手</translation>
+        <translation type="vanished">3D 相机助手</translation>
     </message>
     <message>
         <source>Recommended Results</source>
-        <translation>推荐结果</translation>
+        <translation type="vanished">推荐结果</translation>
     </message>
     <message>
         <source>Catalog</source>
-        <translation>参数库</translation>
+        <translation type="vanished">参数库</translation>
     </message>
     <message>
         <source>License Info</source>
@@ -259,7 +259,7 @@ Expires: %4</source>
     </message>
     <message>
         <source>No recommended plan is available; BOM cannot be exported.</source>
-        <translation>暂无推荐方案，无法导出 BOM。</translation>
+        <translation type="vanished">暂无推荐方案，无法导出 BOM。</translation>
     </message>
     <message>
         <source>Export BOM CSV</source>
@@ -280,6 +280,14 @@ Expires: %4</source>
     <message>
         <source>Light</source>
         <translation>光源</translation>
+    </message>
+    <message>
+        <source>Recommendation calculation is still running. Please export after it completes.</source>
+        <translation>推荐计算仍在进行中，请完成后再导出。</translation>
+    </message>
+    <message>
+        <source>Recommendation calculation has started. Please export after it completes.</source>
+        <translation>推荐计算已开始，请完成后再导出。</translation>
     </message>
 </context>
 <context>

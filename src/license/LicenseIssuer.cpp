@@ -1,5 +1,7 @@
 #include "license/LicenseIssuer.h"
 
+#include "core/Localization.h"
+
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QFile>
@@ -18,9 +20,9 @@
 namespace {
 const char *kProductId = "VisionSelect";
 
-QString issuerError(const char *text)
+QString issuerError(const char *zhUtf8, const char *enUtf8)
 {
-    return QString::fromLatin1(text);
+    return CoreI18n::localizedText(zhUtf8, enUtf8);
 }
 
 QByteArray compactBase64(QString text)
@@ -42,7 +44,8 @@ bool requirePart(const QByteArray &value, const char *name, QString *errorMessag
     if (!value.isEmpty())
         return true;
     if (errorMessage)
-        *errorMessage = QString::fromLatin1("Private key XML is missing %1.").arg(QString::fromLatin1(name));
+        *errorMessage = CoreI18n::localizedText("私钥 XML 缺少 %1。", "Private key XML is missing %1.")
+            .arg(QString::fromLatin1(name));
     return false;
 }
 
@@ -76,10 +79,10 @@ QByteArray normalizedSize(QByteArray value, int size)
     return value;
 }
 
-QString bcryptError(const char *message, NTSTATUS status)
+QString bcryptError(const char *zhUtf8, const char *enUtf8, NTSTATUS status)
 {
     return QString::fromLatin1("%1 (0x%2)")
-        .arg(QString::fromLatin1(message),
+        .arg(CoreI18n::localizedText(zhUtf8, enUtf8),
              QString::number(static_cast<ULONG>(status), 16).rightJustified(8, QLatin1Char('0')));
 }
 
@@ -96,7 +99,7 @@ bool LicenseIssuer::loadPrivateKeyFile(const QString &path, QString *errorMessag
     if (!file.open(QIODevice::ReadOnly)) {
         clear();
         if (errorMessage)
-            *errorMessage = issuerError("Unable to read private key file.");
+            *errorMessage = issuerError("无法读取私钥文件。", "Unable to read private key file.");
         return false;
     }
     return loadPrivateKeyXml(file.readAll(), errorMessage);
@@ -133,7 +136,7 @@ bool LicenseIssuer::loadPrivateKeyXml(const QByteArray &xml, QString *errorMessa
     if (reader.hasError()) {
         clear();
         if (errorMessage)
-            *errorMessage = issuerError("Private key XML is not well formed.");
+            *errorMessage = issuerError("私钥 XML 格式不正确。", "Private key XML is not well formed.");
         return false;
     }
 
@@ -160,7 +163,7 @@ bool LicenseIssuer::loadPrivateKeyXml(const QByteArray &xml, QString *errorMessa
         || !rsaPartFits(m_d, modulusSize)) {
         clear();
         if (errorMessage)
-            *errorMessage = issuerError("Private key XML has inconsistent RSA component sizes.");
+            *errorMessage = issuerError("私钥 XML 的 RSA 组件长度不一致。", "Private key XML has inconsistent RSA component sizes.");
         return false;
     }
 
@@ -190,7 +193,7 @@ bool LicenseIssuer::issue(const LicenseIssueRequest &request,
 {
     if (!hasPrivateKey()) {
         if (errorMessage)
-            *errorMessage = issuerError("Private key has not been loaded.");
+            *errorMessage = issuerError("尚未加载私钥。", "Private key has not been loaded.");
         return false;
     }
 
@@ -202,22 +205,22 @@ bool LicenseIssuer::issue(const LicenseIssueRequest &request,
 
     if (licensee.isEmpty()) {
         if (errorMessage)
-            *errorMessage = issuerError("Licensee is required.");
+            *errorMessage = issuerError("必须填写授权对象。", "Licensee is required.");
         return false;
     }
     if (machineCode.isEmpty()) {
         if (errorMessage)
-            *errorMessage = issuerError("Machine code is required.");
+            *errorMessage = issuerError("必须填写机器码。", "Machine code is required.");
         return false;
     }
     if (serial.isEmpty()) {
         if (errorMessage)
-            *errorMessage = issuerError("Serial is required.");
+            *errorMessage = issuerError("必须填写序列号。", "Serial is required.");
         return false;
     }
     if (!expiresAt.isValid() || expiresAt < QDate::currentDate()) {
         if (errorMessage)
-            *errorMessage = issuerError("Expiration date must be today or later.");
+            *errorMessage = issuerError("到期日期必须是今天或之后。", "Expiration date must be today or later.");
         return false;
     }
 
@@ -288,7 +291,7 @@ bool LicenseIssuer::signPayload(const QByteArray &payloadBase64,
     NTSTATUS status = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_RSA_ALGORITHM, nullptr, 0);
     if (status != 0) {
         if (errorMessage)
-            *errorMessage = bcryptError("Unable to open RSA provider.", status);
+            *errorMessage = bcryptError("无法打开 RSA provider。", "Unable to open RSA provider.", status);
         return false;
     }
 
@@ -321,7 +324,7 @@ bool LicenseIssuer::signPayload(const QByteArray &payloadBase64,
     if (status != 0) {
         BCryptCloseAlgorithmProvider(algorithm, 0);
         if (errorMessage)
-            *errorMessage = bcryptError("Unable to import RSA private key.", status);
+            *errorMessage = bcryptError("无法导入 RSA 私钥。", "Unable to import RSA private key.", status);
         return false;
     }
 
@@ -348,13 +351,13 @@ bool LicenseIssuer::signPayload(const QByteArray &payloadBase64,
     BCryptCloseAlgorithmProvider(algorithm, 0);
 
     if (!ok && errorMessage)
-        *errorMessage = bcryptError("Unable to sign license payload.", status);
+        *errorMessage = bcryptError("无法签名授权载荷。", "Unable to sign license payload.", status);
     return ok;
 #else
     Q_UNUSED(payloadBase64)
     Q_UNUSED(signature)
     if (errorMessage)
-        *errorMessage = issuerError("License signing is only supported on Windows.");
+        *errorMessage = issuerError("注册码签名仅支持 Windows。", "License signing is only supported on Windows.");
     return false;
 #endif
 }

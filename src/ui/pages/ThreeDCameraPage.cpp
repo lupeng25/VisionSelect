@@ -36,6 +36,8 @@
 using namespace UiHelpers;
 
 namespace {
+QString localizedSpecText(QString value);
+
 QString allText()
 {
     return localizedText("全部", "All");
@@ -62,13 +64,13 @@ double optionalValue(const QDoubleSpinBox *spin)
 void addComboValues(QComboBox *combo, const QStringList &values)
 {
     combo->clear();
-    combo->addItem(allText());
+    combo->addItem(allText(), QString());
     QStringList sorted = values;
     sorted.removeDuplicates();
     sorted.sort(Qt::CaseInsensitive);
     for (const QString &value : sorted) {
         if (!value.trimmed().isEmpty())
-            combo->addItem(value);
+            combo->addItem(localizedSpecText(value), value);
     }
 }
 
@@ -76,7 +78,8 @@ QString comboRequirement(const QComboBox *combo)
 {
     if (!combo || combo->currentIndex() <= 0)
         return QString();
-    return combo->currentText();
+    const QString value = combo->currentData().toString();
+    return value.isEmpty() ? combo->currentText() : value;
 }
 
 QString valueOrUnknown(double value, const QString &unit, int decimals = 1)
@@ -160,6 +163,186 @@ QString yesNoUnknown(int value)
     if (value < 0)
         return localizedText("未公开", "Unpublished");
     return value > 0 ? localizedText("是", "Yes") : localizedText("否", "No");
+}
+
+struct SpecValueReplacement
+{
+    const char *zh;
+    const char *en;
+};
+
+bool englishUi()
+{
+    return localizedText("中文", "English") == QLatin1String("English");
+}
+
+QString localizedSpecText(QString value)
+{
+    value = value.trimmed();
+    if (value.isEmpty())
+        return value;
+
+    static const SpecValueReplacement replacements[] = {
+        {"在售", "On sale"},
+        {"已发布", "Released"},
+        {"已停产", "Discontinued"},
+        {"停产", "Discontinued"},
+        {"用户录入", "User entered"},
+        {"未公开", "Unpublished"},
+        {"蓝色激光", "Blue laser"},
+        {"蓝色结构光", "Blue structured light"},
+        {"结构光蓝光", "Blue structured light"},
+        {"线共焦白光/多波长", "Line confocal white light / multi-wavelength"},
+        {"线共焦", "Line confocal"},
+        {"蓝色/红色激光", "Blue / red laser"},
+        {"红色半导体激光", "Red semiconductor laser"},
+        {"蓝色半导体激光", "Blue semiconductor laser"},
+        {"红外 SLD / 白光干涉", "Infrared SLD / white-light interferometry"},
+        {"双目结构光", "Stereo structured light"},
+        {"结构光/激光投影", "Structured light / laser projection"},
+        {"结构光", "Structured light"},
+        {"激光", "Laser"},
+        {"编码器", "Encoder"},
+        {"高度轮廓", "Height profile"},
+        {"测量工具结果", "Measurement tool result"},
+        {"轮廓", "Profile"},
+        {"高度图", "Height map"},
+        {"高度", "Height"},
+        {"强度图", "Intensity map"},
+        {"强度", "Intensity"},
+        {"厚度", "Thickness"},
+        {"点云", "Point cloud"},
+        {"粗糙度/外观", "Roughness / appearance"},
+        {"深度图", "Depth map"},
+        {"木材", "Wood"},
+        {"大尺寸板材", "Large panels"},
+        {"无需完整面阵快照", "No full-area snapshot required"},
+        {"通用", "General purpose"},
+        {"暗色", "Dark surfaces"},
+        {"反光", "Reflective"},
+        {"高精度", "High precision"},
+        {"微小零件", "Small parts"},
+        {"大视野", "Large FOV"},
+        {"高速在线检测", "High-speed inline inspection"},
+        {"小视野", "Small FOV"},
+        {"高分辨率", "High resolution"},
+        {"高反光复杂结构", "Highly reflective complex structures"},
+        {"钢壳电池外壳", "Steel-shell battery housing"},
+        {"手机中框内壁", "Phone mid-frame inner wall"},
+        {"拐角", "corner"},
+        {"槽", "groove"},
+        {"遮挡/复杂外形", "Occlusion / complex shape"},
+        {"静态零件", "Static parts"},
+        {"无需运动平台", "No motion stage required"},
+        {"机器人搭载", "Robot-mounted"},
+        {"孔/槽/螺柱/间隙面差", "holes / slots / studs / gap step height"},
+        {"微小电子元件", "Small electronic components"},
+        {"透明", "Transparent"},
+        {"镜面反射目标", "Specular reflective targets"},
+        {"镜面", "Mirror-like"},
+        {"高反光", "Highly reflective"},
+        {"多层材料", "Multi-layer materials"},
+        {"玻璃", "Glass"},
+        {"工业检测", "Industrial inspection"},
+        {"高速", "High speed"},
+        {"位移测量", "Displacement measurement"},
+        {"漫反射目标", "Diffuse reflective targets"},
+        {"黑色", "Black"},
+        {"物流", "Logistics"},
+        {"机器人", "Robot"},
+        {"抓取定位", "Picking positioning"},
+        {"定位", "Positioning"},
+        {"模块化多点轮廓扫描器", "Modular multi-point profile scanner"},
+        {"一体式智能传感器", "Integrated smart sensor"},
+        {"一体式双相机 3D 线激光轮廓传感器", "Integrated dual-camera 3D line laser profile sensor"},
+        {"一体式 3D 线激光传感器", "Integrated 3D line laser sensor"},
+        {"分体式 3D 线激光传感器", "Split 3D line laser sensor"},
+        {"高性能 3D 线激光传感器", "High-performance 3D line laser sensor"},
+        {"传感器头 + 控制器", "Sensor head + controller"},
+        {"激光振镜立体相机", "Laser galvanometer stereo camera"},
+        {"一体式 3D 线激光相机", "Integrated 3D line laser camera"},
+        {"3D激光轮廓传感器", "3D laser profile sensor"},
+        {"3D线激光轮廓传感器", "3D line laser profile sensor"},
+        {"高分辨率 3D 线激光相机", "High-resolution 3D line laser camera"},
+        {"投影结构光立体相机", "Projected structured-light stereo camera"},
+        {"一体式结构光 3D 相机", "Integrated structured-light 3D camera"},
+        {"3D结构光传感器", "3D structured-light sensor"},
+        {"官方公开规格", "Official published specifications"},
+        {"官方快速规格", "Official quick specifications"},
+        {"官方规格页", "Official specifications page"},
+        {"官方中文数据表", "Official Chinese datasheet"},
+        {"官网公开规格", "Official website published specifications"},
+        {"官网新闻", "official website news"},
+        {"下载中心", "download center"},
+        {"官网产品页/参数页公开字段", "published fields from official product / parameter pages"},
+        {"官网产品页公开", "published on the official product page"},
+        {"官网产品列表公开", "published on the official product list"},
+        {"测试条件按官方脚注", "test conditions follow official footnotes"},
+        {"测试条件未公开", "test conditions unpublished"},
+        {"详细测试条件未公开", "detailed test conditions unpublished"},
+        {"具体测试条件未公开", "specific test conditions unpublished"},
+        {"测量条件", "measurement conditions"},
+        {"重复性", "repeatability"},
+        {"标准目标", "standard target"},
+        {"优化配置脚注", "optimized configuration footnote"},
+        {"官网脚注条件", "official website footnote conditions"},
+        {"官网脚注定义", "official website footnote definition"},
+        {"按官网定义", "defined by the official website"},
+        {"按官网表格", "from the official website table"},
+        {"以官网下发的", "based on the official"},
+        {"产品规格 ZIP 为准", "product specifications ZIP"},
+        {"同一官方产品行的特殊定制版本", "special custom version in the same official product line"},
+        {"特殊定制版本", "special custom version"},
+        {"具体选型需咨询业务端", "consult sales for model selection"},
+        {"官网型号列表以", "official model list shows"},
+        {"组合展示", "as a paired listing"},
+        {"标注为", "marked as"},
+        {"新增", "adds"},
+        {"大视野相机", "large-FOV cameras"},
+        {"实现", "covering"},
+        {"线宽测量范围覆盖", "line-width measurement range"},
+        {"网页未直接展开逐项规格", "the webpage does not expand each specification item"},
+        {"数值字段暂不臆造", "numeric fields are not inferred"},
+        {"可达亚微米级", "can reach sub-micron level"},
+        {"精度/重复精度", "accuracy / repeatability"},
+        {"使用标准目标", "using a standard target"},
+        {"指定矩形区域", "specified rectangular area"},
+        {"测量", "measurement"},
+        {"条件", "conditions"},
+        {"按参考距离", "at reference distance"},
+        {"次平均", "averages"},
+        {"基恩士", "KEYENCE"},
+        {"深视智能", "SRI"},
+        {"官网", "official website"},
+        {"产品页", "product page"},
+        {"参数页", "parameter page"},
+        {"规格页", "specification page"},
+        {"公开字段", "published fields"},
+        {"脚注", "footnote"},
+        {"，", ", "},
+        {"；", "; "},
+        {"。", "."}
+    };
+
+    if (englishUi()) {
+        for (const SpecValueReplacement &replacement : replacements)
+            value.replace(QString::fromUtf8(replacement.zh), QString::fromUtf8(replacement.en), Qt::CaseSensitive);
+        return value;
+    }
+    for (const SpecValueReplacement &replacement : replacements) {
+        if (value.compare(QString::fromUtf8(replacement.en), Qt::CaseInsensitive) == 0)
+            return QString::fromUtf8(replacement.zh);
+    }
+    return value;
+}
+
+QString localizedSpecList(const QStringList &values, const QString &separator)
+{
+    QStringList localized;
+    localized.reserve(values.size());
+    for (const QString &value : values)
+        localized.append(localizedSpecText(value));
+    return localized.join(separator);
 }
 
 QString htmlEscape(const QString &text)
@@ -984,7 +1167,7 @@ void ThreeDCameraPage::fillTable()
             m_table->setItem(row, 6, item(geometrySummary(spec)));
             m_table->setItem(row, 7, item(qualitySummary(spec)));
             m_table->setItem(row, 8, item(speedSummary(spec)));
-            m_table->setItem(row, 9, item(spec.interfaces.join(QStringLiteral(", "))));
+            m_table->setItem(row, 9, item(localizedSpecList(spec.interfaces, QStringLiteral(", "))));
         }
         m_table->setUpdatesEnabled(true);
     }
@@ -1168,7 +1351,7 @@ void ThreeDCameraPage::showDetailsForRow(int row)
     html += line(localizedText("匹配状态", "Match Status"), htmlEscape(threeDMatchStatusLabel(match.status)));
     html += line(localizedText("资料来源类型", "Source Type"), htmlEscape(sourceTypeText(spec)));
     html += line(localizedText("技术路线", "Technology"), htmlEscape(threeDTechnologyLabel(spec.technology)));
-    html += line(localizedText("产品状态", "Product Status"), htmlEscape(spec.status));
+    html += line(localizedText("产品状态", "Product Status"), htmlEscape(localizedSpecText(spec.status)));
     if (spec.sourceUrl.trimmed().isEmpty()) {
         html += line(localizedText("资料来源", "Source"), htmlEscape(localizedText("用户录入", "User entered")));
     } else {
@@ -1192,7 +1375,7 @@ void ThreeDCameraPage::showDetailsForRow(int row)
 
     const QString accuracyCondition = spec.accuracyCondition.isEmpty()
         ? localizedText("未公开", "Unpublished")
-        : spec.accuracyCondition;
+        : localizedSpecText(spec.accuracyCondition);
     QString qualityHtml;
     qualityHtml += line(localizedText("Z轴重复精度", "Z Repeatability"), htmlEscape(valueOrUnknown(spec.zRepeatabilityUm, QStringLiteral(" um"), 2)));
     qualityHtml += line(localizedText("X轴重复精度", "X Repeatability"), htmlEscape(valueOrUnknown(spec.xRepeatabilityUm, QStringLiteral(" um"), 2)));
@@ -1217,20 +1400,20 @@ void ThreeDCameraPage::showDetailsForRow(int row)
             line(localizedText("曝光范围", "Exposure Range"), htmlEscape(exposureRange)));
     html += QStringLiteral("<h4>%1</h4><p>%2%3%4</p>")
         .arg(htmlEscape(localizedText("光学与集成", "Optics / Integration")),
-            line(localizedText("光源", "Light Source"), htmlEscape(spec.lightSource.isEmpty() ? localizedText("未公开", "Unpublished") : spec.lightSource)),
+            line(localizedText("光源", "Light Source"), htmlEscape(spec.lightSource.isEmpty() ? localizedText("未公开", "Unpublished") : localizedSpecText(spec.lightSource))),
             line(localizedText("波长", "Wavelength"), htmlEscape(valueOrUnknown(spec.wavelengthNm, QStringLiteral(" nm"), 0))),
-            line(localizedText("接口", "Interfaces"), htmlEscape(spec.interfaces.join(QStringLiteral(", ")))));
+            line(localizedText("接口", "Interfaces"), htmlEscape(localizedSpecList(spec.interfaces, QStringLiteral(", ")))));
     html += QStringLiteral("<h4>%1</h4><p>%2%3%4%5%6</p>")
         .arg(htmlEscape(localizedText("结构环境", "Structure / Environment")),
             line(QStringLiteral("IP"), htmlEscape(spec.ipRating.isEmpty() ? localizedText("未公开", "Unpublished") : spec.ipRating)),
-            line(localizedText("结构", "Structure"), htmlEscape(spec.structure.isEmpty() ? localizedText("未公开", "Unpublished") : spec.structure)),
+            line(localizedText("结构", "Structure"), htmlEscape(spec.structure.isEmpty() ? localizedText("未公开", "Unpublished") : localizedSpecText(spec.structure))),
             line(localizedText("尺寸", "Dimensions"), htmlEscape(spec.dimensions.isEmpty() ? localizedText("未公开", "Unpublished") : spec.dimensions)),
             line(localizedText("重量", "Weight"), htmlEscape(valueOrUnknown(spec.weightG, QStringLiteral(" g"), 0))),
             line(localizedText("温度", "Temperature"), htmlEscape(spec.temperature.isEmpty() ? localizedText("未公开", "Unpublished") : spec.temperature)));
     if (!spec.materialScenarios.isEmpty())
-        html += QStringLiteral("<p><b>%1</b>: %2</p>").arg(localizedText("材质场景", "Material Scenarios"), htmlEscape(spec.materialScenarios.join(localizedText("，", ", "))));
+        html += QStringLiteral("<p><b>%1</b>: %2</p>").arg(localizedText("材质场景", "Material Scenarios"), htmlEscape(localizedSpecList(spec.materialScenarios, localizedText("，", ", "))));
     if (!spec.notes.isEmpty())
-        html += QStringLiteral("<p><b>%1</b>: %2</p>").arg(localizedText("备注", "Notes"), htmlEscape(spec.notes.join(localizedText("；", "; "))));
+        html += QStringLiteral("<p><b>%1</b>: %2</p>").arg(localizedText("备注", "Notes"), htmlEscape(localizedSpecList(spec.notes, localizedText("；", "; "))));
     html += QStringLiteral("<h4>%1</h4>%2").arg(localizedText("官方原始规格字段", "Official Raw Spec Fields"), rawSpecsHtml(spec.rawSpecs));
     m_details->setHtml(html);
 }

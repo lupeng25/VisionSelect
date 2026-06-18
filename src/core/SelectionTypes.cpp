@@ -1,5 +1,6 @@
 #include "core/SelectionTypes.h"
 
+#include "core/Localization.h"
 #include "i18n/LanguageManager.h"
 
 #include <QtMath>
@@ -7,9 +8,7 @@
 namespace {
 QString selectionText(const char *zhUtf8, const char *enUtf8)
 {
-    return LanguageManager::instance().currentLanguage() == QLatin1String("en_US")
-        ? QString::fromUtf8(enUtf8)
-        : QString::fromUtf8(zhUtf8);
+    return CoreI18n::localizedText(zhUtf8, enUtf8);
 }
 
 QString normalizedMount(const QString &value)

@@ -70,6 +70,29 @@ int tristateComboValue(const QComboBox *combo)
     return combo ? combo->currentData().toInt() : -1;
 }
 
+void addCodeItem(QComboBox *combo, const QString &label, const QString &code)
+{
+    combo->addItem(label, code);
+}
+
+void setCurrentCode(QComboBox *combo, const QString &code)
+{
+    const int index = combo ? combo->findData(code) : -1;
+    if (index >= 0)
+        combo->setCurrentIndex(index);
+}
+
+QString currentCodeOrText(const QComboBox *combo)
+{
+    if (!combo)
+        return QString();
+    const QString currentText = combo->currentText().trimmed();
+    const QString code = combo->currentData().toString();
+    return (!code.isEmpty() && combo->currentIndex() >= 0 && combo->itemText(combo->currentIndex()) == currentText)
+        ? code
+        : currentText;
+}
+
 QString listText(const QStringList &values)
 {
     return values.join(QLatin1Char('\n'));
@@ -172,8 +195,11 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     QLineEdit *model = new QLineEdit(lens->model);
     QLineEdit *manufacturer = new QLineEdit(lens->manufacturer);
     QComboBox *type = new QComboBox;
-    type->addItems({QStringLiteral("FixedFocal"), QStringLiteral("ObjectTelecentric"), QStringLiteral("BiTelecentric")});
-    type->setCurrentIndex(lens->lensType == LensType::FixedFocal ? 0 : lens->lensType == LensType::ObjectTelecentric ? 1 : 2);
+    addCodeItem(type, localizedText("普通工业镜头", "Fixed-focal Industrial Lens"), QStringLiteral("FixedFocal"));
+    addCodeItem(type, localizedText("物方远心镜头", "Object-side Telecentric Lens"), QStringLiteral("ObjectTelecentric"));
+    addCodeItem(type, localizedText("双远心镜头", "Bi-telecentric Lens"), QStringLiteral("BiTelecentric"));
+    setCurrentCode(type, lens->lensType == LensType::FixedFocal ? QStringLiteral("FixedFocal")
+        : lens->lensType == LensType::ObjectTelecentric ? QStringLiteral("ObjectTelecentric") : QStringLiteral("BiTelecentric"));
     QComboBox *mount = editableCombo({QStringLiteral("C"), QStringLiteral("M12"), QStringLiteral("M42"), QStringLiteral("M58"), QStringLiteral("F")}, lens->lensMount);
     QDoubleSpinBox *focal = dialogSpin(0.0, 10000.0, lens->focalLengthMm, QStringLiteral(" mm"));
     QDoubleSpinBox *minWd = dialogSpin(0.0, 100000.0, lens->minWorkingDistanceMm, QStringLiteral(" mm"));
@@ -260,7 +286,7 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
 
     lens->model = model->text().trimmed();
     lens->manufacturer = manufacturer->text().trimmed();
-    lens->lensType = type->currentIndex() == 0 ? LensType::FixedFocal : type->currentIndex() == 1 ? LensType::ObjectTelecentric : LensType::BiTelecentric;
+    lens->lensType = lensTypeFromString(currentCodeOrText(type));
     lens->lensMount = mount->currentText().trimmed();
     const bool fixedLens = lens->lensType == LensType::FixedFocal;
     lens->focalLengthMm = fixedLens ? focal->value() : 0.0;
@@ -293,16 +319,20 @@ bool editLightDialog(QWidget *parent, LightSpec *light, const QString &title)
     QLineEdit *model = new QLineEdit(light->model);
     QLineEdit *manufacturer = new QLineEdit(light->manufacturer);
     QComboBox *type = new QComboBox;
-    type->addItems({QStringLiteral("Backlight"), QStringLiteral("Ring"), QStringLiteral("Bar"),
-                    QStringLiteral("Coaxial"), QStringLiteral("Dome"), QStringLiteral("TelecentricBacklight"),
-                    QStringLiteral("DarkField")});
+    addCodeItem(type, localizedText("背光", "Backlight"), QStringLiteral("Backlight"));
+    addCodeItem(type, localizedText("环形光", "Ring Light"), QStringLiteral("Ring"));
+    addCodeItem(type, localizedText("条形光", "Bar Light"), QStringLiteral("Bar"));
+    addCodeItem(type, localizedText("同轴光", "Coaxial Light"), QStringLiteral("Coaxial"));
+    addCodeItem(type, localizedText("穹顶光", "Dome Light"), QStringLiteral("Dome"));
+    addCodeItem(type, localizedText("远心平行背光", "Telecentric Backlight"), QStringLiteral("TelecentricBacklight"));
+    addCodeItem(type, localizedText("暗场光", "Dark-field Light"), QStringLiteral("DarkField"));
     const QString currentType = light->lightType == LightType::Backlight ? QStringLiteral("Backlight")
         : light->lightType == LightType::Ring ? QStringLiteral("Ring")
         : light->lightType == LightType::Bar ? QStringLiteral("Bar")
         : light->lightType == LightType::Coaxial ? QStringLiteral("Coaxial")
         : light->lightType == LightType::Dome ? QStringLiteral("Dome")
         : light->lightType == LightType::TelecentricBacklight ? QStringLiteral("TelecentricBacklight") : QStringLiteral("DarkField");
-    type->setCurrentText(currentType);
+    setCurrentCode(type, currentType);
     QComboBox *color = editableCombo({QStringLiteral("White"), QStringLiteral("Red"), QStringLiteral("Blue"),
                                       QStringLiteral("Green"), QStringLiteral("IR"), QStringLiteral("UV")}, light->color);
     QSpinBox *wavelength = dialogIntSpin(0, 100000, light->wavelengthNm, QStringLiteral(" nm"));
@@ -334,7 +364,7 @@ bool editLightDialog(QWidget *parent, LightSpec *light, const QString &title)
 
     light->model = model->text().trimmed();
     light->manufacturer = manufacturer->text().trimmed();
-    light->lightType = lightTypeFromString(type->currentText().trimmed());
+    light->lightType = lightTypeFromString(currentCodeOrText(type));
     light->color = color->currentText().trimmed();
     light->wavelengthNm = wavelength->value();
     light->mode = mode->currentText().trimmed();
@@ -361,8 +391,16 @@ bool editThreeDCameraDialog(QWidget *parent, ThreeDCameraSpec *camera, const QSt
     QLineEdit *model = new QLineEdit(camera->model);
     QComboBox *technology = editableCombo(threeDTechnologyLabels(),
         camera->technologyLabel.isEmpty() ? threeDTechnologyLabel(camera->technology) : camera->technologyLabel);
-    QComboBox *status = editableCombo({QString::fromUtf8("在售"), QString::fromUtf8("停产"), localizedText("用户录入", "User entered")},
-        camera->status.isEmpty() ? localizedText("用户录入", "User entered") : camera->status);
+    QComboBox *status = new QComboBox;
+    status->setEditable(true);
+    addCodeItem(status, localizedText("在售", "On sale"), QString::fromUtf8("在售"));
+    addCodeItem(status, localizedText("已发布", "Released"), QString::fromUtf8("已发布"));
+    addCodeItem(status, localizedText("已停产", "Discontinued"), QString::fromUtf8("已停产"));
+    addCodeItem(status, localizedText("用户录入", "User entered"), QString::fromUtf8("用户录入"));
+    const QString statusValue = camera->status.isEmpty() ? QString::fromUtf8("用户录入") : camera->status;
+    setCurrentCode(status, statusValue);
+    if (status->currentData().toString() != statusValue)
+        status->setEditText(statusValue);
     QLineEdit *sourceUrl = new QLineEdit(camera->sourceUrl);
     QLineEdit *sourceDate = new QLineEdit(camera->sourceDate.isEmpty()
         ? QDate::currentDate().toString(Qt::ISODate) : camera->sourceDate);
@@ -494,7 +532,7 @@ bool editThreeDCameraDialog(QWidget *parent, ThreeDCameraSpec *camera, const QSt
     camera->model = model->text().trimmed();
     camera->technologyLabel = technology->currentText().trimmed();
     camera->technology = threeDTechnologyFromLabel(camera->technologyLabel);
-    camera->status = status->currentText().trimmed();
+    camera->status = currentCodeOrText(status);
     camera->sourceUrl = sourceUrl->text().trimmed();
     camera->sourceDate = sourceDate->text().trimmed();
     camera->referenceDistanceMm = optionalThreeDValue(referenceDistance);

@@ -1,5 +1,6 @@
 #include "selection/CalculationAssistant.h"
 
+#include "core/Localization.h"
 #include "selection/SelectionEngine.h"
 
 #include <algorithm>
@@ -140,6 +141,24 @@ void appendCommonLensJudgement(const SelectionRequest &request,
         estimate->reasons.append(QString::fromUtf8("按 FOV 边缘估算畸变误差约 %1")
             .arg(um(estimate->distortionErrorUm)));
     }
+}
+
+void localizeLensEstimate(LensCalculationEstimate *estimate)
+{
+    if (!estimate)
+        return;
+    estimate->formulaSummary = CoreI18n::localizedDiagnostic(estimate->formulaSummary);
+    estimate->reasons = CoreI18n::localizedDiagnostics(estimate->reasons);
+    estimate->risks = CoreI18n::localizedDiagnostics(estimate->risks);
+}
+
+void localizePureResult(PureCalculationResult *result)
+{
+    if (!result)
+        return;
+    result->lensFormulaSummary = CoreI18n::localizedDiagnostic(result->lensFormulaSummary);
+    result->reasons = CoreI18n::localizedDiagnostics(result->reasons);
+    result->risks = CoreI18n::localizedDiagnostics(result->risks);
 }
 }
 
@@ -381,6 +400,7 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
         && light.lightType != LightType::TelecentricBacklight)
         result.risks.append(QString::fromUtf8("远心测量建议优先远心平行背光"));
 
+    localizePureResult(&result);
     return result;
 }
 
@@ -602,6 +622,8 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
     });
     if (limit > 0 && estimates.size() > limit)
         estimates.resize(limit);
+    for (LensCalculationEstimate &estimate : estimates)
+        localizeLensEstimate(&estimate);
     return estimates;
 }
 
