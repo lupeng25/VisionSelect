@@ -3108,7 +3108,10 @@
       "rawSpecs": {
         "型号": "SR5100",
         "官网分类": "3D相机 / 线激光"
-      }
+      },
+      "notes": [
+        "2026-06-18官网核对：当前sourceUrl未展示该型号详情规格，顶层规格未能由官网页面直接确认。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -3178,7 +3181,10 @@
       "scanRateMinHz": 2500,
       "weightG": 2700,
       "dimensions": "608x98.5x62 mm",
-      "temperature": "0~50 C"
+      "temperature": "0~50 C",
+      "notes": [
+        "2026-06-18官网核对：当前sourceUrl未展示该型号详情规格，顶层规格未能由官网页面直接确认。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -3239,7 +3245,10 @@
       "laserClass": "2M",
       "xRepeatabilityUm": 1,
       "profileDataIntervalUm": 3,
-      "zLinearityPercentOfRange": 0.05
+      "zLinearityPercentOfRange": 0.05,
+      "notes": [
+        "2026-06-18官网核对：当前sourceUrl未展示该型号详情规格，顶层规格未能由官网页面直接确认。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -3280,7 +3289,10 @@
       "rawSpecs": {
         "型号": "SR7040",
         "官网分类": "3D相机 / 线激光"
-      }
+      },
+      "notes": [
+        "2026-06-18官网核对：当前sourceUrl未展示该型号详情规格，顶层规格未能由官网页面直接确认。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -3355,7 +3367,10 @@
       "weightG": 1800,
       "dimensions": "431*110.5*62 mm",
       "temperature": "0~50 C",
-      "power": "24VDC±10%"
+      "power": "24VDC±10%",
+      "notes": [
+        "官网光源波长为450/660 nm；wavelengthNm为单值字段，保留主要测量激光波长。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -5359,7 +5374,10 @@
         "系列": "SRI 系列",
         "型号": "SRI1600",
         "官网分类": "3D相机 / 高速线激光"
-      }
+      },
+      "notes": [
+        "2026-06-18官网核对：当前sourceUrl未展示该型号详情规格，顶层规格未能由官网页面直接确认。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -5401,7 +5419,10 @@
         "系列": "SRI 系列",
         "型号": "SRI2400",
         "官网分类": "3D相机 / 高速线激光"
-      }
+      },
+      "notes": [
+        "2026-06-18官网核对：当前sourceUrl未展示该型号详情规格，顶层规格未能由官网页面直接确认。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -5443,7 +5464,10 @@
         "系列": "SRI 系列",
         "型号": "SRI3200",
         "官网分类": "3D相机 / 高速线激光"
-      }
+      },
+      "notes": [
+        "2026-06-18官网核对：当前sourceUrl未展示该型号详情规格，顶层规格未能由官网页面直接确认。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -5742,7 +5766,10 @@
       "weightG": 1150,
       "dimensions": "155.5*54*94.5 mm",
       "temperature": "0~50 C",
-      "power": "24VDC±10%"
+      "power": "24VDC±10%",
+      "notes": [
+        "官网光源波长为405/660 nm；wavelengthNm为单值字段，保留主要测量激光波长。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -5817,7 +5844,10 @@
       "weightG": 1000,
       "dimensions": "155.5*54*94.5 mm",
       "temperature": "0~50 C",
-      "power": "24VDC±10%"
+      "power": "24VDC±10%",
+      "notes": [
+        "官网光源波长为405/660 nm；wavelengthNm为单值字段，保留主要测量激光波长。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -5967,7 +5997,10 @@
       "weightG": 2000,
       "dimensions": "218*67*116 mm",
       "temperature": "0~50 C",
-      "power": "24VDC±10%"
+      "power": "24VDC±10%",
+      "notes": [
+        "官网光源波长为450/660 nm；wavelengthNm为单值字段，保留主要测量激光波长。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -6042,7 +6075,10 @@
       "weightG": 1200,
       "dimensions": "200.5*54*94 mm",
       "temperature": "0~50 C",
-      "power": "24VDC±10%"
+      "power": "24VDC±10%",
+      "notes": [
+        "官网光源波长为405/660 nm；wavelengthNm为单值字段，保留主要测量激光波长。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -6150,7 +6186,8 @@
       "sourceUrl": "https://www.cnsszn.com/downloads/product-specifications",
       "notes": [
         "官网新闻披露 SRI 系列新增 SRI7700 和 SRI72800 大视野相机，实现 14 mm 至 3 m 线宽测量范围覆盖。",
-        "官网产品规格下载中心列出 SRI72800 产品规格 ZIP；网页未直接展开逐项规格，数值字段暂不臆造。"
+        "官网产品规格下载中心列出 SRI72800 产品规格 ZIP；网页未直接展开逐项规格，数值字段暂不臆造。",
+        "2026-06-18官网核对：当前sourceUrl未展示该型号详情规格，顶层规格未能由官网页面直接确认。"
       ],
       "rawSpecs": {
         "型号": "SRI72800",
@@ -6306,7 +6343,10 @@
       "weightG": 1850,
       "dimensions": "294.5*59*102 mm",
       "temperature": "0~50 C",
-      "power": "24VDC±10%"
+      "power": "24VDC±10%",
+      "notes": [
+        "官网光源波长为450/660 nm；wavelengthNm为单值字段，保留主要测量激光波长。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -6836,7 +6876,10 @@
       "weightG": 1200,
       "dimensions": "135.5 x 58 x 112.5 mm",
       "temperature": "0~50 C",
-      "power": "DC 24V?36W?"
+      "power": "DC 24V?36W?",
+      "notes": [
+        "2026-06-18官网核对：当前sourceUrl未展示该型号详情规格，顶层规格未能由官网页面直接确认。"
+      ]
     },
     {
       "manufacturer": "深视智能",
@@ -7253,7 +7296,6 @@
       "zRepeatabilityUm": 0.3,
       "profileDataIntervalUm": 5,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
       "rawSpecs": {
         "Series": "LJ-S8000",
         "Model": "LJ-S015",
@@ -7262,17 +7304,23 @@
         "Measuring range X": "14-16 mm",
         "Repeatability Z (standard mode)": "0.6 um",
         "Profile data interval": "4.7 um",
-        "Sampling speed": "up to 64 kHz",
         "Measurement range Z": "F.S.=8 mm",
         "Measurement range X": "14-16 mm",
         "XY data interval": "5 um",
         "Repeatability Z": "0.3 um",
         "Linearity": "±0.035% of F.S.",
         "Imaging time": "min. 0.2 sec",
-        "Enclosure rating": "IP65"
+        "Enclosure rating": "IP65",
+        "Number of XY data points": "3200 × 5000",
+        "Weight": "Approx. 2300 g"
       },
       "zLinearityPercentOfRange": 0.035,
-      "acquisitionTimeMs": 200
+      "acquisitionTimeMs": 200,
+      "frameRateHz": 5.0,
+      "weightG": 2300,
+      "notes": [
+        "官网为3D Laser Snapshot Sensor，速度按Imaging time归一化为frameRateHz；不使用线扫scanRateMaxHz。"
+      ]
     },
     {
       "manufacturer": "基恩士",
@@ -7286,7 +7334,6 @@
       "zMeasurementRangeMm": 18,
       "xFovReferenceMm": 23,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
       "requiresExternalMotion": false,
       "supportsEncoder": false,
       "interfaces": [
@@ -7320,24 +7367,30 @@
         "Model": "LJ-S025",
         "Reference distance": "68.5 mm",
         "Measuring range Z": "±9 mm",
-        "Measuring range X": "21.5-28.5 mm",
+        "Measuring range X": "21-25 mm",
         "Repeatability Z (standard mode)": "0.3 um",
         "Profile data interval": "7.8 um",
-        "Sampling speed": "up to 64 kHz",
         "Measurement range Z": "F.S.=18 mm",
         "Measurement range X": "21-25 mm",
         "XY data interval": "8 um",
         "Repeatability Z": "0.4 um",
         "Linearity": "±0.03% of F.S.",
         "Imaging time": "min. 0.2 sec",
-        "Enclosure rating": "IP65"
+        "Enclosure rating": "IP65",
+        "Number of XY data points": "3200 × 6400",
+        "Weight": "Approx. 2100 g"
       },
       "xFovNearMm": 21,
       "xFovFarMm": 25,
       "zRepeatabilityUm": 0.4,
       "profileDataIntervalUm": 8,
       "zLinearityPercentOfRange": 0.03,
-      "acquisitionTimeMs": 200
+      "acquisitionTimeMs": 200,
+      "frameRateHz": 5.0,
+      "weightG": 2100,
+      "notes": [
+        "官网为3D Laser Snapshot Sensor，速度按Imaging time归一化为frameRateHz；不使用线扫scanRateMaxHz。"
+      ]
     },
     {
       "manufacturer": "基恩士",
@@ -7383,26 +7436,31 @@
       "zRepeatabilityUm": 0.5,
       "profileDataIntervalUm": 12.5,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
       "rawSpecs": {
         "Series": "LJ-S8000",
         "Model": "LJ-S040",
         "Reference distance": "70 mm",
-        "Measuring range Z": "±25 mm",
-        "Measuring range X": "30-50 mm",
+        "Measuring range Z": "±18 mm",
+        "Measuring range X": "31-39 mm",
         "Repeatability Z (standard mode)": "1 um",
         "Profile data interval": "12.5 um",
-        "Sampling speed": "up to 64 kHz",
         "Measurement range Z": "F.S.=36 mm",
         "Measurement range X": "31-39 mm",
         "XY data interval": "12.5 um",
         "Repeatability Z": "0.5 um",
         "Linearity": "±0.02% of F.S.",
         "Imaging time": "min. 0.2 sec",
-        "Enclosure rating": "IP65"
+        "Enclosure rating": "IP65",
+        "Number of XY data points": "3200 × 6400",
+        "Weight": "Approx. 2600 g"
       },
       "zLinearityPercentOfRange": 0.02,
-      "acquisitionTimeMs": 200
+      "acquisitionTimeMs": 200,
+      "frameRateHz": 5.0,
+      "weightG": 2600,
+      "notes": [
+        "官网为3D Laser Snapshot Sensor，速度按Imaging time归一化为frameRateHz；不使用线扫scanRateMaxHz。"
+      ]
     },
     {
       "manufacturer": "基恩士",
@@ -7416,7 +7474,6 @@
       "zMeasurementRangeMm": 46,
       "xFovReferenceMm": 72,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
       "requiresExternalMotion": false,
       "supportsEncoder": false,
       "interfaces": [
@@ -7449,25 +7506,31 @@
         "Series": "LJ-S8000",
         "Model": "LJ-S080",
         "Reference distance": "160 mm",
-        "Measuring range Z": "±50 mm",
-        "Measuring range X": "44-124 mm",
+        "Measuring range Z": "±23 mm",
+        "Measuring range X": "66-78 mm",
         "Repeatability Z (standard mode)": "3 um",
         "Profile data interval": "25 um",
-        "Sampling speed": "up to 64 kHz",
         "Measurement range Z": "F.S.=46 mm",
         "Measurement range X": "66-78 mm",
         "XY data interval": "25 um",
         "Repeatability Z": "1 um",
         "Linearity": "±0.055% of F.S.",
         "Imaging time": "min. 0.2 sec",
-        "Enclosure rating": "IP65"
+        "Enclosure rating": "IP65",
+        "Number of XY data points": "3200 × 6400",
+        "Weight": "Approx. 2600 g"
       },
       "xFovNearMm": 66,
       "xFovFarMm": 78,
       "zRepeatabilityUm": 1,
       "profileDataIntervalUm": 25,
       "zLinearityPercentOfRange": 0.055,
-      "acquisitionTimeMs": 200
+      "acquisitionTimeMs": 200,
+      "frameRateHz": 5.0,
+      "weightG": 2600,
+      "notes": [
+        "官网为3D Laser Snapshot Sensor，速度按Imaging time归一化为frameRateHz；不使用线扫scanRateMaxHz。"
+      ]
     },
     {
       "manufacturer": "基恩士",
@@ -7512,7 +7575,7 @@
       "zRepeatabilityUm": 3,
       "profileDataIntervalUm": 50,
       "zLinearityPercentOfRange": 0.02,
-      "acquisitionTimeMs": 200,
+      "acquisitionTimeMs": 300,
       "profilePoints": 3200,
       "rawSpecs": {
         "Series": "LJ-S8000",
@@ -7523,10 +7586,17 @@
         "XY data interval": "50 um",
         "Repeatability Z": "3 um",
         "Linearity": "±0.02% of F.S.",
-        "Imaging time": "min. 0.2 sec",
-        "Enclosure rating": "IP65"
+        "Imaging time": "min. 0.3 sec",
+        "Enclosure rating": "IP65",
+        "Number of XY data points": "3200 × 3200",
+        "Weight": "Approx. 3600 g"
       },
-      "xFovFarMm": 160
+      "xFovFarMm": 160,
+      "frameRateHz": 3.3333333333,
+      "weightG": 3600,
+      "notes": [
+        "官网为3D Laser Snapshot Sensor，速度按Imaging time归一化为frameRateHz；不使用线扫scanRateMaxHz。"
+      ]
     },
     {
       "manufacturer": "基恩士",
@@ -7583,9 +7653,16 @@
         "Repeatability Z": "5 um",
         "Linearity": "±0.027% of F.S.",
         "Imaging time": "min. 0.3 sec",
-        "Enclosure rating": "IP65"
+        "Enclosure rating": "IP65",
+        "Number of XY data points": "3200 × 3200",
+        "Weight": "Approx. 3700 g"
       },
-      "xFovFarMm": 320
+      "xFovFarMm": 320,
+      "frameRateHz": 3.3333333333,
+      "weightG": 3700,
+      "notes": [
+        "官网为3D Laser Snapshot Sensor，速度按Imaging time归一化为frameRateHz；不使用线扫scanRateMaxHz。"
+      ]
     },
     {
       "manufacturer": "基恩士",
@@ -7642,8 +7719,15 @@
         "Repeatability Z": "10 um",
         "Linearity": "±0.058% of F.S.",
         "Imaging time": "min. 0.3 sec",
-        "Enclosure rating": "IP65"
-      }
+        "Enclosure rating": "IP65",
+        "Number of XY data points": "3200 × 3200",
+        "Weight": "Approx. 4300 g"
+      },
+      "frameRateHz": 3.3333333333,
+      "weightG": 4300,
+      "notes": [
+        "官网为3D Laser Snapshot Sensor，速度按Imaging time归一化为frameRateHz；不使用线扫scanRateMaxHz。"
+      ]
     },
     {
       "manufacturer": "基恩士",
@@ -8090,13 +8174,14 @@
       "referenceDistanceMm": 20,
       "zMeasurementRangeMm": 4.4,
       "xFovReferenceMm": 7.5,
-      "zRepeatabilityUm": 0.1,
+      "zRepeatabilityUm": 0.3,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "requiresExternalMotion": true,
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8125,15 +8210,19 @@
         "Model": "LJ-X8020",
         "Sensor head": "Included in LJ-X8000 specifications",
         "Reference distance": "20 mm",
-        "Measuring range Z": "±2.2 mm",
-        "Measuring range X": "7-8 mm",
-        "Repeatability Z": "0.1 um",
+        "Measuring range Z": "±2.2 mm (F.S.=4.4 mm)",
+        "Measuring range X": "7 / 7.5 / 8 mm",
+        "Repeatability Z": "0.3 um",
         "Profile data interval": "2.5 um",
-        "Sampling speed": "up to 64 kHz"
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.05% of F.S.",
+        "Weight": "Approx. 1000 g"
       },
       "xFovNearMm": 7,
       "xFovFarMm": 8,
-      "profileDataIntervalUm": 2.5
+      "profileDataIntervalUm": 2.5,
+      "zLinearityPercentOfRange": 0.05,
+      "weightG": 1000
     },
     {
       "manufacturer": "基恩士",
@@ -8143,6 +8232,7 @@
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8173,22 +8263,26 @@
       "referenceDistanceMm": 28,
       "zMeasurementRangeMm": 13,
       "xFovNearMm": 16,
-      "xFovReferenceMm": 18,
-      "xFovFarMm": 20,
-      "zRepeatabilityUm": 0.1,
+      "xFovReferenceMm": 16,
+      "xFovFarMm": 16,
+      "zRepeatabilityUm": 0.3,
       "profileDataIntervalUm": 5,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "rawSpecs": {
         "Series": "LJ-X8000",
         "Model": "LJ-X8030",
         "Reference distance": "28 mm",
-        "Measuring range Z": "±6.5 mm",
-        "Measuring range X": "16-20 mm",
-        "Repeatability Z": "0.1 um",
+        "Measuring range Z": "±6.5 mm (F.S.=13 mm)",
+        "Measuring range X": "16 / 16 / 16 mm",
+        "Repeatability Z": "0.3 um",
         "Profile data interval": "5 um",
-        "Sampling speed": "up to 64 kHz"
-      }
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.013% of F.S.",
+        "Weight": "Approx. 1300 g"
+      },
+      "zLinearityPercentOfRange": 0.013,
+      "weightG": 1300
     },
     {
       "manufacturer": "基恩士",
@@ -8201,13 +8295,14 @@
       "referenceDistanceMm": 64,
       "zMeasurementRangeMm": 14.6,
       "xFovReferenceMm": 16,
-      "zRepeatabilityUm": 0.2,
+      "zRepeatabilityUm": 0.4,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "requiresExternalMotion": true,
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8235,15 +8330,19 @@
         "Series": "LJ-X8000",
         "Model": "LJ-X8060",
         "Reference distance": "64 mm",
-        "Measuring range Z": "±7.3 mm",
-        "Measuring range X": "15-16.5 mm",
-        "Repeatability Z": "0.2 um",
+        "Measuring range Z": "±7.3 mm (F.S.=14.6 mm)",
+        "Measuring range X": "15 / 16 / 16 mm",
+        "Repeatability Z": "0.4 um",
         "Profile data interval": "5 um",
-        "Sampling speed": "up to 64 kHz"
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.04% of F.S.",
+        "Weight": "Approx. 1000 g"
       },
       "xFovNearMm": 15,
-      "xFovFarMm": 16.5,
-      "profileDataIntervalUm": 5
+      "xFovFarMm": 16,
+      "profileDataIntervalUm": 5,
+      "zLinearityPercentOfRange": 0.04,
+      "weightG": 1000
     },
     {
       "manufacturer": "基恩士",
@@ -8253,6 +8352,7 @@
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8285,20 +8385,24 @@
       "xFovNearMm": 33.5,
       "xFovReferenceMm": 35,
       "xFovFarMm": 36.5,
-      "zRepeatabilityUm": 0.2,
-      "profileDataIntervalUm": 10.9,
+      "zRepeatabilityUm": 0.3,
+      "profileDataIntervalUm": 12.5,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "rawSpecs": {
         "Series": "LJ-X8000",
         "Model": "LJ-X8070",
         "Reference distance": "50 mm",
-        "Measuring range Z": "±8 mm",
-        "Measuring range X": "33.5-36.5 mm",
-        "Repeatability Z": "0.2 um",
-        "Profile data interval": "10.9 um",
-        "Sampling speed": "up to 64 kHz"
-      }
+        "Measuring range Z": "±8 mm (F.S.=16 mm)",
+        "Measuring range X": "33.5 / 35 / 36.5 mm",
+        "Repeatability Z": "0.3 um",
+        "Profile data interval": "12.5 um",
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.025% of F.S.",
+        "Weight": "Approx. 1300 g"
+      },
+      "zLinearityPercentOfRange": 0.025,
+      "weightG": 1300
     },
     {
       "manufacturer": "基恩士",
@@ -8311,13 +8415,14 @@
       "referenceDistanceMm": 73,
       "zMeasurementRangeMm": 41,
       "xFovReferenceMm": 35,
-      "zRepeatabilityUm": 0.3,
+      "zRepeatabilityUm": 0.5,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "requiresExternalMotion": true,
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8345,15 +8450,19 @@
         "Series": "LJ-X8000",
         "Model": "LJ-X8080",
         "Reference distance": "73 mm",
-        "Measuring range Z": "±20.5 mm",
-        "Measuring range X": "30-39 mm",
-        "Repeatability Z": "0.3 um",
-        "Profile data interval": "10.9 um",
-        "Sampling speed": "up to 64 kHz"
+        "Measuring range Z": "±20.5 mm (F.S.=41 mm)",
+        "Measuring range X": "30 / 35 / 39 mm",
+        "Repeatability Z": "0.5 um",
+        "Profile data interval": "12.5 um",
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.03% of F.S.",
+        "Weight": "Approx. 1100 g"
       },
       "xFovNearMm": 30,
       "xFovFarMm": 39,
-      "profileDataIntervalUm": 10.9
+      "profileDataIntervalUm": 12.5,
+      "zLinearityPercentOfRange": 0.03,
+      "weightG": 1100
     },
     {
       "manufacturer": "基恩士",
@@ -8363,6 +8472,7 @@
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8390,25 +8500,29 @@
       "model": "LJ-X8100",
       "technology": "线激光轮廓",
       "sourceUrl": "https://www.keyence.com/products/measure/laser-2d/lj-x8000/specs/",
-      "referenceDistanceMm": 100,
-      "zMeasurementRangeMm": 60,
-      "xFovNearMm": 52,
-      "xFovReferenceMm": 70,
-      "xFovFarMm": 88,
+      "referenceDistanceMm": 107,
+      "zMeasurementRangeMm": 34,
+      "xFovNearMm": 71,
+      "xFovReferenceMm": 74,
+      "xFovFarMm": 77,
       "zRepeatabilityUm": 0.5,
-      "profileDataIntervalUm": 21.9,
+      "profileDataIntervalUm": 25,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "rawSpecs": {
         "Series": "LJ-X8000",
         "Model": "LJ-X8100",
-        "Reference distance": "100 mm",
-        "Measuring range Z": "±30 mm",
-        "Measuring range X": "52-88 mm",
+        "Reference distance": "107 mm",
+        "Measuring range Z": "±17 mm (F.S.=34 mm)",
+        "Measuring range X": "71 / 74 / 77 mm",
         "Repeatability Z": "0.5 um",
-        "Profile data interval": "21.9 um",
-        "Sampling speed": "up to 64 kHz"
-      }
+        "Profile data interval": "25 um",
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.025% of F.S.",
+        "Weight": "Approx. 1600 g"
+      },
+      "zLinearityPercentOfRange": 0.025,
+      "weightG": 1600
     },
     {
       "manufacturer": "基恩士",
@@ -8418,16 +8532,17 @@
       "status": "在售",
       "sourceUrl": "https://www.keyence.com/products/measure/laser-2d/lj-x8000/specs/",
       "sourceDate": "2026-05-30",
-      "referenceDistanceMm": 200,
-      "zMeasurementRangeMm": 110,
-      "xFovReferenceMm": 100,
+      "referenceDistanceMm": 245,
+      "zMeasurementRangeMm": 68,
+      "xFovReferenceMm": 72,
       "zRepeatabilityUm": 1,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "requiresExternalMotion": true,
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8454,16 +8569,20 @@
       "rawSpecs": {
         "Series": "LJ-X8000",
         "Model": "LJ-X8200",
-        "Reference distance": "200 mm",
-        "Measuring range Z": "±55 mm",
-        "Measuring range X": "62-138 mm",
+        "Reference distance": "245 mm",
+        "Measuring range Z": "±34 mm (F.S.=68 mm)",
+        "Measuring range X": "64 / 72 / 80 mm",
         "Repeatability Z": "1 um",
-        "Profile data interval": "31.3 um",
-        "Sampling speed": "up to 64 kHz"
+        "Profile data interval": "25 um",
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.04% of F.S.",
+        "Weight": "Approx. 1200 g"
       },
-      "xFovNearMm": 62,
-      "xFovFarMm": 138,
-      "profileDataIntervalUm": 31.3
+      "xFovNearMm": 64,
+      "xFovFarMm": 80,
+      "profileDataIntervalUm": 25,
+      "zLinearityPercentOfRange": 0.04,
+      "weightG": 1200
     },
     {
       "manufacturer": "基恩士",
@@ -8473,6 +8592,7 @@
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8500,25 +8620,29 @@
       "model": "LJ-X8300",
       "technology": "线激光轮廓",
       "sourceUrl": "https://www.keyence.com/products/measure/laser-2d/lj-x8000/specs/",
-      "referenceDistanceMm": 300,
-      "zMeasurementRangeMm": 290,
-      "xFovNearMm": 110,
-      "xFovReferenceMm": 180,
-      "xFovFarMm": 250,
-      "zRepeatabilityUm": 2,
-      "profileDataIntervalUm": 56.3,
+      "referenceDistanceMm": 288,
+      "zMeasurementRangeMm": 106,
+      "xFovNearMm": 134,
+      "xFovReferenceMm": 150,
+      "xFovFarMm": 160,
+      "zRepeatabilityUm": 3,
+      "profileDataIntervalUm": 50,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "rawSpecs": {
         "Series": "LJ-X8000",
         "Model": "LJ-X8300",
-        "Reference distance": "300 mm",
-        "Measuring range Z": "±145 mm",
-        "Measuring range X": "110-250 mm",
-        "Repeatability Z": "2 um",
-        "Profile data interval": "56.3 um",
-        "Sampling speed": "up to 64 kHz"
-      }
+        "Reference distance": "288 mm",
+        "Measuring range Z": "±53 mm (F.S.=106 mm)",
+        "Measuring range X": "134 / 150 / 160 mm",
+        "Repeatability Z": "3 um",
+        "Profile data interval": "50 um",
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.033% of F.S.",
+        "Weight": "Approx. 1400 g"
+      },
+      "zLinearityPercentOfRange": 0.033,
+      "weightG": 1400
     },
     {
       "manufacturer": "基恩士",
@@ -8528,16 +8652,17 @@
       "status": "在售",
       "sourceUrl": "https://www.keyence.com/products/measure/laser-2d/lj-x8000/specs/",
       "sourceDate": "2026-05-30",
-      "referenceDistanceMm": 400,
-      "zMeasurementRangeMm": 500,
-      "xFovReferenceMm": 320,
-      "zRepeatabilityUm": 3.5,
+      "referenceDistanceMm": 380,
+      "zMeasurementRangeMm": 315,
+      "xFovReferenceMm": 210,
+      "zRepeatabilityUm": 5,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "requiresExternalMotion": true,
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8564,16 +8689,20 @@
       "rawSpecs": {
         "Series": "LJ-X8000",
         "Model": "LJ-X8400",
-        "Reference distance": "400 mm",
-        "Measuring range Z": "±250 mm",
-        "Measuring range X": "145-495 mm",
-        "Repeatability Z": "3.5 um",
-        "Profile data interval": "100 um",
-        "Sampling speed": "up to 64 kHz"
+        "Reference distance": "380 mm",
+        "Measuring range Z": "±60 mm (+95 to -220 mm, F.S.=315 mm)",
+        "Measuring range X": "180 / 210 / 240 mm (extended near 163, far 320)",
+        "Repeatability Z": "5 um",
+        "Profile data interval": "75 um",
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.035% of F.S.",
+        "Weight": "Approx. 1300 g"
       },
-      "xFovNearMm": 145,
-      "xFovFarMm": 495,
-      "profileDataIntervalUm": 100
+      "xFovNearMm": 180,
+      "xFovFarMm": 240,
+      "profileDataIntervalUm": 75,
+      "zLinearityPercentOfRange": 0.035,
+      "weightG": 1300
     },
     {
       "manufacturer": "基恩士",
@@ -8583,16 +8712,17 @@
       "status": "在售",
       "sourceUrl": "https://www.keyence.com/products/measure/laser-2d/lj-x8000/specs/",
       "sourceDate": "2026-05-30",
-      "referenceDistanceMm": 900,
-      "zMeasurementRangeMm": 1300,
-      "xFovReferenceMm": 1200,
-      "zRepeatabilityUm": 12,
+      "referenceDistanceMm": 980,
+      "zMeasurementRangeMm": 800,
+      "xFovReferenceMm": 510,
+      "zRepeatabilityUm": 10,
       "profilePoints": 3200,
-      "scanRateMaxHz": 64000,
+      "scanRateMaxHz": 16000,
       "requiresExternalMotion": true,
       "supportsEncoder": true,
       "interfaces": [
         "Ethernet",
+        "USB",
         "EtherNet/IP",
         "PROFINET",
         "EtherCAT",
@@ -8619,16 +8749,20 @@
       "rawSpecs": {
         "Series": "LJ-X8000",
         "Model": "LJ-X8900",
-        "Reference distance": "900 mm",
-        "Measuring range Z": "±650 mm",
-        "Measuring range X": "390-1500 mm",
-        "Repeatability Z": "12 um",
-        "Profile data interval": "375 um",
-        "Sampling speed": "up to 64 kHz"
+        "Reference distance": "980 mm",
+        "Measuring range Z": "±400 mm (F.S.=800 mm)",
+        "Measuring range X": "300 / 510 / 720 mm",
+        "Repeatability Z": "10 um",
+        "Profile data interval": "225 um",
+        "Sampling speed": "3D mode with LJ-X8000 Series head: up to 16 kHz (controller LJ-X8002)",
+        "Linearity Z": "±0.05% of F.S.",
+        "Weight": "Approx. 1600 g"
       },
-      "xFovNearMm": 390,
-      "xFovFarMm": 1500,
-      "profileDataIntervalUm": 375
+      "xFovNearMm": 300,
+      "xFovFarMm": 720,
+      "profileDataIntervalUm": 225,
+      "zLinearityPercentOfRange": 0.05,
+      "weightG": 1600
     },
     {
       "manufacturer": "基恩士",
@@ -8652,7 +8786,10 @@
       "interfaces": [
         "Ethernet",
         "USB",
-        "I/O"
+        "I/O",
+        "RS-232C",
+        "PLC-Link",
+        "EtherNet/IP"
       ],
       "outputTypes": [
         "3D 形状",
@@ -8680,8 +8817,17 @@
         "Minimum detection area": "4 x 4 um",
         "Repeatability (height difference)": "0.1 um",
         "Linearity (height difference)": "±2.8 um (±0.2% of F.S.)",
-        "Sampling frequency": "133 ms high speed / 266 ms standard"
-      }
+        "Sampling frequency": "133 ms high speed / 266 ms standard",
+        "Technology": "3D Interference Measurement Sensor",
+        "Light source": "Infrared SLD",
+        "Linearity": "±0.2% of F.S.",
+        "Weight": "Approx. 3000 g"
+      },
+      "zLinearityPercentOfRange": 0.2,
+      "weightG": 3000,
+      "notes": [
+        "官网为3D Interference Measurement Sensor，测量光源为Infrared SLD；本地技术类目仍归入干涉/白光类测量。"
+      ]
     },
     {
       "manufacturer": "基恩士",
@@ -8705,7 +8851,10 @@
       "interfaces": [
         "Ethernet",
         "USB",
-        "I/O"
+        "I/O",
+        "RS-232C",
+        "PLC-Link",
+        "EtherNet/IP"
       ],
       "outputTypes": [
         "3D 形状",
@@ -8733,8 +8882,17 @@
         "Minimum detection area": "15 x 15 um",
         "Repeatability (height difference)": "0.1 um",
         "Linearity (height difference)": "±2.8 um (±0.2% of F.S.)",
-        "Sampling frequency": "133 ms high speed / 266 ms standard"
-      }
+        "Sampling frequency": "133 ms high speed / 266 ms standard",
+        "Technology": "3D Interference Measurement Sensor",
+        "Light source": "Infrared SLD",
+        "Linearity": "±0.2% of F.S.",
+        "Weight": "Approx. 3000 g"
+      },
+      "zLinearityPercentOfRange": 0.2,
+      "weightG": 3000,
+      "notes": [
+        "官网为3D Interference Measurement Sensor，测量光源为Infrared SLD；本地技术类目仍归入干涉/白光类测量。"
+      ]
     },
     {
       "manufacturer": "基恩士",
@@ -8758,7 +8916,10 @@
       "interfaces": [
         "Ethernet",
         "USB",
-        "I/O"
+        "I/O",
+        "RS-232C",
+        "PLC-Link",
+        "EtherNet/IP"
       ],
       "outputTypes": [
         "3D 形状",
@@ -8786,8 +8947,17 @@
         "Minimum detection area": "40 x 40 um",
         "Repeatability (height difference)": "0.1 um",
         "Linearity (height difference)": "±2.8 um (±0.2% of F.S.)",
-        "Sampling frequency": "133 ms high speed / 266 ms standard"
-      }
+        "Sampling frequency": "133 ms high speed / 266 ms standard",
+        "Technology": "3D Interference Measurement Sensor",
+        "Light source": "Infrared SLD",
+        "Linearity": "±0.2% of F.S.",
+        "Weight": "Approx. 3000 g"
+      },
+      "zLinearityPercentOfRange": 0.2,
+      "weightG": 3000,
+      "notes": [
+        "官网为3D Interference Measurement Sensor，测量光源为Infrared SLD；本地技术类目仍归入干涉/白光类测量。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
@@ -9274,7 +9444,7 @@
       "series": "DLS800",
       "model": "MV-DLS800-01H",
       "technology": "双目结构光/RGB-D",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 800,
@@ -9303,15 +9473,19 @@
       "accuracyCondition": "官网产品列表公开；详细测试条件未公开",
       "rawSpecs": {
         "Product model": "MV-DLS800-01H",
-        "Category": "Binocular Structured Light Stereo Camera"
-      }
+        "Category": "Binocular Structured Light Stereo Camera",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
       "series": "DP2000",
       "model": "MV-DP290-05H",
       "technology": "线激光轮廓",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/?id=157&typeId=99",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 90,
@@ -9340,8 +9514,12 @@
         "Product model": "MV-DP290-05H",
         "Version": "V2.0.0",
         "Status": "Available",
-        "Category": "Hikrobot 3D camera"
-      }
+        "Category": "Hikrobot 3D camera",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
@@ -9442,9 +9620,11 @@
         "Z轴重复精度": "0.49 μm@传感器在光学平台上测试标准量块的数据",
         "X轴测量范围-近端": "26.5 mm",
         "X轴测量范围-参考": "31 mm",
-        "X轴测量范围-远端": "35.5 mm"
+        "X轴测量范围-远端": "35.5 mm",
+        "扫描帧率": "1.7k Hz ~ 23.9k Hz(高帧率模式)",
+        "官网单品配置": "https://www.hikrobotics.com/cn/Api/Foreground/Vision/VisionProductConfig?id=13862"
       },
-      "scanRateMaxHz": 10000,
+      "scanRateMaxHz": 23900,
       "profilePoints": 3200,
       "referenceDistanceMm": 63.5,
       "zMeasurementRangeMm": 26,
@@ -9717,9 +9897,11 @@
         "Z轴重复精度": "1.48 μm@传感器在光学平台上测试标准量块的数据",
         "X轴测量范围-近端": "57 mm",
         "X轴测量范围-参考": "74.2 mm",
-        "X轴测量范围-远端": "91.4 mm"
+        "X轴测量范围-远端": "91.4 mm",
+        "扫描帧率": "1.7k Hz ~ 23.9k Hz(高帧率模式)",
+        "官网单品配置": "https://www.hikrobotics.com/cn/Api/Foreground/Vision/VisionProductConfig?id=13863"
       },
-      "scanRateMaxHz": 10000,
+      "scanRateMaxHz": 23900,
       "profilePoints": 3200,
       "referenceDistanceMm": 117,
       "zMeasurementRangeMm": 80,
@@ -10338,7 +10520,7 @@
       "series": "DP2000",
       "model": "MV-DP2915-05H",
       "technology": "线激光轮廓",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/?id=157&typeId=99",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 150,
@@ -10366,15 +10548,19 @@
       "rawSpecs": {
         "Product model": "MV-DP2915-05H",
         "Version": "V2.0.0",
-        "Status": "Available"
-      }
+        "Status": "Available",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
       "series": "DP2000",
       "model": "MV-DP2920-05H",
       "technology": "线激光轮廓",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/?id=157&typeId=99",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 200,
@@ -10402,8 +10588,12 @@
       "rawSpecs": {
         "Product model": "MV-DP2920-05H",
         "Version": "V2.0.0",
-        "Status": "Available"
-      }
+        "Status": "Available",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
@@ -10740,7 +10930,7 @@
       "series": "DP3000",
       "model": "MV-DP3050-01H",
       "technology": "线激光轮廓",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/?id=157&typeId=99",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 50,
@@ -10770,8 +10960,12 @@
       "rawSpecs": {
         "Product model": "MV-DP3050-01H",
         "Version": "V2.0.0",
-        "Status": "Available"
-      }
+        "Status": "Available",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
@@ -10888,7 +11082,7 @@
       "series": "DP3000",
       "model": "MV-DP3060-01H",
       "technology": "线激光轮廓",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/?id=157&typeId=99",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 60,
@@ -10918,8 +11112,12 @@
       "rawSpecs": {
         "Product model": "MV-DP3060-01H",
         "Version": "V2.0.0",
-        "Status": "Available"
-      }
+        "Status": "Available",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
@@ -11256,7 +11454,7 @@
       "series": "DP3000",
       "model": "MV-DP3100-01H",
       "technology": "线激光轮廓",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/?id=157&typeId=99",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 100,
@@ -11286,8 +11484,12 @@
       "rawSpecs": {
         "Product model": "MV-DP3100-01H",
         "Version": "V2.0.0",
-        "Status": "Available"
-      }
+        "Status": "Available",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
@@ -12064,7 +12266,7 @@
       "series": "DP4000",
       "model": "MV-DP4060-00H",
       "technology": "线激光轮廓",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/?id=157&typeId=99",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 60,
@@ -12093,8 +12295,12 @@
       "rawSpecs": {
         "Product model": "MV-DP4060-00H",
         "Status": "Available",
-        "Category": "DP4000"
-      }
+        "Category": "DP4000",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
@@ -12211,7 +12417,7 @@
       "series": "DP4000",
       "model": "MV-DP4120-00H",
       "technology": "线激光轮廓",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/?id=157&typeId=99",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 120,
@@ -12240,8 +12446,12 @@
       "rawSpecs": {
         "Product model": "MV-DP4120-00H",
         "Status": "Available",
-        "Category": "DP4000"
-      }
+        "Category": "DP4000",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
@@ -12643,7 +12853,7 @@
       "series": "DS5000",
       "model": "MV-DS5000-01H",
       "technology": "结构光快照",
-      "status": "Available",
+      "status": "未能官网确认",
       "sourceUrl": "https://www.hikrobotics.com/en/machinevision/visionproduct/",
       "sourceDate": "2026-05-30",
       "xFovReferenceMm": 500,
@@ -12672,8 +12882,12 @@
       "accuracyCondition": "官网产品列表公开；详细测试条件未公开",
       "rawSpecs": {
         "Product model": "MV-DS5000-01H",
-        "Category": "3D Structured Light Sensor"
-      }
+        "Category": "3D Structured Light Sensor",
+        "官网核对状态": "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      },
+      "notes": [
+        "2026-06-18官网核对：当前海康机器人中/英文3D产品API未找到该精确型号，旧英文sourceUrl仅作历史来源。"
+      ]
     },
     {
       "manufacturer": "海康机器人",
