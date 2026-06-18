@@ -1,0 +1,1661 @@
+
+===== gocator_2100_2300_2880_manual.pdf =====
+
+--- page 417 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•419
+Specificationsstatedarebasedonstandardlaserclasses.LinearityZ,ResolutionZ,andRepeatabilityZ
+mayvaryforotherlaserclasses.
+AllspecificationmeasurementsareperformedonLMI’sstandardcalibrationtarget(adiffuse,painted
+whitesurface).
+LinearityZistheworstcasedifferenceinaverageheightmeasured,comparedtotheactualpositionover
+themeasurementrange.
+ResolutionZisthemaximumvariabilityofheightmeasurementsacrossmultipleframes,with95%
+confidence.
+ResolutionXisthedistancebetweendatapointsalongthelaserline.
+RepeatabilityZismeasuredwithaflattargetatthemiddleofthemeasurementrange.Itisthe95%
+confidencevariationoftheaverageheightover4096frames.Heightvaluesareaveragedoverthefull
+FOV.
+SeeResolutionandAccuracyonpage42formoreinformation.
+ALL2x00SERIESMODELS
+ScanRate Approx.170Hzto5000Hz
+Interface GigabitEthernet
+Inputs DifferentialEncoder,LaserSafetyEnable,Trigger
+Outputs 2xDigitaloutput,RS-485Serial(115kBaud),1xAnalogOutput(4-20mA)
+Housing Gasketedaluminumenclosure,IP67
+OperatingTemp. 0to50°C
+StorageTemp. -30to70°C
+Mechanicaldimensionsforeachsensormodelareillustratedonthefollowingpages.
+
+--- page 418 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•420
+Gocator2320
+FieldofView/ MeasurementRange
+Dimensions
+
+
+--- page 419 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•421
+Envelope
+Gocator2130and2330
+FieldofView/ MeasurementRange
+
+
+--- page 420 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•422
+Dimensions
+Envelope
+
+
+--- page 421 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•423
+Gocator2140and2340
+FieldofView/ MeasurementRange
+Dimensions
+
+
+--- page 422 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•424
+Envelope
+Gocator2342
+FieldofView/ MeasurementRange
+
+
+--- page 423 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•425
+Dimensions
+Envelope
+
+
+--- page 424 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•426
+Gocator2150and2350
+FieldofView/ MeasurementRange
+Dimensions
+
+
+--- page 425 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•427
+Envelope
+
+
+--- page 426 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•428
+Gocator2170and2370
+FieldofView/ MeasurementRange
+
+
+--- page 427 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•429
+Dimensions
+
+
+--- page 428 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•430
+Envelope
+
+
+--- page 429 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•431
+Gocator2375
+FieldofView/ MeasurementRange
+Dimensions
+
+
+--- page 430 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•432
+Envelope
+
+
+--- page 431 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•433
+Gocator2180and2380
+FieldofView/ MeasurementRange
+
+
+--- page 432 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•434
+Dimensions
+
+
+--- page 433 ---
+Gocator2100,2300&2880Series Specifications•Gocator2100&2300Series•435
+Envelope
+
+
+--- page 434 ---
+Gocator2100,2300&2880Series Specifications•Gocator2880Sensor•436
+Gocator2880Sensor
+TheGocator2880isdefinedbelow.
+MODEL 2880
+DataPoints/Profile 1280
+LinearityZ
+(+/-%ofMR)
+0.04
+ResolutionZ(mm) 0.092-0.488
+ResolutionX(mm) 0.375-1.1
+Clearance
+Distance(CD)(mm)
+350
+Measurement
+Range(MR)(mm)
+800
+FieldofView(FOV)(mm) 390-1260
+RecommendedLaser
+Class
+3B
+Dimensions(mm) 49x75x498
+Weight(kg) 1.3
+ScanRate Approx.170Hzto5000Hz
+Interface GigabitEthernet
+Inputs DifferentialEncoder,LaserSafetyEnable,Trigger
+Outputs 2xDigitaloutput,RS-485Serial(115kBaud),1xAnalogOutput(4-20mA)
+InputVoltage(Power) +24to+48VDC(13Watts);RIPPLE+/-10%
+Housing Gasketedaluminumenclosure,IP67
+OperatingTemp. 0to50°C
+StorageTemp. -30to70°C
+Opticalmodels,laserclasses,andpackagescanbecustomized.ContactLMIformoredetails.
+Specificationsstatedarebasedonstandardlaserclasses.ResolutionZandLinearityZmayvaryforother
+laserclasses.
+Mechanicaldimensionsforthesensormodelareillustratedonthefollowingpages.
+
+--- page 435 ---
+Gocator2100,2300&2880Series Specifications•Gocator2880Sensor•437
+Gocator2880
+FieldofView/ MeasurementRange
+Dimensions
+
+
+--- page 436 ---
+Gocator2100,2300&2880Series Specifications•Gocator2880Sensor•438
+Envelope
+
+
+--- page 437 ---
+Gocator2100,2300&2880Series Specifications•GocatorPower/LANConnector•439
+GocatorPower/LANConnector
+TheGocatorPower/LANconnectorisa14pin,M16styleconnectorthatprovidespowerinput,laser
+safetyinputandEthernet.
+ThisconnectorisratedIP67onlywhenacableisconnectedorwhenaprotectivecapisused.
+ThissectiondefinestheelectricalspecificationsforGocatorPower/LANConnectorpins,organizedby
+function.
+Function Pin LeadColoron
+Cordset
+GND_24-48V L White/
+Orange&Black
+View:Lookingintotheconnectoronthesensor
+GND_24-48V L Orange/Black
+DC_24-48V A White/
+Green&Black
+DC_24-48V A Green/Black
+Safety- G White/Blue&
+Black
+Safety+ J Blue/
+Black
+Sync+ E White/
+Brown&Black
+Sync- C Brown/Black
+EthernetMX1+ M White/Orange
+EthernetMX1- N Orange
+EthernetMX2+ O White/Green
+EthernetMX2- P Green
+EthernetMX3- S White/Blue
+EthernetMX3+ R Blue
+EthernetMX4+ T White/Brown
+EthernetMX4- U Brown
+GocatorPower/LANConnectorPins
+Twowiresareconnectedtothegroundandpowerpins.
+GroundingShield
+Thegroundingshieldshouldbemountedtotheearthground.
+
+===== line_profile_2024.pdf =====
+
+--- page 988 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•988
+Envelope
+
+
+--- page 989 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•989
+Gocator2380
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 990 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•990
+Dimensions
+
+
+--- page 991 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•991
+Envelope
+
+
+--- page 992 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•992
+Gocator2400Series
+TheGocator2400seriesconsistsofthefollowingmodels:
+MODEL 2410 2420 2430 2440 2450 2490
+ScanRate(Hz) 200Hz,upto5
+kHz
+200Hz,upto5
+kHz
+320-5000 310-5000 270-5000 370Hz(full
+view)or
+800Hz
+(configured
+for1mx2m
+fieldofview)
+to5000Hz
+DataPoints/Profile 1710 1940 1500 1500 1800 1920
+LinearityZ
+(+/-%ofMR)
+0.015 0.006 0.01 0.01 0.01 0.04
+ResolutionX(mm)
+(ProfileDataInterval)
+0.0058-0.00620.014‬ -0.0165 0.037-0.057 0.09-0.13 0.100-0.255 0.25-1.1
+RepeatabilityZ(µm) 0.2 0.4 0.8 1.2 2.0 12
+Clearance
+Distance(CD)(mm)
+19 60 75 183 270 350
+Measurement
+Range(MR)(mm)
+6 25 80 210 550 1525
+FieldofView(FOV)
+(mm)
+10-10 27-32 47-85 96-194 145-425 390-2000
+LaserClasses 2M,3R(blue,405nm) 2,3R,3B(red,660nm;
+blue,405nm)
+2,3R,3B(blue,
+405nm)
+2,3R(red,
+660nm)
+Dimensions(mm) 44x90x145 44x90x145 44x90x155 44x90x190 44x90x240 49x85x272
+Weight(kg) 0.88 0.88 1.0 1.2 1.2 1.5
+Thefollowingdiagramillustratessomeofthetermsusedinthetableabove.
+
+--- page 993 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•993
+Opticalmodels,laserclasses,andpackagescanbecustomized.ContactLMIformoredetails.
+Specificationsstatedarebasedonstandardlaserclasses.LinearityZ,ResolutionZ,andRepeatability
+Zmayvaryforotherlaserclasses.
+AllspecificationmeasurementsareperformedonLMI’sstandardcalibrationtarget(adiffuse,
+paintedwhitesurface).
+LinearityZistheworstcasedifferenceinaverageheightmeasured,comparedtotheactualposition
+overthemeasurementrange.
+ResolutionZisthemaximumvariabilityofheightmeasurementsacrossmultipleframes,with95%
+confidence.
+ResolutionXisthedistancebetweendatapointsalongthelaserline.
+RepeatabilityZismeasuredwithaflattargetatthemiddleofthemeasurementrange.Itisthe95%
+confidencevariationoftheaverageheightover4096frames.Heightvaluesareaveragedoverthe
+fullFOV.
+SeeResolutionandLinearityonpage 62formoreinformation.
+ALL2400SERIESMODELS
+Interface GigabitEthernet
+Inputs DifferentialEncoder,LaserSafetyEnable,Trigger
+Outputs 2xDigitaloutput,RS-485Serial(115kBaud),1xAnalogOutput(4-20mA)
+Housing Gasketedaluminumenclosure,IP67
+InputVoltage(Power) +24to+48VDC(9W;13WattsforGocator2490);Ripple+/-10%
+OperatingTemp. 0to50°C
+StorageTemp. -30to70°C
+
+--- page 994 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•994
+Mechanicaldimensions,CD/FOV/MR,andtheenvelopeforeachsensormodelareillustratedonthe
+followingpages.
+Gocator2410
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 995 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•995
+Dimensions
+
+
+--- page 996 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•996
+Envelope
+
+
+--- page 997 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•997
+Gocator2420
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 998 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•998
+Dimensions
+
+
+--- page 999 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•999
+Envelope
+
+
+--- page 1000 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1000
+Gocator2430
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1001 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1001
+Dimensions
+Envelope
+
+
+--- page 1002 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1002
+Gocator2440
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1003 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1003
+Dimensions
+Envelope
+Gocator2450
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+--- page 1004 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1004
+
+
+--- page 1005 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1005
+Dimensions
+
+
+--- page 1006 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1006
+Envelope
+
+
+--- page 1007 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1007
+Gocator2490
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1008 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1008
+Dimensions
+
+
+--- page 1009 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1009
+Envelope
+
+
+--- page 1010 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1010
+Gocator2500Series
+TheGocator2500seriesconsistsofthefollowingmodels:
+MODEL 2510 2512 2520 2522 2530 2540 2550
+DataPoints/
+Profile
+1920 1920 1920 1920 1920 1920 1920
+ResolutionX(µm)
+(ProfileData
+Interval)
+8.0 8.0 13.0-17.0 13.0-17.0 28.0-54.0 64-160 80-270
+LinearityZ(+/-%
+ofMR)
+0.015 0.015 0.006 0.006 0.01 TBD TBD
+RepeatabilityZ
+(µm)
+0.2 0.2 0.4 0.4 0.5 1.2 2.0
+Clearance
+Distance(CD)
+(mm)
+17.0 17.0 47.5 17.75 40 152 216
+Measurement
+Range(MR)(mm)
+6 6 25 25 80 295 595
+FieldofView
+(FOV)(mm)
+13.0-14.5
+(diffuse)
+13.0-14.5
+(diffuse
+& specular)
+25-32.5
+(diffuse)
+25.0-32.5
+(diffuse)
+25.0(specular)
+48-100
+(diffuse)
+120-292 154-518
+ScanRate 2.4kHzto10kHz 1.6kHzto10kHz 2kHzto10
+kHz
+1.8kHz(full
+FOV)upto10
+kHz
+1.8kHz(full
+FOV)upto10
+kHz
+LaserClasses 2(blue,405
+nm)
+2(blue,405
+nm)
+2(blue,405
+nm)
+2(blue,405
+nm)
+2,(blue,405
+nm)
+2,3R,3B
+(blue,405nm)
+2,3R,3B
+2(blue,405
+nm)
+Dimensions
+(mm)
+46x80x110 46x80x110 46x80x11046x110x11046x80x11055x105x19555x105x195
+Weight(kg) 0.65 0.65 0.65 0.65 0.65 1.48 1.48
+Thefollowingdiagramillustratessomeofthetermsusedinthetableabove.
+
+--- page 1011 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1011
+UnlikeotherGocatorlineprofilesensors,theclearancedistanceforGocator2500sensorsis
+measuredfromthelowestpointofthesensor'shousing,notthelaserwindow.
+Specificationsstatedarebasedonstandardlaserclasses.LinearityZandRepeatabilityZmayvary
+forotherlaserclasses.
+AllspecificationmeasurementsareperformedonLMI’sstandardcalibrationtarget(adiffuse,
+paintedwhitesurface).
+LinearityZistheworstcasedifferenceinaverageheightmeasured,comparedtotheactualposition
+overthemeasurementrange.
+ResolutionXisthedistancebetweendatapointsalongthelaserline.
+RepeatabilityZismeasuredwithaflattargetatthemiddleofthemeasurementrange.Itisthe95%
+confidencevariationoftheaverageheightover4096frames.Heightvaluesareaveragedoverthe
+fullFOV.
+SeeResolutionandLinearityonpage 62formoreinformation.
+ALL2500SERIESMODELS
+Interface GigabitEthernet
+Inputs DifferentialEncoder,LaserSafetyEnable,Trigger
+Outputs 2xDigitaloutput,RS-485Serial(115kBaud)
+Housing Gasketedaluminumenclosure,IP67
+InputVoltage(Power) +24to+48VDC(15W);Ripple+/-10%
+OperatingTemp. 0to40°C;forGocator2540and2550,0to45°C
+StorageTemp. -30to70°C
+Mechanicaldimensions,CD/FOV/MR,andtheenvelopeforeachsensormodelareillustratedonthe
+followingpages.
+
+--- page 1012 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1012
+Gocator2510/2512
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1013 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1013
+Dimensions
+Envelope
+
+
+--- page 1014 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1014
+Gocator2520
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1015 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1015
+Dimensions
+
+
+--- page 1016 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1016
+Envelope
+
+
+--- page 1017 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1017
+Gocator2522
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1018 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1018
+Dimensions
+
+
+--- page 1019 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1019
+Envelope
+
+
+--- page 1020 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1020
+Gocator2530
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1021 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1021
+Dimensions
+
+
+--- page 1022 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1022
+Envelope
+
+
+--- page 1023 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1023
+Gocator2540
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1024 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1024
+Dimensions
+
+
+--- page 1025 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1025
+Envelope
+
+
+--- page 1026 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1026
+Gocator2550
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1027 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1027
+Dimensions
+
+
+--- page 1028 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1028
+Envelope
+
+
+--- page 1029 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1029
+Gocator2600Series
+TheGocator2600seriesconsistsofthefollowingmodels:
+MODEL 2610 2618 2630 2640 2650 2670 2690
+DataPoints/Profile 4192 4192 4192 4192 4192 4192 3700
+ScanRate(Hz)* 1100-9000 700-10000 600-9000 600-9000 600-9000 600-9000 900-10000
+ResolutionX(µm)
+(ProfileData
+Interval)
+2.5 5.0-5.4 18-33 28-46 47-104 67-197 124-550
+LinearityZ(+/-%of
+MR) **
+0.015 0.015 0.03 0.04 0.04 0.05 0.08
+RepeatabilityZ
+(µm) **
+0.22 0.38 0.30 1.00 2.70 10.00 TBD
+Clearance
+Distance(CD)(mm)
+19.4 44.5 110 170 330 495 325
+Measurement
+Range(MR)(mm)
+5.0 12 130 190 475 1060 1550
+FieldofView(FOV)
+(mm)
+10.2-10.8 20-23 71-135 105-198 190-430 272-817 385-2000
+LaserClasses 2,3R,3B
+(blue,405
+nm)
+2,3R,3B
+(blue,405
+nm)
+2,3R,3B
+(blue,405
+nm)
+2,3R,3B
+(blue,405
+nm)
+2,3R,3B
+(blue,405
+nm)
+2,3R,3B
+(blue,405
+nm)
+2,3R
+(red,660nm)
+Dimensions(mm) 50x116x
+125
+46x80x110 55x105x
+165
+55x105x
+195
+55x105x
+280
+55x105x
+280
+55x105x
+280
+Weight(kg) 0.9 0.65 1.34 1.48 2.12 2.12 2.12
+*Speedrangesarefromdefaultconfiguration(fullfieldofviewandfullmeasurementrange)tohigh
+speedconfiguration(reducedfield-ofviewandmeasurementrange,uniformspacingdisabled,
+optimizeddataspacingandoutput).
+**TheseresultsareachievedwithLMIstandardtargetandoptimizedsensorconfiguration.
+Thefollowingdiagramillustratessomeofthetermsusedinthetableabove.
+Specificationsstatedarebasedonstandardlaserclasses.LinearityZandRepeatabilityZmayvary
+forotherlaserclasses.
+AllspecificationmeasurementsareperformedonLMI’sstandardcalibrationtarget(adiffuse,
+paintedwhitesurface).
+LinearityZistheworstcasedifferenceinaverageheightmeasured,comparedtotheactualposition
+overthemeasurementrange.
+ResolutionXisthedistancebetweendatapointsalongthelaserline.
+
+--- page 1030 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1030
+RepeatabilityZismeasuredwithaflattargetatthemiddleofthemeasurementrange.Itisthe95%
+confidencevariationoftheaverageheightover4096frames.Heightvaluesareaveragedoverthe
+fullFOV.
+SeeResolutionandLinearityonpage 62formoreinformation.
+ALL2600SERIESMODELS
+Interface GigabitEthernet
+Inputs DifferentialEncoder,LaserSafetyEnable,Trigger
+Outputs 2xDigitaloutput,RS-485Serial(115kBaud)
+FactoryCommunication PROFINET,Modbus,EtherNet/IP,ASCII,Gocator
+InputVoltage(Power) +24to+48VDC(15W);Ripple+/-10%
+Housing Gasketedmetalenclosure,IP67
+OperatingTemp. 0to50°C
+StorageTemp. -30to70°C
+VibrationResistance 10to55Hz,1.5mmdoubleamplitudeinX,Y,andZdirections,2hoursper
+direction
+ShockResistance 15g,halfsinewave,11ms,positiveandnegativeforX,Y,andZdirections
+Mechanicaldimensions,CD/FOV/MR,andtheenvelopeforeachsensormodelareillustratedonthe
+followingpages.
+Gocator2610
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1031 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1031
+Dimensions
+
+
+--- page 1032 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1032
+Envelope
+
+
+--- page 1033 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1033
+Gocator2618
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1034 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1034
+Dimensions
+
+
+--- page 1035 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1035
+Envelope
+
+
+--- page 1036 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1036
+Gocator2630
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1037 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1037
+Dimensions
+
+
+--- page 1038 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1038
+Envelope
+
+
+--- page 1039 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1039
+Gocator2640
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1040 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1040
+Dimensions
+
+
+--- page 1041 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1041
+Envelope
+
+
+--- page 1042 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1042
+Gocator2650
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1043 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1043
+Dimensions
+
+
+--- page 1044 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1044
+Envelope
+
+
+--- page 1045 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1045
+Gocator2670
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1046 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1046
+Dimensions
+
+
+--- page 1047 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1047
+Envelope
+
+
+--- page 1048 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1048
+Gocator2690
+FieldofView/MeasurementRange/CoordinateSystemOrientation
+
+
+--- page 1049 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1049
+Dimensions
+
+
+--- page 1050 ---
+GoPxL forGocatorLaserProfileSensors:UserManual Specifications•1050
+Envelope
+
+
+===== brochure_2026.pdf =====
+
+--- page 27 ---
+Laser Point Profi  le
+Laser Line Profi  le
+PRODUCT SPECS
+MODELS 1320 1340 1350 1365 1370 1380 1390
+Clearance Distance (mm) 40 162.5 200 562 237.5 127 500
+Measurement Range (mm) 20 95 200 375 412.5 1651 2000
+Linearity Z (± % of MR) 0.05 0.05 0.05 0.11 0.07 0.18 0.1
+Linearity Z (± mm) 0.01 0.05 0.1 0.4 0.3 3.0 2.0
+Resolution Z (mm) 0.0004 - 0.0004 0.0005 - 0.0010 0.0015 - 0.0035 0.0025 - 0.0040 0.0025 - 0.0070 0.0100 - 0.0450 0.0250 - 0.0600
+Spot Size (mm) 0.11 0.37 0.50 1.80 0.90 2.60 2.60
+Recommended Package 
+Dimensions (mm)
+Side Mount (3R)
+30x120x149
+Side Mount
+30x120x149
+Side Mount
+30x120x149
+Side Mount
+30x120x220
+Side Mount (3B)
+30x120x149
+Side Mount
+30x120x149
+Side Mount
+30x120x277
+Other Package 
+Dimensions (mm)
+Top Mount (3B)
+49x75x162
+Top Mount
+49x75x162
+Top Mount (2M)
+49x75x162
+Weight (kg) 0.75 / 0.8 0.75 0.75 / 0.8 1.0 0.75 / 0.8 0.75  1.25
+Resolution Z based on averaging 128 samples. Optical models, laser classes, and packages can be customized. Contact LMI for more details. Specifi  cations stated are based on standard laser classes. Resolution Z 
+and Linearity Z may vary for other laser classes. Refer to specifi  cations in the Gocator Point Profi  le Sensor user manual for more details.
+ALL 1300 SERIES MODELS
+Scan Rate 32,000 Hz
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital Output, RS-485 Serial, Selcom Serial, 1x Analog Output (4-20mA)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (13 Watts); Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 50 °C
+Storage Temperature -30 to 70 °C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integra-
+tion with user applications, third-party image processing applications, and PLCs.
+MODELS 2120 2130 2140 2150 2170 2180
+Data Points / Profi  le 640 640 640 640 640 640
+Linearity Z (± % of MR) 0.01 0.01 0.01 0.01 0.04 0.04
+Resolution Z (mm) 0.0018-0.0030 0.006 - 0.014 0.013 - 0.037 0.019 - 0.060 0.055 - 0.200 0.092 - 0.488
+Resolution X (mm) (Profi  le Data Interval) 0.028-0.042 0.088 - 0.150 0.19 - 0.34 0.3 - 0.6 0.55 - 1.10 0.75 - 2.20
+Repeatability Z (µm) 0.4 0.8 1.2 2 8 12 
+Clearance  Distance (CD) (mm) 40 90 190 300 4 00 350
+Measurement  Range (MR) (mm) 25 80 210 400 500 800
+Field of View (FOV) (mm) 18 - 26 47 - 85 96 - 194 158 - 365 308 - 687 390 - 1260
+Dimensions (mm) Side Mount
+35x120x149.5
+Top Mount
+49x75x142 
+Top Mount
+49x75x197
+Top Mount
+49x75x272
+Top Mount
+49x75x272
+Top Mount
+49x75x272
+Weight (kg) 0.8 0.74 0.94 1.3 1.3 1.3
+Optical models, laser classes, and packages can be customized. Contact LMI for more details. Specifi  cations stated are based on standard laser classes. Linearity Z, Resolution Z, and Repeatability Z may vary for 
+other laser classes. Refer to specifi  cations in the Gocator Line Profi  le Sensor user manual for more details.
+ALL 2100 SERIES MODELS
+Scan Rate Approximately 170 Hz to 5000 Hz
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital output, RS-485 Serial (115 kBaud)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (13 Watts); Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 50°C
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, and PLCs.
+Gocator 2100 Series
+Gocator 1300 Series Laser Line Profi  le
+Laser Line Profi  le
+MODELS 2320 2330 2340 2350 2370 2380
+Data Points / Profi  le 1280 1280 1280 1280 1280 1280
+Linearity Z (± % of MR) 0.01 0.01 0.01 0.01 0.04 0.04
+Resolution Z (mm) 0.0018 - 0.0030 0.006 - 0.014 0.013 - 0.037 0.019 - 0.060 0.055 - 0.200 0.092 - 0.488
+Resolution X (mm) (Profi  le Data Interval) 0.014 - 0.021 0.044 - 0.075 0.095 - 0.170 0.150 - 0.300 0.275 - 0.550 0.375 - 1.100
+Repeatability Z (µm) 0.4 0.8 1.2 2 8 12
+Clearance  Distance (CD) (mm) 40 90 190 300 400 350
+Measurement  Range (MR) (mm) 25 80 210 400 500 800
+Field of View (FOV) (mm) 18 - 26 47 - 85 96 - 194 158 - 365 308 - 687 390 - 1260
+Dimensions (mm) Side Mount
+35x120x149.5
+Top Mount
+49x75x142 
+Top Mount
+49x75x197
+Top Mount
+49x75x272
+Top Mount
+49x75x272
+Top Mount
+49x75x272
+Weight (kg) 0.8 0.74 0.94 1.3 1.3 1.3
+Optical models, laser classes, and packages can be customized. Contact LMI for more details. Specifi  cations stated are based on standard laser classes. Linearity Z, Resolution Z, and Repeatability Z may vary for 
+other laser classes. Refer to specifi  cations in the Gocator Line Profi  le Sensor user manual for more details.
+ALL 2300 SERIES MODELS
+Scan Rate Approximately 170 Hz to 5000 Hz
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital output, RS-485 Serial (115 kBaud)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (13 Watts); Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 50°C
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for inte-
+gration with user applications, third-party image processing applications, and PLCs.
+Gocator 2300 Series
+Gocator 2400 Series
+LASER PROFILE SENSORS
+MODELS 2410 2420 2430 2440 2450 2490
+Data Points / Profi  le 1710 1940 1500 1500 1800 1920
+Linearity Z (± % of MR) 0.015 0.006 0.01 0.01 0.01 0.04
+Resolution X (µm) (Profi  le Data Interval) 5.8 - 6.2 14.0 - 16.5 37 - 57 67 - 130 100 - 255 250 - 1100
+Repeatability Z (µm) 0.2 0.4 0.8 1.2 2.0 12
+Clearance Distance (CD) (mm) 19 60 75 183 270 350
+Measurement Range (MR) (mm) 6 25 80 210 550 1525
+Field of View (FOV) (mm) 10 - 10 27 - 32 47 - 85 96 - 194 145 - 425 390 - 2000
+Dimensions (mm) 44x90x145 44x90x145 44x90x155 44x90x190 44x90x240 49x85x272
+Weight (kg) 0.88 0.88 1.0 1.2 1.2 1.5
+Optical models, laser classes, and packages can be customized. Contact LMI for more details. Specifi  cations stated are based on Recommended laser classes. Linearity Z, Resolution Z, and Repeatability Z may 
+vary for other laser classes.
+ALL 2400 SERIES MODELS
+Scan Rate 200 Hz, up to 5 kHz. (Note: 2400 series provides up to 2x scan rate for equivalent window size as 2300 series)
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital output, RS-485 Serial (115 kBaud)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (9 Watts); Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 50°C (10 to 50°C for Class 2 Blue)
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, and PLCs.
+27
+
+--- page 28 ---
+PRODUCT SPECS
+LASER PROFILE SENSORS
+Laser Line Profi  le
+Laser Line Profi  le
+MODELS 2510 2512 2513 2520 2522 2525 2530 2540 2550
+Data Points / Profi  le 1920 1920 600 1920 1920 1920 1920 1920 1920
+Scan Rate (Hz) (1) 2400 - 20,000 1600 - 20,000 14,500 - 20,000 1600 - 20,000 1600 - 20,000 1800 - 20,000 2000 - 20,000 1700 - 20,000 1800 - 20,000
+Linearity Z (± % of MR) (2) 0.015 0.015 0.019 0.006 0.006 0.01 0.01 0.05 0.06
+Resolution X (µm) (Profi  le Data Interval) 8.0 8.0 16.0 13.0 - 17.0 13.0 - 17.0 21.0 - 36.0 28.0 - 54.0 64.0 - 160.0 80.0 - 270.0
+Repeatability Z (µm) (2) 0.2 0.2 0.4 0.4 0.4 0.5 0.5 1.2 2.0
+Clearance Distance (CD) (mm) 17.0 17.0 66.5 47.5 17.75 28.0 40.0 152 216
+Measurement Range (MR) (mm) 6 6 6 25 25 55 80 295 595
+Field of View (FOV) (mm) 13.0 - 14.5 
+(diff  use)
+13.0 - 14.5 
+(diff  use & 
+specular)
+10.0
+(diff  use)
+25.0 - 32.5 
+(diff  use)
+25.0 - 32.5 
+(diff  use); 
+25.0 (specular)
+40.0 - 68.0
+(diff  use)
+48.0 - 100.0 
+(diff  use)
+120.0 - 292.0 
+(diff  use)
+154.0 - 518.0 
+(diff  use)
+Dimensions (mm) 46x80x110 46x80x110 46x80x110 46x80x110 46x110x110 46x80x110 46x80x110 55 x 105 x 195 55 x 105 x 195
+Protective Cover (3) - - - - - - -  
+Weight (kg) 0.65 0.65 0.65 0.65 0.65 0.65 0.65 1.48 1.48
+Optical models, laser classes, and packages can be customized. Specifi  cations stated are based on Recommended laser classes. Linearity Z and Repeatability Z may vary for other laser classes.
+ALL 2500 SERIES MODELS
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital output, RS-485 Serial (115 kBaud)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (15 Watts); Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 40°C
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, and PLCs.
+MODELS 2610 2618 2629 2630 2640 2650 2670 2690 
+Data Points / Profi  le 4192 4192 4192 4192 4192 4192 4192 3700
+Scan Rate (Hz) (1) 1100 - 9000 700 - 10,000 2500 - 9000 600 - 9000 600 - 9000 600 - 9000 600 - 9000 900 - 10,000
+Linearity Z (± % of MR) (2) 0.015 0.015 0.03 0.03 0.04 0.04 0.05 0.08
+Resolution X (µm) (Profi  le Data Interval) 2.5 5.0 - 5.4 18 - 23 18 - 33 28 - 46 47 - 104 67 - 197 124 - 550
+Repeatability Z (µm) (2) 0.22 0.38 0.30 0.30 1.00 2.70 10.00 12.00
+Clearance Distance (CD) (mm) 19.5 44.5 110 110 170 330 495 325
+Measurement Range (MR) (mm) 5.0 12 45 130 190 475 1060 1550
+Field of View (FOV) (mm) 10.2 - 10.8 20 - 23 71 - 93 71 - 135 105 - 198 190 - 430 272 - 817 385 - 2000
+Dimensions (mm) 50 x 116 x 125 46 x 80 x 110 55 x 105 x 165 55 x 105 x 165 55 x 105 x 195 55 x 105 x 280 55 x 105 x 280 55 x 105 x 280
+Protective Cover (3) - -      
+Weight (kg) 0.9 0.65 1.34 1.34 1.48 2.12 2.12 2.12
+Optical models, laser classes, and packages can be customized. Specifi  cations stated are based on Recommended laser classes. Linearity Z and Repeatability Z may vary for other laser classes.
+ALL 2600 SERIES MODELS
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital output, RS-485 Serial (115 kBaud)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (15 Watts); Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 50°C (Gocator 2610: 0 to 40°C)
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, and PLCs.
+Gocator 2500 Series
+Gocator 2600 Series
+(1) Speed Ranges are from default confi  guration (full fi  eld-of-view and full measurement range) to high speed confi  guration (reduced fi  eld-of-view and measurement range, uniform spacing disabled, optimized 
+data spacing and output, acceleration enabled).
+(2) These results are achieved with LMI standard target and optimized sensor confi  guration. 
+(3) Protective Covers are now available for specifi  c G2 sensor models. The cover protects the sensor’s camera and laser windows from scratching caused by dust, debris, and cleaning.
+28
+
+--- page 29 ---
+PRODUCT SPECS
+LASER PROFILE SENSORS
+Laser Line Profi  le
+Laser Line Profi  le
+MODELS 2510 2512 2513 2520 2522 2525 2530 2540 2550
+Data Points / Profi  le 1920 1920 600 1920 1920 1920 1920 1920 1920
+Scan Rate (Hz) (1) 2400 - 20,000 1600 - 20,000 14,500 - 20,000 1600 - 20,000 1600 - 20,000 1800 - 20,000 2000 - 20,000 1700 - 20,000 1800 - 20,000
+Linearity Z (± % of MR) (2) 0.015 0.015 0.019 0.006 0.006 0.01 0.01 0.05 0.06
+Resolution X (µm) (Profi  le Data Interval) 8.0 8.0 16.0 13.0 - 17.0 13.0 - 17.0 21.0 - 36.0 28.0 - 54.0 64.0 - 160.0 80.0 - 270.0
+Repeatability Z (µm) (2) 0.2 0.2 0.4 0.4 0.4 0.5 0.5 1.2 2.0
+Clearance Distance (CD) (mm) 17.0 17.0 66.5 47.5 17.75 28.0 40.0 152 216
+Measurement Range (MR) (mm) 6 6 6 25 25 55 80 295 595
+Field of View (FOV) (mm) 13.0 - 14.5 
+(diff  use)
+13.0 - 14.5 
+(diff  use & 
+specular)
+10.0
+(diff  use)
+25.0 - 32.5 
+(diff  use)
+25.0 - 32.5 
+(diff  use); 
+25.0 (specular)
+40.0 - 68.0
+(diff  use)
+48.0 - 100.0 
+(diff  use)
+120.0 - 292.0 
+(diff  use)
+154.0 - 518.0 
+(diff  use)
+Dimensions (mm) 46x80x110 46x80x110 46x80x110 46x80x110 46x110x110 46x80x110 46x80x110 55 x 105 x 195 55 x 105 x 195
+Protective Cover (3) - - - - - - -  
+Weight (kg) 0.65 0.65 0.65 0.65 0.65 0.65 0.65 1.48 1.48
+Optical models, laser classes, and packages can be customized. Specifi  cations stated are based on Recommended laser classes. Linearity Z and Repeatability Z may vary for other laser classes.
+ALL 2500 SERIES MODELS
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital output, RS-485 Serial (115 kBaud)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (15 Watts); Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 40°C
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, and PLCs.
+MODELS 2610 2618 2629 2630 2640 2650 2670 2690 
+Data Points / Profi  le 4192 4192 4192 4192 4192 4192 4192 3700
+Scan Rate (Hz) (1) 1100 - 9000 700 - 10,000 2500 - 9000 600 - 9000 600 - 9000 600 - 9000 600 - 9000 900 - 10,000
+Linearity Z (± % of MR) (2) 0.015 0.015 0.03 0.03 0.04 0.04 0.05 0.08
+Resolution X (µm) (Profi  le Data Interval) 2.5 5.0 - 5.4 18 - 23 18 - 33 28 - 46 47 - 104 67 - 197 124 - 550
+Repeatability Z (µm) (2) 0.22 0.38 0.30 0.30 1.00 2.70 10.00 12.00
+Clearance Distance (CD) (mm) 19.5 44.5 110 110 170 330 495 325
+Measurement Range (MR) (mm) 5.0 12 45 130 190 475 1060 1550
+Field of View (FOV) (mm) 10.2 - 10.8 20 - 23 71 - 93 71 - 135 105 - 198 190 - 430 272 - 817 385 - 2000
+Dimensions (mm) 50 x 116 x 125 46 x 80 x 110 55 x 105 x 165 55 x 105 x 165 55 x 105 x 195 55 x 105 x 280 55 x 105 x 280 55 x 105 x 280
+Protective Cover (3) - -      
+Weight (kg) 0.9 0.65 1.34 1.34 1.48 2.12 2.12 2.12
+Optical models, laser classes, and packages can be customized. Specifi  cations stated are based on Recommended laser classes. Linearity Z and Repeatability Z may vary for other laser classes.
+ALL 2600 SERIES MODELS
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital output, RS-485 Serial (115 kBaud)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (15 Watts); Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 50°C (Gocator 2610: 0 to 40°C)
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, and PLCs.
+Gocator 2500 Series
+Gocator 2600 Series
+(1) Speed Ranges are from default confi  guration (full fi  eld-of-view and full measurement range) to high speed confi  guration (reduced fi  eld-of-view and measurement range, uniform spacing disabled, optimized 
+data spacing and output, acceleration enabled).
+(2) These results are achieved with LMI standard target and optimized sensor confi  guration. 
+(3) Protective Covers are now available for specifi  c G2 sensor models. The cover protects the sensor’s camera and laser windows from scratching caused by dust, debris, and cleaning.
+LASER PROFILE SENSORS
+SNAPSHOT SENSORS
+Structured LightGocator 3000 Series
+MODELS 3506 3210 3520
+Scan Rate (Hz) 3 4 3
+Imagers (megapixels) 5 2 5
+Clearance Distance (CD) (mm) 87.0 164.0 203.0
+Measurement Range (MR) (mm) 25.0 110.0 150.0
+Field of View (mm) 27.0 x 45.0 (near). 30.0 x 45.0 (far) 71.0 x 98.0 (near). 100.0 x 154.0 (far) 179.0 x 115.0 (near). 282.0 x 175.0 (far)
+Repeatability Z (µm) 2.0 4.7 4.6
+Resolution XY (mm) 0.020 (close end) - 0.025 (far end) 0.060 (close end) - 0.090 (far end) 0.074 (close end) - 0.121 (far end)
+Dimensions (mm) 49x136x170 49x146x190 55x167x260
+Weight (kg) 1.52 1.7 2.6
+Light Source Blue LED (465 nm) Blue LED (465 nm) Blue LED (465 nm)
+Interface Gigabit Ethernet Gigabit Ethernet Gigabit Ethernet
+Inputs Diff  erential Encoder, Trigger Diff  erential Encoder, Trigger Diff  erential Encoder, Trigger
+Input Voltage (Power) +24 to +48 VDC (25 Watts); 
+Ripple ± 10%
++24 to +48 VDC (50 Watts); 
+Ripple ± 10%
+48 VDC (50 Watts); 
+Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67 Gasketed aluminum enclosure, IP67 Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 50 °C 0 to 45 °C 0 to 40 °C
+Storage Temperature -30 to 70 °C -30 to 70 °C -30 to 70 °C
+Outputs 2x Digital Output, RS485 Serial (115 kbaud), 1x Analog Output (4 - 20 mA)
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y and Z directions
+SOFTWARE AND BUILT-IN 3D MEASUREMENT TOOLS
+3D Feature Tools Openings (holes, slots), Cylinders, Studs (threaded and non-threaded), Plane
+3D Volumetric Tools Volumes, Areas, Bounding boxes, Positions (min, max, centroid), Ellipses, Orientations
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, and PLCs.
+(1) This specifi  cation is achieved with uniform spacing enabled
+(2) Speed is calculated from default confi  guration (full fi  eld of view and full measurement range)
+(3) These results are achieved with LMI standard target and optimized sensor confi  guration.
+Laser Line Profi  le
+MODELS 6310 6320
+Data Points / Profi  le (1) > 6500 > 6500
+Scan Rate (Full FOV/MR) (Hz) (2) > 1700 > 1800
+X Profi  le Data Interval (µm) (1) < 2.1 < 4.3
+Linearity Z (+/- % of MR) (3) 0.016 0.006
+Repeatability Z (μm) (3) 0.15 0.30
+Clearance Distance (CD) (mm) 18.15 57.5
+Measurement Range (MR) (mm) 5.5 17
+Field of View (FOV) (mm) 13.4 - 14.5 28 - 31
+Dimensions (mm) 156 x 141 x 58 146 x 152 x 58
+Weight (kg) 1.7 1.7
+Optical models, laser classes, and packages can be customized. Specifi  cations stated are based on Recommended laser classes. Linearity Z and Repeatability Z may vary for other laser classes.
+ALL 6300 SERIES MODELS
+Interface Ethernet 2.5 Gbps
+Inputs Diff  erential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital output, RS-485 Serial (115 kBaud)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (30 Watts); Ripple ± 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 0 to 35°C
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, and PLCs.
+Gocator 6300 Series
+29
+
+--- page 30 ---
+PRODUCT SPECS
+COAXIAL LINE CONFOCAL SENSORS
+LINE CONFOCAL SENSORS
+Line Confocal
+MODELS 4010 4011 4020 4021
+Scan Rate (Hz) (1) 4300 - 34 000 4500 - 36 000
+Resolution X (µm) (Profi  le Data Interval) 1.9 2.6
+Clearance Distance (CD) (mm) 9.3 ±0.2 27.8 ±0.3
+Measurement Range (MR) (mm) 1.05 2.5
+Field of View (FOV) (mm) 3.5 5.0
+Dimensions (mm) 183 x 82 x 459 183 x 82 x 428
+Weight (kg) 10.4 9.6
+Linearity Z (± % of MR) (2) 0.04 0.04
+Repeatability Z (µm) (2) 0.12 0.10 0.25 0.20
+Resolution Z (μm) 0.25 0.20 0.50 0.40
+Max Slope Angle (°) (3) ~45 - 85 ~23 - 85 ~30 - 85 ~13 - 85
+Application Note
+In the majority of applications the 4011 and 4021 provide superior data quality, repeatability and linearity and are the recommended sensors. In applications that 
+require additional sensitivity (shorter exposure times for higher scan speeds) or increased detection angle on highly refl  ective targets, the 4010 and 4020 are 
+typically more suitable.
+ALL 4000 SERIES MODELS
+Data Points / Profi  le 1920
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Trigger
+Outputs 2x Digital output
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (77 Watts); Ripple ± 5%
+Housing IP50
+Operating Temperature 15 to 35°C (above 30°C max duty cycle is 50%)
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, robots, and PLCs.
+Gocator 4000 Series
+(1) This specifi  cation is achieved with uniform spacing enabled. (2) Speed is calculated from default confi  guration (full fi  eld of view and full measurement range). (3) These results are achieved with LMI standard 
+target and optimized sensor confi  guration.
+Line Confocal
+MODELS 5504 5512 5516
+Scan Rate (Hz) (1) 2100 - 39 000 4200 - 40 000 3800 - 38 000
+Data Points / Profi  le 1792 1792 1792
+Resolution X (µm) (Profi  le Data Interval) 2.5 6.5 9.9
+Linearity Z (± % of MR) 0.03 0.07 0.04
+Repeatability Z (µm) (2) 0.05 0.2 0.25
+Resolution Z (µm) 0.16 0.72 1.50
+Clearance Distance (CD) (mm) 7.8 19.1 61.3
+Measurement Range (MR) (mm) 1.1 3.0 5.5
+Field of View (FOV) (mm) 4.3 11.6 17.0
+Max. surface slope on mirror (deg) ± 15.0 ± 20.0 ± 13.5
+Dimensions (mm) 60x190x303 91x345x419 113x358x440
+Housing IP67 IP55 IP50
+Weight (kg) 5 19 21
+ALL 5500 SERIES MODELS
+Interface Gigabit Ethernet
+Inputs Diff  erential / Single Ended Encoder, Trigger
+Outputs 2x Digital output
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) Gocator 5512/5516: +24-48 VDC (± 5%) @ 62 W, Gocator 5504: +24-48 VDC (±5%) @ 48 W
+Operating Temperature 15 to 35°C
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, robots, and PLCs.
+Gocator 5500 Series
+(1) Speed ranges are from default confi  guration (full fi  eld of view and full measurement range) to high speed confi  guration (optimized imager readout, reduced fi  eld-of-view and measurement range).
+(2) These results are achieved with LMI standard target and optimized sensor confi  guration.
+
+--- page 31 ---
+PRODUCT SPECS
+COAXIAL LINE CONFOCAL SENSORS
+LINE CONFOCAL SENSORS
+Line Confocal
+MODELS 4010 4011 4020 4021
+Scan Rate (Hz) (1) 4300 - 34 000 4500 - 36 000
+Resolution X (µm) (Profi  le Data Interval) 1.9 2.6
+Clearance Distance (CD) (mm) 9.3 ±0.2 27.8 ±0.3
+Measurement Range (MR) (mm) 1.05 2.5
+Field of View (FOV) (mm) 3.5 5.0
+Dimensions (mm) 183 x 82 x 459 183 x 82 x 428
+Weight (kg) 10.4 9.6
+Linearity Z (± % of MR) (2) 0.04 0.04
+Repeatability Z (µm) (2) 0.12 0.10 0.25 0.20
+Resolution Z (μm) 0.25 0.20 0.50 0.40
+Max Slope Angle (°) (3) ~45 - 85 ~23 - 85 ~30 - 85 ~13 - 85
+Application Note
+In the majority of applications the 4011 and 4021 provide superior data quality, repeatability and linearity and are the recommended sensors. In applications that 
+require additional sensitivity (shorter exposure times for higher scan speeds) or increased detection angle on highly refl  ective targets, the 4010 and 4020 are 
+typically more suitable.
+ALL 4000 SERIES MODELS
+Data Points / Profi  le 1920
+Interface Gigabit Ethernet
+Inputs Diff  erential Encoder, Trigger
+Outputs 2x Digital output
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (77 Watts); Ripple ± 5%
+Housing IP50
+Operating Temperature 15 to 35°C (above 30°C max duty cycle is 50%)
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, robots, and PLCs.
+Gocator 4000 Series
+(1) This specifi  cation is achieved with uniform spacing enabled. (2) Speed is calculated from default confi  guration (full fi  eld of view and full measurement range). (3) These results are achieved with LMI standard 
+target and optimized sensor confi  guration.
+Line Confocal
+MODELS 5504 5512 5516
+Scan Rate (Hz) (1) 2100 - 39 000 4200 - 40 000 3800 - 38 000
+Data Points / Profi  le 1792 1792 1792
+Resolution X (µm) (Profi  le Data Interval) 2.5 6.5 9.9
+Linearity Z (± % of MR) 0.03 0.07 0.04
+Repeatability Z (µm) (2) 0.05 0.2 0.25
+Resolution Z (µm) 0.16 0.72 1.50
+Clearance Distance (CD) (mm) 7.8 19.1 61.3
+Measurement Range (MR) (mm) 1.1 3.0 5.5
+Field of View (FOV) (mm) 4.3 11.6 17.0
+Max. surface slope on mirror (deg) ± 15.0 ± 20.0 ± 13.5
+Dimensions (mm) 60x190x303 91x345x419 113x358x440
+Housing IP67 IP55 IP50
+Weight (kg) 5 19 21
+ALL 5500 SERIES MODELS
+Interface Gigabit Ethernet
+Inputs Diff  erential / Single Ended Encoder, Trigger
+Outputs 2x Digital output
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) Gocator 5512/5516: +24-48 VDC (± 5%) @ 62 W, Gocator 5504: +24-48 VDC (±5%) @ 48 W
+Operating Temperature 15 to 35°C
+Storage Temperature -30 to 70°C
+Vibration Resistance 10 to 55 Hz, 1.5 mm double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for confi  guration and real-time 3D visualization. Open source SDK, native drivers, and industrial protocols for integration 
+with user applications, third-party image processing applications, robots, and PLCs.
+Gocator 5500 Series
+(1) Speed ranges are from default confi  guration (full fi  eld of view and full measurement range) to high speed confi  guration (optimized imager readout, reduced fi  eld-of-view and measurement range).
+(2) These results are achieved with LMI standard target and optimized sensor confi  guration.
+Master 2410. Supports up to 24 sensors.
+Master 810. Supports up to 8 sensors.
+SENSOR NETWORKING
+Gocator laser profilers support 
+seamless multi-sensor networking for 
+scanning large or complex objects 
+(i.e., with irregular surface geometry 
+and multiple occlusions). These sensor 
+networks are connected by LMI 
+Master controllers.
+MASTER 810 & 2410
+Master 810 and 2410 network controllers 
+make it easy to distribute power, achieve 
+microsecond data synchronization, and 
+provide laser safety for up to 24 sensors 
+per Master. Designed to scale, Masters 
+provide uplink/download ports for daisy 
+chaining, and support differential or single-
+ended encoder and digital I/O.
+• Synchronized within 1 μs accuracy
+• All-in-one cabling
+• Built-in laser safety control
+BENEFITS OF MULTI-
+SENSOR SUPPORT
+• Ideal for scanning large or complex 
+targets
+• Simple point-and-click network setup
+• Built-in layout alignment and stitching 
+for maximum ease of use
+• Maintains high resolution across wide 
+FOV
+SUPERCHARGED DATA PROCESSING POWER.
+GoMax ORIN and ORIN+ are compact, fanless, and easy-
+to-use smart embedded devices that enhance data 
+processing power in real-time (including data generation, 3D 
+measurement, and PLC/robot communication), minimizing 
+cycle times and increasing overall inspection performance so 
+users can achieve optimal results in heavy data processing 
+applications.
+• Easy to set up, power, and run using a web browser interface
+• Dedicated edge device with no additional drivers or OS maintenance
+• Deployed with Gocator snapshot and line confocal sensors to 
+increase scan rates
+SMART VISION ACCELERATOR
+Smart Vision AcceleratorGoMax ORIN
+Powered by NVIDIA® Jetson Orin™
+/
+ GoMax ORIN GoMax ORIN+
+GPU Platform NVIDIA Jetson Orin NX NVIDIA Jetson AGX Orin
+Dimensions  
+(L x W x H)(mm) 180 x 136 x 75 210 x 164 x 74
+Weight (kg) 2.5 2.9
+Operating  
+Temperature (°C) -15 - 60 -20 - 55
+Certifications CE, FCC, UKCA, KCC, RoHS, Reach CE, FCC, UKCA, KCC, RoHS, Reach
+Mounting DIN rail, wall mounting DIN rail, wall mounting
+CPU 8-core NVIDIA Arm® Cortex®-A78AE 
+v8.2 64-bit CPU 2MB L2 + 4MB L3
+8-core NVIDIA Arm® Cortex®-A78AE 
+v8.2 64-bit CPU 2MB L2 + 4MB L3
+Performance (TOPS) 157 200
+GPU Ampere, 1024 CUDA cores,  
+32 Tensor cores
+Ampere, 1792 CUDA cores,  
+56 Tensor cores
+31
+
+===== gocator_2300.pdf =====
+
+--- page 1 ---
+• Pre-calibrated to scan micron-level details 
+• High speed & low latency 
+• Setup & control via web browser 
+• Built-in tools, no programming 
+• Open source sdk
+  2300 Series
+ALL-IN-ONE 3D SMART PROFILE SENSORS
+The Gocator 2300 series of 3D smart sensors are designed 
+for the demanding industrial conditions of the factory floor. 
+Gocator’s simple and flexible design enables factories 
+to reduce costs and maximize profitability by improving 
+efficiencies in product validation. The Gocator 2300 series 
+comes in various models but can also be customized to suit 
+specific factory automation requirements. 
+MEGAPIXEL RESOLUTION
+Gocator 2300 sensors measure micron  level features leveraging 
+megapixel resolution while maintaining large fields of view. Gocator 
+can now screen parts for very small defects, raising the bar for 
+quality inspection.
+STANDALONE & SCALABLE 
+Single sensors require no additional controllers, amplifiers or 
+PCs. Gocator systems can effortlessly scale to multiple sensors 
+using LMI Master hubs. Masters take care of power distribution, 
+laser safety interlock, encoder and digital input handling, and 
+microsecond synchronization.
+ASCII
+COMPACT & LIGHT WEIGHT
+Gocator’s small footprint and less than 1.5 kg weight make it ideal 
+for fitting into tight spaces and mounting onto robotic arms.
+EASY TO USE
+Gocator’s built-in GUI allows for flexible configuration of profiling 
+settings and measurement tools using any web browser, computer 
+or operating system. With no additional software to install, 
+Gocator’s out  of  the  box setup and configuration is fast and easy.
+Gocator’s browser-based graphical user interface
+
+--- page 2 ---
+©2023 LMI Technologies Inc. All rights reserved. Subject to change without notice.
+LMI Technologies has offices worldwide. All contact information is listed at lmi3D.com/contact/locations
+DATASHEET_Gocator_2300_US-3.4
+ALL 2300 SERIES MODELS
+Scan Rate Approximately 170 Hz to 5000 Hz
+Interface Gigabit Ethernet
+Inputs Differential Encoder, Laser Safety Enable, Trigger
+Outputs 2x Digital output, RS-485 Serial (115 kBaud)
+Factory Communication PROFINET, Modbus, EtherNet/IP, ASCII, Gocator
+Input Voltage (Power) +24 to +48 VDC (13 Watts); Ripple +/- 10%
+Housing Gasketed aluminum enclosure, IP67
+Operating Temperature 32 to 122°F (0 to 50°C)
+Storage Temperature -22 to 158°F (-30 to 70°C)
+Vibration Resistance 10 to 55 Hz, 0.059" (1.5 mm) double amplitude in X, Y, and Z directions, 2 hours per direction
+Shock Resistance 15 g, half sine wave, 11 ms, positive and negative for X, Y, and Z directions
+Scanning Software Browser-based GUI and open source SDK for configuration and real-time 3D visualization. Open source SDK, native driv-
+ers, and industrial protocols for integration with user applications, third-party image processing applications, and PLCs.
+Clearance
+Distance
+(CD)
+Near
+Field of View
+(FOV)
+Far Field of View
+(FOV)
+Measurement
+Range
+(MR)
+(X) 
+(Z)
+GOCATOR 2300 SERIES MODELS 2320 2330 2340 2350 2370 2375 2380
+Data Points / Profile 1280 1280 1280 1280 1280 1280 1280
+Linearity Z (+/- % of MR) 0.01 0.01 0.01 0.01 0.04 0.03 0.04
+Resolution Z (mm) 0.0018 - 0.0030 0.006 - 0.014 0.013 - 0.037 0.019 - 0.060 0.055 - 0.200 0.175 - 0.925 0.092 - 0.488
+Resolution X (mm) 
+(Profile Data Interval) 0.014 - 0.021 0.044 - 0.075 0.095 - 0.170 0.150 - 0.300 0.275 - 0.550 0.255 - 0.790 0.375 - 1.100
+Repeatability Z (µm) 0.4 0.8 1.2 2 8 12 12
+Clearance  Distance (CD) (mm) 40 90 190 300 400 650 350
+Measurement  Range (MR) (mm) 25 80 210 400 500 1350 800
+Field of View (FOV) (mm) 18 - 26 47 - 85 96 - 194 158 - 365 308 - 687 324 - 1010 390 - 1260
+Laser Classes 2, 3R 2, 3R 2, 3R 2, 3R 2, 3R 2, 3R 2, 3R
+Dimensions (mm) Side Mount
+35x120x149.5
+Top Mount
+49x75x142 
+Top Mount
+49x75x197
+Top Mount
+49x75x272
+Top Mount
+49x75x272
+Top Mount
+49x75x272
+Top Mount
+49x75x272
+Weight (kg) 0.8 0.74 0.94 1.3 1.3 1.3 1.3
+Optical models, laser classes, and packages can be customized. Contact LMI for more details.
+Specifications stated are based on standard laser classes. Linearity Z, Resolution Z, and Repeatability Z may vary for other laser classes.
+Refer to specifications in the Gocator Line Profile Sensor user manual for more details.
+272 mm
+197 mm
+142 mm
+49 mm
+75 mm
+61.5 mm
+35 mm
+149.5 mm
+120 mm
+IEC 60825-1:2007
+LASERSTRAHLUNG
+NICHT DEM STRAHL AUSSETZEN,
+LASER KLASSE 3B PRODUKT
+SPITZENLEISTUNG:
+WELLENLÄNGE:
+Dieses Produkt ist für den Einsatz als Komponente 
+bestimmt und entspricht nicht in vollem Umfang den 
+Anforderungen an ein Laser Produkt spezifiziert in 
+U.S. FDA CFR Titel 21 Teil 1040 und IEC 60825-1
+130 mW
+660 nm
+Gocator 2330/40/50/70/80 Gocator 2330
+Gocator 2320
+Gocator 2320
+Gocator 2340 Gocator 2350/70/80
+
+===== gocator_2400_cn.pdf =====
+
+--- page 1 ---
+•	出厂前微米级预校准
+•	X方向分辨率至6 μm
+•	最大视野范围至2 m
+•	速度高出Gocator 2300系列两倍
+•	可通过网页浏览器或SDK进行设置和控制
+•	内置测量工具, 无需任何编程
+•	可扩展性， 可用GDK和GOMAX
+  2400系列
+3D智能线激光轮廓传感器
+Gocator 2400系列3D智能传感器是专为消费类电子产品及
+医疗产品的在线检测而设计。 采用最新的两百万像素成像
+技术以及全新的处理器， 可以实现更快速扫描并达到行业
+内最高的X方向分辨率和Z方向重复性(0.2 µm)。 此外， 2400
+系列产品型号有红光和蓝光可选， 满足用户的不同应用需
+求。 使用蓝光型号使您在扫描有光泽的物体表面的时候， 获
+得更清晰可靠的数据。
+微米级测量
+搭载两百万像素成像芯片的Gocator 2400系列激光传感器可以帮
+助用户在大范围扫描视野下依然实现微米级的精度。 即便是极为
+微小的缺陷， Gocator 2400系列也依然能够执行完美的三维检测。
+超高检测速度与精度	
+更快的扫描和采集速度能帮助用户实现更高效、 更高精度的在线
+质量检测， 同时用户可以更好的设置多重曝光模式来精准的测量
+同一表面具有不同材质和反射率的目标。 X方向高达6 µm的精度，
+可以帮助用户在即便非常狭窄的边缘、 间隙及断差上依然获得高
+质量的三维点云数据。
+ASCII
+更大的测量范围
+使用Gocator 2400系列， 用户仅需尽可能少的传感器， 即可实现
+更大的检测范围并获得微米级的测量精度。 更大的测量景深也能
+够确保用户使用同一型号的传感器即可对各种不同零部件实现在
+线检测。
+轮胎胎侧和胎面检测
+电池检测
+箱体体积测量
+
+--- page 2 ---
+©2024 LMI Technologies Inc. 版权所有， 如有更改， 恕不另行通知.
+LMI Technologies公司在全球有诸多分支机构， 敬请访问 lmi3D.com/cn/contact
+DATASHEET_Gocator_2400_CN-1.6
+ 49 
+ 85 
+ 272 
+ 61.5 
+44 90
+155
+44
+190
+90
+145
+9044
+145
+9044
+ 90  44 
+ 240 
+Gocator 2410
+Gocator 2420
+Gocator 2430
+Gocator 2440
+Gocator 2490
+Gocator 2450
+GOCATOR	2400系列型号 2410 2420	 2430 2440 2450 2490
+激光线轮廓点数 1710 1940 1500 1500 1800 1920
+X方向分辨率 （µm）  
+（轮廓线数据间隔） 5.8 - 6.2 14.0 - 16.5 37.0 - 57.0 67.0 - 130.0 100 - 255 250.0 - 1100.0
+Z方向线性度 （+/-% of MR） 0.015% 0.006% 0.01% 0.01% 0.01% 0.04%
+Z方向重复性(µm) 0.2 0.4 0.8 1.2 2.0 12.0
+安装净距离 (CD) (mm) 19.0 60.0 75.0 183.0 270.0 350.0
+测量范围 （MR） (mm) 6.0 25.0 80.0 210.0 550.0 1525.0
+视野(FOV) (mm) 10.0 27.0 - 32.0 47.0 - 85.0 96.0 - 194.0 145.0 - 425.0 390.0 - 2000.0
+激光等级 3R  
+(蓝光, 405 nm)
+3R  
+(蓝光, 405 nm)
+2, 3R, 3B  
+(红光, 660 nm; 
+蓝光, 405nm)
+2, 3R, 3B  
+(红光, 660 nm; 
+蓝光, 405nm)
+2, 3R, 3B  
+(蓝光, 405nm)
+2, 3R 
+(红光, 660 nm)
+尺寸 （mm） 44x90x145 44x90x145 44x90x155 44x90x190 44x90x240 49x85x272
+重量 （kg） 0.88 0.88 1.0 1.2 1.2 1.5
+以下规格适用于全部GOCATOR	2400系列产品
+扫描速度 200 Hz， 高达 5 kHz （注意：  2400 产品系列的扫描速度是2300产品系列的2倍）
+接口 千兆以太网
+输入 差分编码器、 激光安全控制器、 触发器
+输出 2x数字型号输出， RS485串口 （115kBaud）
+工业通讯 PROFINET , Modbus, EtherNet/IP , ASCII, Gocator
+输入电压 （功率） +24 到 +48 VDC (9 瓦特)； 波动范围 +/- 10%
+机身防护 铝合金全封闭机身， IP67防护等级
+运作温度 0 至 50°C （2 级蓝光为 10 至 50°C）
+存储温度 -30 到 70 °C
+抗震性 频率10-55 Hz， X、 Y和Z三个方向上1.5 mm双向振幅， 每个方向持续2小时
+抗冲击性 15 g, 半正弦冲击,周期11 ms,从X,Y和Z三个方向的正负方向冲击
+扫描软件 基于浏览器的图形界面和开源SDK （软件开发包） 实现参数设置和三维数据实时可视化。  提供开源SDK、 本地驱动以及支持
+标准工业协议方便与用户应用、 第三方图像处理软件、 机器人和PLC集成。
+
+===== gocator_1300_nonstandard.pdf =====
+
+--- page 8 ---
+Gocator1300Series: Non-StandardModelSpecifications 8
+Specifications
+Thefollowingsectionsprovidethespecificationsofthenon-standardGocator1300models.
+
+--- page 9 ---
+Gocator1300Series: Non-StandardModelSpecifications 9
+Gocator1300Series(Non-StandardModels)
+MODEL 1320 1340 1365 1370 1390
+ClearanceDistance 40 162.5 562 237.5 500
+Measurement 
+Range(MR)(mm)
+20 95 375 412.5 2000
+LinearityZ (+/-%ofMR) 0.05 0.03 0.11 0.07 0.10
+LinearityZ(+/-mm) 0.010 0.03 0.4 0.3 2.0
+ResolutionZ(mm) 0.0004-
+0.0004
+0.0005-
+0.0010
+0.0025-
+0.0040
+0.0025-
+0.0070
+0.0250-
+0.0600
+SpotSize(mm) 0.11 0.37 1.80 0.90 2.60
+LaserClasses 2M,3B 2M,3R 2M,3R 2M,3R 3R
+PackageDimensions
+(mm)
+TopMount
+49x75x162
+TopMount
+49x75x162
+TopMount
+49x75x232
+TopMount
+49x75x162
+TopMount
+49x75x289
+Weight(kg) 0.8 0.8 1.1 0.8 1.4
+ALL1300SERIESMODELS
+ScanRate 32kHz
+Interface GigabitEthernet
+Inputs DifferentialEncoder,LaserSafetyEnable,Trigger
+Outputs 2xDigitalOutput,RS-485Serial,SelcomSerial,1xAnalogOutput(4- 20mA)
+InputVoltage(Power) +24to+48VDC(13Watts);Ripple+/-10%
+Housing GasketedAluminumEnclosure,IP67
+OperatingTemp. 0to50°C
+StorageTemp. -30to70° C
+Specificationsarepreliminary;finalspecificationsmayvary.ResolutionZbasedon128samples
+averaging.
+Specificationsstatedreflectstandardlaserclasses;valueswillvaryforotherlaserclasses.
