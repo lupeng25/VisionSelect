@@ -297,7 +297,7 @@ QStringList MainWindow::navigationLabels() const
 {
     return {
         localizedText("需求输入", "Requirement Input"),
-        localizedText("纯计算", "Pure Calculation"),
+        localizedText("视觉参数校算", "Vision Parameter Check"),
         localizedText("产品计算", "Calculation Assistant"),
         localizedText("3D 相机", "3D Camera"),
         localizedText("推荐结果", "Recommended Results"),

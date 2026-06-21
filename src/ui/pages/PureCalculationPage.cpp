@@ -25,8 +25,8 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     QVBoxLayout *outer = new QVBoxLayout(this);
     outer->setContentsMargins(28, 24, 28, 24);
     outer->setSpacing(14);
-    outer->addWidget(pageHeader(localizedText("纯计算", "Pure Calculation"),
-        localizedText("手动输入相机、镜头和光源参数，用于快速工程校核。", "Manually enter camera, lens, and light parameters for quick engineering checks.")));
+    outer->addWidget(pageHeader(localizedText("视觉参数校算", "Vision Parameter Check"),
+        localizedText("手动输入相机、镜头和光源参数，用于快速视觉参数校算。", "Manually enter camera, lens, and light parameters for quick vision parameter checks.")));
 
     QHBoxLayout *body = new QHBoxLayout;
     body->setSpacing(14);
@@ -379,7 +379,7 @@ void PureCalculationPage::refresh()
         : localizedText("无运动约束", "No motion constraint");
 
     QString html;
-    html += localizedText("<h3>纯计算结果</h3>", "<h3>Pure Calculation Result</h3>");
+    html += localizedText("<h3>视觉参数校算结果</h3>", "<h3>Vision Parameter Check Result</h3>");
     html += localizedText("<h4>需求估算</h4>", "<h4>Requirement Estimate</h4>");
     html += localizedText("<p>需求 FOV：<b>%1 x %2 mm</b>；目标物方像素：<b>%3 um/px</b>；最低分辨率：<b>%4 x %5</b>（%6 MP）；12 bit 原始带宽：<b>%7 MB/s</b>；曝光上限：<b>%8</b>。</p>",
                           "<p>Required FOV: <b>%1 x %2 mm</b>; target object pixel: <b>%3 um/px</b>; minimum resolution: <b>%4 x %5</b> (%6 MP); 12-bit raw bandwidth: <b>%7 MB/s</b>; exposure limit: <b>%8</b>.</p>")
