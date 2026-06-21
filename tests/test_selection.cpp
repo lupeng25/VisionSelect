@@ -45,6 +45,7 @@ private slots:
     void nonMeasurementRequirementsDoNotForceTelecentric();
     void catalogPersistenceRoundTrip();
     void sqliteInitializeDatabaseKeepsCompatibilitySnapshotsLazy();
+    void sqliteInitializeDatabaseRemovesDeletedBuiltIns();
     void sqliteCatalogQueriesPageAndDistinctValues();
     void sqliteCatalogIdUpdateDeleteAndFilteredExport();
     void sqliteAddDuplicateProductsDoesNotReplaceExisting();
@@ -752,6 +753,131 @@ void SelectionEngineTest::sqliteInitializeDatabaseKeepsCompatibilitySnapshotsLaz
     QVERIFY(repo.cameras().isEmpty());
     QVERIFY(repo.lenses().isEmpty());
     QVERIFY(repo.lights().isEmpty());
+}
+
+void SelectionEngineTest::sqliteInitializeDatabaseRemovesDeletedBuiltIns()
+{
+    QTemporaryDir storage;
+    QVERIFY(storage.isValid());
+
+    CatalogRepository repo;
+    repo.setStorageDirectory(storage.path());
+    QString error;
+    QVERIFY2(repo.initializeDatabase(&error), qPrintable(error));
+
+    const QString connectionName = QStringLiteral("sqliteInitializeDatabaseRemovesDeletedBuiltIns");
+    QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+    db.setDatabaseName(QDir(storage.path()).filePath(QStringLiteral("catalog.db")));
+    QVERIFY2(db.open(), qPrintable(db.lastError().text()));
+
+    const QString now = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    const QString insertCameraSql = QStringLiteral(
+        "INSERT INTO camera_products (model, manufacturer, manufacturer_key, model_key, resolution_x, resolution_y,"
+        " pixel_size_um, sensor_format, color_mode, shutter_type, max_fps, interface, bandwidth_mbps, bit_depth,"
+        " dynamic_range_db, lens_mount, search_text, source_kind, source_version, created_at, updated_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    const auto insertCameraRow = [&](const QString &model, const QString &manufacturer, const QString &sourceKind) {
+        QSqlQuery insertCamera(db);
+        insertCamera.prepare(insertCameraSql);
+        insertCamera.addBindValue(model);
+        insertCamera.addBindValue(manufacturer);
+        insertCamera.addBindValue(manufacturer.trimmed().toLower());
+        insertCamera.addBindValue(model.toLower());
+        insertCamera.addBindValue(1280);
+        insertCamera.addBindValue(1024);
+        insertCamera.addBindValue(4.8);
+        insertCamera.addBindValue(QStringLiteral("1/2in"));
+        insertCamera.addBindValue(QStringLiteral("Mono"));
+        insertCamera.addBindValue(QStringLiteral("Global"));
+        insertCamera.addBindValue(60.0);
+        insertCamera.addBindValue(QStringLiteral("USB3"));
+        insertCamera.addBindValue(380.0);
+        insertCamera.addBindValue(8.0);
+        insertCamera.addBindValue(60.0);
+        insertCamera.addBindValue(QStringLiteral("C"));
+        insertCamera.addBindValue(model.toLower() + QLatin1Char(' ') + manufacturer.trimmed().toLower());
+        insertCamera.addBindValue(sourceKind);
+        insertCamera.addBindValue(QStringLiteral("1"));
+        insertCamera.addBindValue(now);
+        insertCamera.addBindValue(now);
+        if (!insertCamera.exec()) {
+            error = insertCamera.lastError().text();
+            return false;
+        }
+        return true;
+    };
+    QVERIFY2(insertCameraRow(QStringLiteral("STALE-BUILTIN-CAM"), QStringLiteral("DeletedMaker"), QStringLiteral("builtin")), qPrintable(error));
+    QVERIFY2(insertCameraRow(QStringLiteral("LOCAL-CAM-KEEP"), QStringLiteral("LocalMaker"), QStringLiteral("local")), qPrintable(error));
+    QVERIFY2(insertCameraRow(QStringLiteral("RETIRED-LOCAL-CAM"), QStringLiteral("Opto Engineering"), QStringLiteral("local")), qPrintable(error));
+
+    QSqlQuery insertLens(db);
+    insertLens.prepare(QStringLiteral(
+        "INSERT INTO lens_products (model, manufacturer, manufacturer_key, model_key, lens_type, lens_mount,"
+        " focal_length_mm, min_wd_mm, distortion_percent, image_circle_mm, megapixel_rating, recommended_min_pixel_um,"
+        " pmag, nominal_wd_mm, wd_tolerance_mm, max_sensor_diagonal_mm, telecentricity_deg, dof_mm,"
+        " numerical_aperture, f_number, coaxial_illumination, notes, search_text, source_kind, source_version,"
+        " created_at, updated_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+    insertLens.addBindValue(QStringLiteral("STALE-BUILTIN-LENS"));
+    insertLens.addBindValue(QStringLiteral("DeletedMaker"));
+    insertLens.addBindValue(QStringLiteral("deletedmaker"));
+    insertLens.addBindValue(QStringLiteral("stale-builtin-lens"));
+    insertLens.addBindValue(QStringLiteral("FixedFocal"));
+    insertLens.addBindValue(QStringLiteral("C"));
+    insertLens.addBindValue(25.0);
+    insertLens.addBindValue(100.0);
+    insertLens.addBindValue(0.05);
+    insertLens.addBindValue(12.0);
+    insertLens.addBindValue(5.0);
+    insertLens.addBindValue(3.45);
+    insertLens.addBindValue(0.0);
+    insertLens.addBindValue(0.0);
+    insertLens.addBindValue(0.0);
+    insertLens.addBindValue(0.0);
+    insertLens.addBindValue(0.0);
+    insertLens.addBindValue(5.0);
+    insertLens.addBindValue(0.0);
+    insertLens.addBindValue(2.8);
+    insertLens.addBindValue(0);
+    insertLens.addBindValue(QStringLiteral("stale built-in lens"));
+    insertLens.addBindValue(QStringLiteral("stale-builtin-lens deletedmaker"));
+    insertLens.addBindValue(QStringLiteral("builtin"));
+    insertLens.addBindValue(QStringLiteral("1"));
+    insertLens.addBindValue(now);
+    insertLens.addBindValue(now);
+    QVERIFY2(insertLens.exec(), qPrintable(insertLens.lastError().text()));
+    insertLens.finish();
+    insertLens = QSqlQuery();
+
+    db.close();
+    db = QSqlDatabase();
+    QSqlDatabase::removeDatabase(connectionName);
+
+    error.clear();
+    QVERIFY2(repo.initializeDatabase(&error), qPrintable(error));
+
+    CatalogQuery query;
+    query.limit = 10;
+    query.search = QStringLiteral("STALE-BUILTIN-CAM");
+    CatalogPageResult<CameraSpec> cameraPage = repo.queryCameras(query, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(cameraPage.totalCount, 0);
+
+    query.search = QStringLiteral("STALE-BUILTIN-LENS");
+    CatalogPageResult<LensSpec> lensPage = repo.queryLenses(query, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(lensPage.totalCount, 0);
+
+    query.search = QStringLiteral("LOCAL-CAM-KEEP");
+    cameraPage = repo.queryCameras(query, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(cameraPage.totalCount, 1);
+    QCOMPARE(cameraPage.items.first().manufacturer, QStringLiteral("LocalMaker"));
+
+    query.search = QStringLiteral("RETIRED-LOCAL-CAM");
+    cameraPage = repo.queryCameras(query, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(cameraPage.totalCount, 0);
 }
 
 void SelectionEngineTest::sqliteCatalogQueriesPageAndDistinctValues()

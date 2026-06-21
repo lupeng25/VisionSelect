@@ -215,6 +215,69 @@ QString productKey(const LightSpec &light)
     return productKey(light.manufacturer, light.model);
 }
 
+template <typename Product>
+QSet<QString> productKeySet(const QVector<Product> &products)
+{
+    QSet<QString> keys;
+    for (const Product &product : products)
+        keys.insert(productKey(product));
+    return keys;
+}
+
+bool purgeOrphanedBuiltInProducts(const QSqlDatabase &db,
+                                  const QString &tableName,
+                                  const QSet<QString> &currentBuiltInKeys,
+                                  QString *errorMessage)
+{
+    QSqlQuery select(db);
+    const QString selectSql = QStringLiteral("SELECT id, manufacturer, model FROM %1 WHERE source_kind='builtin'").arg(tableName);
+    if (!select.exec(selectSql)) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Unable to read built-in catalog rows: %1").arg(sqlErrorText(select));
+        return false;
+    }
+
+    QVector<qint64> idsToRemove;
+    while (select.next()) {
+        const QString key = productKey(select.value(1).toString(), select.value(2).toString());
+        if (!currentBuiltInKeys.contains(key))
+            idsToRemove.append(select.value(0).toLongLong());
+    }
+
+    if (idsToRemove.isEmpty())
+        return true;
+
+    QSqlQuery remove(db);
+    remove.prepare(QStringLiteral("DELETE FROM %1 WHERE id=?").arg(tableName));
+    for (qint64 id : idsToRemove) {
+        remove.bindValue(0, id);
+        if (!remove.exec()) {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("Unable to remove obsolete built-in catalog row: %1").arg(sqlErrorText(remove));
+            return false;
+        }
+    }
+    return true;
+}
+
+bool purgeRetiredManufacturers(const QSqlDatabase &db,
+                               const QString &tableName,
+                               const QStringList &manufacturerKeys,
+                               QString *errorMessage)
+{
+    QSqlQuery remove(db);
+    remove.prepare(QStringLiteral("DELETE FROM %1 WHERE manufacturer_key=?").arg(tableName));
+    for (const QString &manufacturerKey : manufacturerKeys) {
+        remove.bindValue(0, manufacturerKey);
+        if (!remove.exec()) {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("Unable to remove retired manufacturer catalog rows: %1").arg(sqlErrorText(remove));
+            return false;
+        }
+    }
+    return true;
+}
+
 bool sameCameraSpec(const CameraSpec &left, const CameraSpec &right)
 {
     return left.model == right.model
@@ -718,10 +781,22 @@ bool CatalogRepository::migrateInitialDatabase(QString *errorMessage)
 bool CatalogRepository::appendMissingBuiltInRows(QString *errorMessage)
 {
     ScopedErrorLocalizer localizeError(errorMessage);
+    if (!openDatabase(errorMessage))
+        return false;
+
+    const QStringList retiredManufacturerKeys = {keyForText(QStringLiteral("Opto Engineering"))};
+    if (!purgeRetiredManufacturers(m_db, QStringLiteral("camera_products"), retiredManufacturerKeys, errorMessage)
+        || !purgeRetiredManufacturers(m_db, QStringLiteral("lens_products"), retiredManufacturerKeys, errorMessage)
+        || !purgeRetiredManufacturers(m_db, QStringLiteral("light_products"), retiredManufacturerKeys, errorMessage)) {
+        return false;
+    }
+
     QVector<Row> rows;
     QVector<CameraSpec> cameras;
     if (!readCsvRows(QStringLiteral(":/data/cameras.csv"), &rows, errorMessage)
         || !parseCameraSpecs(rows, QString::fromUtf8("内置相机库"), &cameras, errorMessage))
+        return false;
+    if (!purgeOrphanedBuiltInProducts(m_db, QStringLiteral("camera_products"), productKeySet(cameras), errorMessage))
         return false;
     for (const CameraSpec &camera : cameras) {
         if (!insertCameraIntoDatabase(camera, QStringLiteral("builtin"), false, nullptr, errorMessage))
@@ -733,6 +808,8 @@ bool CatalogRepository::appendMissingBuiltInRows(QString *errorMessage)
     if (!readCsvRows(QStringLiteral(":/data/lenses.csv"), &rows, errorMessage)
         || !parseLensSpecs(rows, QString::fromUtf8("内置镜头库"), &lenses, errorMessage))
         return false;
+    if (!purgeOrphanedBuiltInProducts(m_db, QStringLiteral("lens_products"), productKeySet(lenses), errorMessage))
+        return false;
     for (const LensSpec &lens : lenses) {
         if (!insertLensIntoDatabase(lens, QStringLiteral("builtin"), false, nullptr, errorMessage))
             return false;
@@ -742,6 +819,8 @@ bool CatalogRepository::appendMissingBuiltInRows(QString *errorMessage)
     QVector<LightSpec> lights;
     if (!readCsvRows(QStringLiteral(":/data/lights.csv"), &rows, errorMessage)
         || !parseLightSpecs(rows, QString::fromUtf8("内置光源库"), &lights, errorMessage))
+        return false;
+    if (!purgeOrphanedBuiltInProducts(m_db, QStringLiteral("light_products"), productKeySet(lights), errorMessage))
         return false;
     for (const LightSpec &light : lights) {
         if (!insertLightIntoDatabase(light, QStringLiteral("builtin"), false, nullptr, errorMessage))
