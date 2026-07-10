@@ -31,5 +31,6 @@ moc_predefs.h
 
 # Local test/report outputs
 .deps/
+.codex_tmp/
 test_results.txt
 *.log

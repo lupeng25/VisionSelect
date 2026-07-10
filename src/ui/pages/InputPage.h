@@ -43,6 +43,12 @@ private:
     QLabel *m_fovSummaryLabel = nullptr;
     QLabel *m_pixelSummaryLabel = nullptr;
     QLabel *m_resolutionSummaryLabel = nullptr;
+    QLabel *m_bandwidthSummaryLabel = nullptr;
+    QLabel *m_workDistanceSummaryLabel = nullptr;
+    QLabel *m_fpsSummaryLabel = nullptr;
+    QLabel *m_detectionSummaryLabel = nullptr;
+    QLabel *m_surfaceSummaryLabel = nullptr;
+    QLabel *m_exposureSummaryLabel = nullptr;
     QLabel *m_processSummaryLabel = nullptr;
 };
 

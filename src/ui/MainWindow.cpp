@@ -26,12 +26,17 @@
 #include <QIcon>
 #include <QLabel>
 #include <QMessageBox>
+#include <QMouseEvent>
+#include <QPainterPath>
 #include <QPushButton>
+#include <QResizeEvent>
+#include <QRegion>
 #include <QSize>
 #include <QSizePolicy>
 #include <QStackedWidget>
 #include <QStyle>
 #include <QTextStream>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QtConcurrent/QtConcurrent>
@@ -117,11 +122,69 @@ SelectionJobResult runSelectionJob(const QString &storageDirectory, const Select
     result.results = service.select(request, limit, &result.error);
     return result;
 }
+
+class WindowChromeBar : public QFrame
+{
+public:
+    explicit WindowChromeBar(QWidget *parent = nullptr)
+        : QFrame(parent)
+    {
+        setMouseTracking(true);
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton && window()) {
+            m_dragOffset = event->globalPos() - window()->frameGeometry().topLeft();
+            m_dragging = !window()->isMaximized();
+            event->accept();
+            return;
+        }
+        QFrame::mousePressEvent(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
+        if (m_dragging && window() && !window()->isMaximized() && (event->buttons() & Qt::LeftButton)) {
+            window()->move(event->globalPos() - m_dragOffset);
+            event->accept();
+            return;
+        }
+        QFrame::mouseMoveEvent(event);
+    }
+
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        m_dragging = false;
+        QFrame::mouseReleaseEvent(event);
+    }
+
+    void mouseDoubleClickEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton && window()) {
+            if (window()->isMaximized())
+                window()->showNormal();
+            else
+                window()->showMaximized();
+            event->accept();
+            return;
+        }
+        QFrame::mouseDoubleClickEvent(event);
+    }
+
+private:
+    QPoint m_dragOffset;
+    bool m_dragging = false;
+};
 }
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground);
+
     QString error;
     if (!m_catalog.initializeDatabase(&error))
         QMessageBox::critical(this, tr("Catalog Load Failed"), error);
@@ -134,10 +197,36 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&LanguageManager::instance(), &LanguageManager::languageChanged, this, &MainWindow::rebuildPagesForLanguage);
 }
 
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    updateWindowMask();
+}
+
+void MainWindow::updateWindowMask()
+{
+    if (isMaximized() || isFullScreen()) {
+        clearMask();
+        return;
+    }
+
+    QPainterPath roundedRect;
+    roundedRect.addRoundedRect(rect(), 12.0, 12.0);
+    setMask(QRegion(roundedRect.toFillPolygon().toPolygon()));
+}
+
 void MainWindow::buildUi()
 {
     QWidget *root = new QWidget(this);
-    QHBoxLayout *rootLayout = new QHBoxLayout(root);
+    root->setObjectName(QStringLiteral("ApplicationShell"));
+    QVBoxLayout *shellLayout = new QVBoxLayout(root);
+    shellLayout->setContentsMargins(0, 0, 0, 0);
+    shellLayout->setSpacing(0);
+    shellLayout->addWidget(createTopBar());
+
+    QWidget *workspace = new QWidget(root);
+    workspace->setObjectName(QStringLiteral("ShellWorkspace"));
+    QHBoxLayout *rootLayout = new QHBoxLayout(workspace);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
 
@@ -154,38 +243,111 @@ void MainWindow::buildUi()
     for (int i = 1; i <= kCatalogPageIndex; ++i)
         m_pages->addWidget(new QWidget);
     rootLayout->addWidget(m_pages, 1);
+    shellLayout->addWidget(workspace, 1);
+    shellLayout->addWidget(createStatusBar());
 
     setCentralWidget(root);
     retranslateUi();
     setActivePage(0);
 }
 
+QWidget *MainWindow::createTopBar()
+{
+    WindowChromeBar *bar = new WindowChromeBar;
+    bar->setObjectName(QStringLiteral("ShellTopBar"));
+    bar->setFixedHeight(54);
+
+    QHBoxLayout *layout = new QHBoxLayout(bar);
+    layout->setContentsMargins(16, 0, 16, 0);
+    layout->setSpacing(12);
+
+    QLabel *appIcon = new QLabel(bar);
+    appIcon->setObjectName(QStringLiteral("TopBarIcon"));
+    appIcon->setAttribute(Qt::WA_TransparentForMouseEvents);
+    appIcon->setPixmap(QIcon(QStringLiteral(":/icons/visionselect_icon_64.png")).pixmap(26, 26));
+    layout->addWidget(appIcon, 0, Qt::AlignVCenter);
+
+    QLabel *brand = new QLabel(QStringLiteral("VisionSelect"), bar);
+    brand->setObjectName(QStringLiteral("TopBarBrand"));
+    brand->setAttribute(Qt::WA_TransparentForMouseEvents);
+    layout->addWidget(brand, 0, Qt::AlignVCenter);
+
+    m_topProductLabel = new QLabel(bar);
+    m_topProductLabel->setObjectName(QStringLiteral("TopBarProduct"));
+    m_topProductLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+    layout->addWidget(m_topProductLabel, 0, Qt::AlignVCenter);
+
+    m_topPageLabel = new QLabel(bar);
+    m_topPageLabel->setObjectName(QStringLiteral("TopBarPage"));
+    m_topPageLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+    layout->addWidget(m_topPageLabel, 0, Qt::AlignVCenter);
+    layout->addStretch(1);
+
+    m_workflowStepLabels.clear();
+    const QStringList initialSteps = {
+        localizedText("1  需求建模", "1  Requirements"),
+        localizedText("2  候选计算", "2  Candidate Calculation"),
+        localizedText("3  方案评审", "3  Solution Review")
+    };
+    for (const QString &step : initialSteps) {
+        QLabel *label = new QLabel(step, bar);
+        label->setObjectName(QStringLiteral("WorkflowStep"));
+        label->setProperty("state", QStringLiteral("pending"));
+        label->setAlignment(Qt::AlignCenter);
+        label->setAttribute(Qt::WA_TransparentForMouseEvents);
+        m_workflowStepLabels.append(label);
+        layout->addWidget(label, 0, Qt::AlignVCenter);
+    }
+
+    QToolButton *minimizeButton = new QToolButton(bar);
+    minimizeButton->setObjectName(QStringLiteral("WindowControlButton"));
+    minimizeButton->setText(QStringLiteral("—"));
+    minimizeButton->setToolTip(localizedText("最小化", "Minimize"));
+    connect(minimizeButton, &QToolButton::clicked, this, &MainWindow::showMinimized);
+    layout->addWidget(minimizeButton, 0, Qt::AlignVCenter);
+
+    QToolButton *maximizeButton = new QToolButton(bar);
+    maximizeButton->setObjectName(QStringLiteral("WindowControlButton"));
+    maximizeButton->setText(QStringLiteral("□"));
+    maximizeButton->setToolTip(localizedText("最大化", "Maximize"));
+    connect(maximizeButton, &QToolButton::clicked, this, [this, maximizeButton]() {
+        if (isMaximized()) {
+            showNormal();
+            maximizeButton->setText(QStringLiteral("□"));
+            maximizeButton->setToolTip(localizedText("最大化", "Maximize"));
+        } else {
+            showMaximized();
+            maximizeButton->setText(QStringLiteral("❐"));
+            maximizeButton->setToolTip(localizedText("还原", "Restore"));
+        }
+    });
+    layout->addWidget(maximizeButton, 0, Qt::AlignVCenter);
+
+    QToolButton *closeButton = new QToolButton(bar);
+    closeButton->setObjectName(QStringLiteral("WindowCloseButton"));
+    closeButton->setText(QStringLiteral("×"));
+    closeButton->setToolTip(localizedText("关闭", "Close"));
+    connect(closeButton, &QToolButton::clicked, this, &MainWindow::close);
+    layout->addWidget(closeButton, 0, Qt::AlignVCenter);
+    return bar;
+}
+
 QWidget *MainWindow::createSidebar()
 {
     QFrame *sidebar = new QFrame;
     sidebar->setObjectName(QStringLiteral("Sidebar"));
-    sidebar->setFixedWidth(266);
+    sidebar->setFixedWidth(104);
 
     QVBoxLayout *layout = new QVBoxLayout(sidebar);
-    layout->setContentsMargins(16, 16, 16, 16);
-    layout->setSpacing(8);
+    layout->setContentsMargins(8, 12, 8, 10);
+    layout->setSpacing(6);
 
-    QFrame *brand = new QFrame(sidebar);
-    brand->setObjectName(QStringLiteral("SidebarBrand"));
-    QVBoxLayout *brandLayout = new QVBoxLayout(brand);
-    brandLayout->setContentsMargins(14, 13, 14, 13);
-    brandLayout->setSpacing(6);
-    QLabel *title = new QLabel(QStringLiteral("VisionSelect"));
-    title->setObjectName(QStringLiteral("AppTitle"));
-    m_brandSubtitleLabel = new QLabel;
-    m_brandSubtitleLabel->setObjectName(QStringLiteral("AppSubtitle"));
-    m_brandSubtitleLabel->setWordWrap(true);
-    m_brandBadgeLabel = new QLabel;
-    m_brandBadgeLabel->setObjectName(QStringLiteral("AppBadge"));
-    brandLayout->addWidget(title);
-    brandLayout->addWidget(m_brandSubtitleLabel);
-    brandLayout->addWidget(m_brandBadgeLabel, 0, Qt::AlignLeft);
-    layout->addWidget(brand);
+    QLabel *railMark = new QLabel(sidebar);
+    railMark->setObjectName(QStringLiteral("RailMark"));
+    railMark->setPixmap(QIcon(QStringLiteral(":/icons/visionselect_icon_64.png")).pixmap(34, 34));
+    railMark->setAlignment(Qt::AlignCenter);
+    railMark->setFixedHeight(44);
+    layout->addWidget(railMark);
 
     m_languageCombo = new QComboBox(sidebar);
     m_languageCombo->setObjectName(QStringLiteral("SidebarLanguage"));
@@ -196,10 +358,6 @@ QWidget *MainWindow::createSidebar()
         if (!language.isEmpty() && language != LanguageManager::instance().currentLanguage())
             LanguageManager::instance().setLanguage(language);
     });
-
-    m_navTitleLabel = new QLabel;
-    m_navTitleLabel->setObjectName(QStringLiteral("SidebarSectionLabel"));
-    layout->addWidget(m_navTitleLabel);
 
     m_navButtons.clear();
     m_navButtons.resize(kCatalogPageIndex + 1);
@@ -214,83 +372,73 @@ QWidget *MainWindow::createSidebar()
         QPushButton *button = new QPushButton(text);
         button->setObjectName(QStringLiteral("NavButton"));
         button->setCursor(Qt::PointingHandCursor);
-        button->setMinimumHeight(38);
+        button->setFixedHeight(44);
         button->setIcon(QIcon(iconPath));
-        button->setIconSize(QSize(16, 16));
+        button->setIconSize(QSize(20, 20));
         button->setFocusPolicy(Qt::NoFocus);
+        button->setToolTip(navigationLabels().at(pageIndex));
         connect(button, &QPushButton::clicked, this, [this, pageIndex]() { setActivePage(pageIndex); });
         m_navButtons[pageIndex] = button;
         layout->addWidget(button);
     };
 
-    addSection(localizedText("工作流", "Workflow"));
-    addNav(0, navigationLabels().at(0), QStringLiteral(":/icons/ui/requirement.png"));
-    addNav(kCalculationPageIndex, navigationLabels().at(kCalculationPageIndex), QStringLiteral(":/icons/ui/assistant.png"));
-    addNav(kResultsPageIndex, navigationLabels().at(kResultsPageIndex), QStringLiteral(":/icons/ui/results.png"));
+    const QStringList railLabels = railNavigationLabels();
+    addSection(localizedText("选型", "SELECT"));
+    addNav(0, railLabels.at(0), QStringLiteral(":/icons/ui/requirement.png"));
+    addNav(kCalculationPageIndex, railLabels.at(kCalculationPageIndex), QStringLiteral(":/icons/ui/assistant.png"));
+    addNav(kResultsPageIndex, railLabels.at(kResultsPageIndex), QStringLiteral(":/icons/ui/results.png"));
 
-    addSection(localizedText("工程工具", "Engineering Tools"));
-    addNav(kPureCalculationPageIndex, navigationLabels().at(kPureCalculationPageIndex), QStringLiteral(":/icons/ui/calculate.png"));
-    addNav(kThreeDCameraPageIndex, navigationLabels().at(kThreeDCameraPageIndex), QStringLiteral(":/icons/ui/camera3d.png"));
+    addSection(localizedText("工具", "TOOLS"));
+    addNav(kPureCalculationPageIndex, railLabels.at(kPureCalculationPageIndex), QStringLiteral(":/icons/ui/calculate.png"));
+    addNav(kThreeDCameraPageIndex, railLabels.at(kThreeDCameraPageIndex), QStringLiteral(":/icons/ui/camera3d.png"));
 
-    addSection(localizedText("数据与系统", "Data and System"));
-    addNav(kCatalogPageIndex, navigationLabels().at(kCatalogPageIndex), QStringLiteral(":/icons/ui/catalog.png"));
+    addSection(localizedText("数据", "DATA"));
+    addNav(kCatalogPageIndex, railLabels.at(kCatalogPageIndex), QStringLiteral(":/icons/ui/catalog.png"));
 
     layout->addStretch();
-    QFrame *summaryBox = new QFrame(sidebar);
-    summaryBox->setObjectName(QStringLiteral("SidebarSummary"));
-    QVBoxLayout *summaryLayout = new QVBoxLayout(summaryBox);
-    summaryLayout->setContentsMargins(12, 11, 12, 12);
-    summaryLayout->setSpacing(7);
-
-    QHBoxLayout *summaryHeader = new QHBoxLayout;
-    summaryHeader->setContentsMargins(0, 0, 0, 0);
-    summaryHeader->setSpacing(8);
-    m_summaryTitleLabel = new QLabel;
-    m_summaryTitleLabel->setObjectName(QStringLiteral("SidebarSummaryTitle"));
-    m_summaryStatusLabel = new QLabel;
-    m_summaryStatusLabel->setObjectName(QStringLiteral("SidebarStatusPill"));
-    summaryHeader->addWidget(m_summaryTitleLabel, 1);
-    summaryHeader->addWidget(m_summaryStatusLabel, 0, Qt::AlignRight);
-    summaryLayout->addLayout(summaryHeader);
-
-    m_summaryLabel = new QLabel;
-    m_summaryLabel->setObjectName(QStringLiteral("SidebarSummaryValue"));
-    m_summaryLabel->setWordWrap(true);
-    summaryLayout->addWidget(m_summaryLabel);
-
-    QGridLayout *statsLayout = new QGridLayout;
-    statsLayout->setContentsMargins(0, 0, 0, 0);
-    statsLayout->setHorizontalSpacing(6);
-    statsLayout->setVerticalSpacing(6);
-    const auto addStat = [statsLayout](int column, QLabel **label) {
-        *label = new QLabel;
-        (*label)->setObjectName(QStringLiteral("SidebarStat"));
-        (*label)->setAlignment(Qt::AlignCenter);
-        (*label)->setMinimumHeight(44);
-        (*label)->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        (*label)->setWordWrap(true);
-        statsLayout->addWidget(*label, 0, column);
-    };
-    addStat(0, &m_cameraCountLabel);
-    addStat(1, &m_lensCountLabel);
-    addStat(2, &m_lightCountLabel);
-    summaryLayout->addLayout(statsLayout);
-
-    m_licenseButton = new QPushButton(summaryBox);
+    m_licenseButton = new QPushButton(sidebar);
     m_licenseButton->setObjectName(QStringLiteral("SidebarLicenseButton"));
     m_licenseButton->setIcon(QIcon(QStringLiteral(":/icons/ui/info.png")));
-    m_licenseButton->setIconSize(QSize(15, 15));
+    m_licenseButton->setIconSize(QSize(18, 18));
     m_licenseButton->setCursor(Qt::PointingHandCursor);
     connect(m_licenseButton, &QPushButton::clicked, this, &MainWindow::showLicenseInfo);
-    summaryLayout->addWidget(m_licenseButton);
+    layout->addWidget(m_licenseButton);
 
-    m_languageLabel = new QLabel(summaryBox);
-    m_languageLabel->setObjectName(QStringLiteral("SidebarFieldLabel"));
-    summaryLayout->addWidget(m_languageLabel);
-    summaryLayout->addWidget(m_languageCombo);
-    layout->addWidget(summaryBox);
+    layout->addWidget(m_languageCombo);
 
     return sidebar;
+}
+
+QWidget *MainWindow::createStatusBar()
+{
+    QFrame *bar = new QFrame;
+    bar->setObjectName(QStringLiteral("ShellStatusBar"));
+    bar->setFixedHeight(38);
+    QHBoxLayout *layout = new QHBoxLayout(bar);
+    layout->setContentsMargins(12, 0, 14, 0);
+    layout->setSpacing(10);
+
+    m_summaryStatusLabel = new QLabel(bar);
+    m_summaryStatusLabel->setObjectName(QStringLiteral("ShellStatusPill"));
+    layout->addWidget(m_summaryStatusLabel);
+    m_summaryLabel = new QLabel(bar);
+    m_summaryLabel->setObjectName(QStringLiteral("ShellStatusText"));
+    layout->addWidget(m_summaryLabel);
+    layout->addStretch(1);
+
+    const auto addStat = [layout, bar](QLabel **label) {
+        *label = new QLabel(bar);
+        (*label)->setObjectName(QStringLiteral("ShellCatalogStat"));
+        layout->addWidget(*label);
+    };
+    addStat(&m_cameraCountLabel);
+    addStat(&m_lensCountLabel);
+    addStat(&m_lightCountLabel);
+
+    QLabel *units = new QLabel(localizedText("单位：mm · um · fps", "Units: mm · um · fps"), bar);
+    units->setObjectName(QStringLiteral("ShellUnits"));
+    layout->addWidget(units);
+    return bar;
 }
 
 QStringList MainWindow::navigationLabels() const
@@ -301,6 +449,18 @@ QStringList MainWindow::navigationLabels() const
         localizedText("产品计算", "Calculation Assistant"),
         localizedText("3D 相机", "3D Camera"),
         localizedText("推荐结果", "Recommended Results"),
+        localizedText("参数库", "Catalog")
+    };
+}
+
+QStringList MainWindow::railNavigationLabels() const
+{
+    return {
+        localizedText("2D 选型", "2D Select"),
+        localizedText("参数校算", "Validate"),
+        localizedText("候选计算", "Candidates"),
+        localizedText("3D 相机", "3D Camera"),
+        localizedText("方案评审", "Review"),
         localizedText("参数库", "Catalog")
     };
 }
@@ -322,26 +482,30 @@ void MainWindow::syncLanguageCombo()
 
 void MainWindow::refreshSidebarSummary()
 {
-    if (m_summaryTitleLabel)
-        m_summaryTitleLabel->setText(localizedText("参数库", "Catalog"));
     if (selectionCalculationRunning()) {
-        if (m_summaryStatusLabel)
+        if (m_summaryStatusLabel) {
             m_summaryStatusLabel->setText(localizedText("计算中", "Calculating"));
+            m_summaryStatusLabel->setProperty("state", QStringLiteral("busy"));
+        }
         if (m_summaryLabel)
             m_summaryLabel->setText(localizedText("正在检索候选并生成推荐方案。",
                                                  "Fetching candidates and scoring recommendations."));
     } else {
-        if (m_summaryStatusLabel)
+        if (m_summaryStatusLabel) {
             m_summaryStatusLabel->setText(localizedText("就绪", "Ready"));
+            m_summaryStatusLabel->setProperty("state", QStringLiteral("ready"));
+        }
         if (m_summaryLabel)
             m_summaryLabel->setText(localizedText("推荐和导出可用。",
                                                  "Ready for recommendations and export."));
     }
+    if (m_summaryStatusLabel) {
+        m_summaryStatusLabel->style()->unpolish(m_summaryStatusLabel);
+        m_summaryStatusLabel->style()->polish(m_summaryStatusLabel);
+    }
 
     const auto statText = [](const QString &label, int value) {
-        return QStringLiteral("<span style=\"color:#9fb0c7; font-size:10px;\">%1</span><br>"
-                              "<span style=\"color:#ffffff; font-size:15px; font-weight:800;\">%2</span>")
-            .arg(label, QString::number(value));
+        return QStringLiteral("%1  %2").arg(label, QString::number(value));
     };
     QString countError;
     const int cameraCount = m_catalog.productCount(CatalogDomain::Camera, &countError);
@@ -362,6 +526,8 @@ void MainWindow::refreshSidebarSummary()
 void MainWindow::retranslateUi()
 {
     setWindowTitle(tr("VisionSelect - Industrial Machine Vision Selection Assistant"));
+    if (m_topProductLabel)
+        m_topProductLabel->setText(localizedText("工程控制台", "Engineering Control Console"));
     if (m_brandSubtitleLabel)
         m_brandSubtitleLabel->setText(tr("Industrial Machine Vision Selection Assistant"));
     if (m_brandBadgeLabel)
@@ -375,13 +541,22 @@ void MainWindow::retranslateUi()
     };
     for (int i = 0; i < m_navSectionLabels.size() && i < sections.size(); ++i)
         m_navSectionLabels.at(i)->setText(sections.at(i));
-    const QStringList labels = navigationLabels();
+    const QStringList labels = railNavigationLabels();
     for (int i = 0; i < m_navButtons.size() && i < labels.size(); ++i)
-        if (m_navButtons.at(i))
+        if (m_navButtons.at(i)) {
             m_navButtons.at(i)->setText(labels.at(i));
+            m_navButtons.at(i)->setToolTip(navigationLabels().at(i));
+        }
+    const QStringList steps = {
+        localizedText("1  需求建模", "1  Requirements"),
+        localizedText("2  候选计算", "2  Candidate Calculation"),
+        localizedText("3  方案评审", "3  Solution Review")
+    };
+    for (int i = 0; i < m_workflowStepLabels.size() && i < steps.size(); ++i)
+        m_workflowStepLabels.at(i)->setText(steps.at(i));
     refreshSidebarSummary();
     if (m_licenseButton)
-        m_licenseButton->setText(localizedText("授权信息", "License Info"));
+        m_licenseButton->setText(localizedText("授权", "License"));
     syncLanguageCombo();
 }
 
@@ -486,6 +661,26 @@ void MainWindow::setActivePage(int index)
         m_resultsPage->setBusy(m_request);
     }
     m_pages->setCurrentIndex(index);
+    if (m_topPageLabel)
+        m_topPageLabel->setText(navigationLabels().at(index));
+
+    int workflowStage = -1;
+    if (index == 0)
+        workflowStage = 0;
+    else if (index == kCalculationPageIndex)
+        workflowStage = 1;
+    else if (index == kResultsPageIndex)
+        workflowStage = 2;
+    for (int i = 0; i < m_workflowStepLabels.size(); ++i) {
+        QLabel *step = m_workflowStepLabels.at(i);
+        const QString state = workflowStage < 0
+            ? QStringLiteral("pending")
+            : (i < workflowStage ? QStringLiteral("done")
+                                 : (i == workflowStage ? QStringLiteral("active") : QStringLiteral("pending")));
+        step->setProperty("state", state);
+        step->style()->unpolish(step);
+        step->style()->polish(step);
+    }
     for (int i = 0; i < m_navButtons.size(); ++i) {
         if (!m_navButtons.at(i))
             continue;

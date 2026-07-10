@@ -17,6 +17,7 @@ class InputPage;
 class QLabel;
 class PureCalculationPage;
 class QPushButton;
+class QResizeEvent;
 class ResultsPage;
 class QStackedWidget;
 class ThreeDCameraPage;
@@ -33,6 +34,9 @@ class MainWindow : public QMainWindow
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     CatalogRepository m_catalog;
@@ -58,6 +62,9 @@ private:
     QLabel *m_lensCountLabel = nullptr;
     QLabel *m_lightCountLabel = nullptr;
     QLabel *m_languageLabel = nullptr;
+    QLabel *m_topProductLabel = nullptr;
+    QLabel *m_topPageLabel = nullptr;
+    QVector<QLabel *> m_workflowStepLabels;
     bool m_catalogPageInitialized = false;
 
     CalculationPage *m_calculationPage = nullptr;
@@ -72,8 +79,12 @@ private:
     int m_assistantSelectedCameraRow = -1;
 
     void buildUi();
+    void updateWindowMask();
+    QWidget *createTopBar();
     QWidget *createSidebar();
+    QWidget *createStatusBar();
     QStringList navigationLabels() const;
+    QStringList railNavigationLabels() const;
     void retranslateUi();
     void rebuildPagesForLanguage();
     void syncLanguageCombo();
