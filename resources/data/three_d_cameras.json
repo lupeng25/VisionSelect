@@ -13633,6 +13633,1846 @@
         "产品系列": "DS5000系列",
         "官方特性摘要": "功能特性 相移法结构光编解码技术，精度可达亚微米级 硬件多核异步处理架构，最高帧率可达9帧 定制化莎姆光学系统，成像质量更优异 支持多种曝光模式，材质鲁棒性更强 精准的信号同步设计，触发响应更精准 一体式集成化设计，系统集成更简单 订货型号 MV-DS5040-02H 外形尺寸 *产品所涉数据可能因环境等因素而产生 差异 ，本公司不承担由此产生的后果。"
       }
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L007G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l007g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 7,
+      "zMeasurementRangeMm": 3.0,
+      "zResolutionUm": 0.015,
+      "measurementAccuracyUm": 1.95,
+      "xyResolutionUm": 750,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L007G",
+          "Head": "CL-L007",
+          "Family": "Quad type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "7 mm",
+          "Reference measurement range": "±1.5 mm",
+          "Normalized Z measurement range": "3 mm",
+          "Linearity": "±1.95 μm",
+          "Resolution": "0.015 μm",
+          "Spot diameter": "ø750 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L015G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l015g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 15,
+      "zMeasurementRangeMm": 2.6,
+      "zResolutionUm": 0.003,
+      "measurementAccuracyUm": 0.36,
+      "xyResolutionUm": 300,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L015G",
+          "Head": "CL-L015",
+          "Family": "Quad type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "15 mm",
+          "Reference measurement range": "±1.3 mm",
+          "Normalized Z measurement range": "2.6 mm",
+          "Linearity": "±0.36 μm",
+          "Resolution": "0.003 μm",
+          "Spot diameter": "ø300 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L030G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l030g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 30,
+      "zMeasurementRangeMm": 7.4,
+      "zResolutionUm": 0.015,
+      "measurementAccuracyUm": 0.81,
+      "xyResolutionUm": 500,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L030G",
+          "Head": "CL-L030",
+          "Family": "Quad type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "30 mm",
+          "Reference measurement range": "±3.7 mm",
+          "Normalized Z measurement range": "7.4 mm",
+          "Linearity": "±0.81 μm",
+          "Resolution": "0.015 μm",
+          "Spot diameter": "ø500 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L070G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l070g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 70,
+      "zMeasurementRangeMm": 20.0,
+      "zResolutionUm": 0.025,
+      "measurementAccuracyUm": 2.0,
+      "xyResolutionUm": 600,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L070G",
+          "Head": "CL-L070",
+          "Family": "Quad type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "70 mm",
+          "Reference measurement range": "±10 mm",
+          "Normalized Z measurement range": "20 mm",
+          "Linearity": "±2 μm",
+          "Resolution": "0.025 μm",
+          "Spot diameter": "ø600 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L150G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l150g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 150,
+      "zMeasurementRangeMm": 70.0,
+      "zResolutionUm": 0.1,
+      "measurementAccuracyUm": 5.5,
+      "xyResolutionUm": 1000,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L150G",
+          "Head": "CL-L150",
+          "Family": "Quad type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "150 mm",
+          "Reference measurement range": "±35 mm",
+          "Normalized Z measurement range": "70 mm",
+          "Linearity": "±5.5 μm",
+          "Resolution": "0.1 μm",
+          "Spot diameter": "ø1000 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P007G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p007g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 7,
+      "zMeasurementRangeMm": 3.0,
+      "zResolutionUm": 0.015,
+      "measurementAccuracyUm": 0.83,
+      "xyResolutionUm": 50,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P007G",
+          "Head": "CL-P007",
+          "Family": "Focused spot type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "7 mm",
+          "Reference measurement range": "±1.5 mm",
+          "Normalized Z measurement range": "3 mm",
+          "Linearity": "±0.83 μm",
+          "Resolution": "0.015 μm",
+          "Spot diameter": "ø50 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P015G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p015g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 15,
+      "zMeasurementRangeMm": 2.6,
+      "zResolutionUm": 0.003,
+      "measurementAccuracyUm": 0.36,
+      "xyResolutionUm": 25,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P015G",
+          "Head": "CL-P015",
+          "Family": "Focused spot type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "15 mm",
+          "Reference measurement range": "±1.3 mm",
+          "Normalized Z measurement range": "2.6 mm",
+          "Linearity": "±0.36 μm",
+          "Resolution": "0.003 μm",
+          "Spot diameter": "ø25 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P030G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p030g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 30,
+      "zMeasurementRangeMm": 7.4,
+      "zResolutionUm": 0.015,
+      "measurementAccuracyUm": 0.81,
+      "xyResolutionUm": 38,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P030G",
+          "Head": "CL-P030",
+          "Family": "Focused spot type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "30 mm",
+          "Reference measurement range": "±3.7 mm",
+          "Normalized Z measurement range": "7.4 mm",
+          "Linearity": "±0.81 μm",
+          "Resolution": "0.015 μm",
+          "Spot diameter": "ø38 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P070G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p070g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 70,
+      "zMeasurementRangeMm": 20.0,
+      "zResolutionUm": 0.025,
+      "measurementAccuracyUm": 2.0,
+      "xyResolutionUm": 50,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P070G",
+          "Head": "CL-P070",
+          "Family": "Focused spot type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "70 mm",
+          "Reference measurement range": "±10 mm",
+          "Normalized Z measurement range": "20 mm",
+          "Linearity": "±2 μm",
+          "Resolution": "0.025 μm",
+          "Spot diameter": "ø50 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P150G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p150g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 150,
+      "zMeasurementRangeMm": 70.0,
+      "zResolutionUm": 0.1,
+      "measurementAccuracyUm": 5.5,
+      "xyResolutionUm": 75,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P150G",
+          "Head": "CL-P150",
+          "Family": "Focused spot type / export control",
+          "Type": "Optical unit",
+          "Reference distance": "150 mm",
+          "Reference measurement range": "±35 mm",
+          "Normalized Z measurement range": "70 mm",
+          "Linearity": "±5.5 μm",
+          "Resolution": "0.1 μm",
+          "Spot diameter": "ø75 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L007N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l007n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 7,
+      "zMeasurementRangeMm": 3.0,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 2.1,
+      "xyResolutionUm": 750,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L007N",
+          "Head": "CL-L007",
+          "Family": "Quad type",
+          "Type": "Optical unit",
+          "Reference distance": "7 mm",
+          "Reference measurement range": "±1.5 mm",
+          "Normalized Z measurement range": "3 mm",
+          "Linearity": "±2.1 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø750 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L015N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l015n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 15,
+      "zMeasurementRangeMm": 2.6,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 0.49,
+      "xyResolutionUm": 300,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L015N",
+          "Head": "CL-L015",
+          "Family": "Quad type",
+          "Type": "Optical unit",
+          "Reference distance": "15 mm",
+          "Reference measurement range": "±1.3 mm",
+          "Normalized Z measurement range": "2.6 mm",
+          "Linearity": "±0.49 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø300 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L030N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l030n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 30,
+      "zMeasurementRangeMm": 7.4,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 0.94,
+      "xyResolutionUm": 500,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L030N",
+          "Head": "CL-L030",
+          "Family": "Quad type",
+          "Type": "Optical unit",
+          "Reference distance": "30 mm",
+          "Reference measurement range": "±3.7 mm",
+          "Normalized Z measurement range": "7.4 mm",
+          "Linearity": "±0.94 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø500 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L070N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l070n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 70,
+      "zMeasurementRangeMm": 20.0,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 2.2,
+      "xyResolutionUm": 600,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L070N",
+          "Head": "CL-L070",
+          "Family": "Quad type",
+          "Type": "Optical unit",
+          "Reference distance": "70 mm",
+          "Reference measurement range": "±10 mm",
+          "Normalized Z measurement range": "20 mm",
+          "Linearity": "±2.2 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø600 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-L150N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-l150n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 150,
+      "zMeasurementRangeMm": 70.0,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 5.65,
+      "xyResolutionUm": 1000,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-L150N",
+          "Head": "CL-L150",
+          "Family": "Quad type",
+          "Type": "Optical unit",
+          "Reference distance": "150 mm",
+          "Reference measurement range": "±35 mm",
+          "Normalized Z measurement range": "70 mm",
+          "Linearity": "±5.65 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø1000 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P007N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p007n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 7,
+      "zMeasurementRangeMm": 3.0,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 0.96,
+      "xyResolutionUm": 50,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P007N",
+          "Head": "CL-P007",
+          "Family": "Focused spot type",
+          "Type": "Optical unit",
+          "Reference distance": "7 mm",
+          "Reference measurement range": "±1.5 mm",
+          "Normalized Z measurement range": "3 mm",
+          "Linearity": "±0.96 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø50 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P015N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p015n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 15,
+      "zMeasurementRangeMm": 2.6,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 0.49,
+      "xyResolutionUm": 25,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P015N",
+          "Head": "CL-P015",
+          "Family": "Focused spot type",
+          "Type": "Optical unit",
+          "Reference distance": "15 mm",
+          "Reference measurement range": "±1.3 mm",
+          "Normalized Z measurement range": "2.6 mm",
+          "Linearity": "±0.49 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø25 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P030N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p030n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 30,
+      "zMeasurementRangeMm": 7.4,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 0.94,
+      "xyResolutionUm": 38,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P030N",
+          "Head": "CL-P030",
+          "Family": "Focused spot type",
+          "Type": "Optical unit",
+          "Reference distance": "30 mm",
+          "Reference measurement range": "±3.7 mm",
+          "Normalized Z measurement range": "7.4 mm",
+          "Linearity": "±0.94 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø38 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P070N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p070n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 70,
+      "zMeasurementRangeMm": 20.0,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 2.2,
+      "xyResolutionUm": 50,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P070N",
+          "Head": "CL-P070",
+          "Family": "Focused spot type",
+          "Type": "Optical unit",
+          "Reference distance": "70 mm",
+          "Reference measurement range": "±10 mm",
+          "Normalized Z measurement range": "20 mm",
+          "Linearity": "±2.2 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø50 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-P150N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-p150n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 150,
+      "zMeasurementRangeMm": 70.0,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 5.65,
+      "xyResolutionUm": 75,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP67",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-P150N",
+          "Head": "CL-P150",
+          "Family": "Focused spot type",
+          "Type": "Optical unit",
+          "Reference distance": "150 mm",
+          "Reference measurement range": "±35 mm",
+          "Normalized Z measurement range": "70 mm",
+          "Linearity": "±5.65 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø75 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-S015G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-s015g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 15,
+      "zMeasurementRangeMm": 2.0,
+      "zResolutionUm": 0.003,
+      "measurementAccuracyUm": 0.2,
+      "xyResolutionUm": 10,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP50",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-S015G",
+          "Head": "CL-S015",
+          "Family": "Ultra-high-accuracy 15 mm model / export control",
+          "Type": "Optical unit",
+          "Reference distance": "15 mm",
+          "Reference measurement range": "±1 mm",
+          "Normalized Z measurement range": "2 mm",
+          "Linearity": "±0.2 μm",
+          "Resolution": "0.003 μm",
+          "Spot diameter": "ø10 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-S015EXG",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-s015exg/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 15,
+      "zMeasurementRangeMm": 2.0,
+      "zResolutionUm": 0.003,
+      "measurementAccuracyUm": 0.2,
+      "xyResolutionUm": 10,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP50",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-S015EXG",
+          "Head": "CL-S015EX",
+          "Family": "Explosion-proof 15 mm model / export control",
+          "Type": "Optical unit",
+          "Reference distance": "15 mm",
+          "Reference measurement range": "±1 mm",
+          "Normalized Z measurement range": "2 mm",
+          "Linearity": "±0.2 μm",
+          "Resolution": "0.003 μm",
+          "Spot diameter": "ø10 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-V020G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-v020g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 20,
+      "zMeasurementRangeMm": 2.6,
+      "zResolutionUm": 0.01,
+      "measurementAccuracyUm": 0.3,
+      "xyResolutionUm": 20,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP40",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-V020G",
+          "Head": "CL-V020",
+          "Family": "20 mm vacuum and heat-resistant model / export control",
+          "Type": "Optical unit",
+          "Reference distance": "20 mm",
+          "Reference measurement range": "±1.3 mm",
+          "Normalized Z measurement range": "2.6 mm",
+          "Linearity": "±0.3 μm",
+          "Resolution": "0.01 μm",
+          "Spot diameter": "ø20 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-V050G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-v050g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 50,
+      "zMeasurementRangeMm": 8.0,
+      "zResolutionUm": 0.03,
+      "measurementAccuracyUm": 1.25,
+      "xyResolutionUm": 40,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP40",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-V050G",
+          "Head": "CL-V050",
+          "Family": "50 mm vacuum and heat-resistant model / export control",
+          "Type": "Optical unit",
+          "Reference distance": "50 mm",
+          "Reference measurement range": "±4 mm",
+          "Normalized Z measurement range": "8 mm",
+          "Linearity": "±1.25 μm",
+          "Resolution": "0.03 μm",
+          "Spot diameter": "ø40 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-PT010G",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-pt010g/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 10,
+      "zMeasurementRangeMm": 0.6,
+      "zResolutionUm": 0.001,
+      "measurementAccuracyUm": 0.11,
+      "xyResolutionUm": 3.5,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP64",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-PT010G",
+          "Head": "CL-PT010",
+          "Family": "Profile measurement model / export control",
+          "Type": "Optical unit",
+          "Reference distance": "10 mm",
+          "Reference measurement range": "±0.3 mm",
+          "Normalized Z measurement range": "0.6 mm",
+          "Linearity": "±0.11 μm",
+          "Resolution": "0.001 μm",
+          "Spot diameter": "ø3.5 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。",
+          "KEYENCE 页面标注为 Export Control Products。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-S015N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-s015n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 15,
+      "zMeasurementRangeMm": 2.0,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 0.35,
+      "xyResolutionUm": 10,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP50",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-S015N",
+          "Head": "CL-S015",
+          "Family": "Ultra-high-accuracy 15 mm model",
+          "Type": "Optical unit",
+          "Reference distance": "15 mm",
+          "Reference measurement range": "±1 mm",
+          "Normalized Z measurement range": "2 mm",
+          "Linearity": "±0.35 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø10 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-S015EXN",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-s015exn/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 15,
+      "zMeasurementRangeMm": 2.0,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 0.35,
+      "xyResolutionUm": 10,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP50",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-S015EXN",
+          "Head": "CL-S015EX",
+          "Family": "Explosion-proof 15 mm model",
+          "Type": "Optical unit",
+          "Reference distance": "15 mm",
+          "Reference measurement range": "±1 mm",
+          "Normalized Z measurement range": "2 mm",
+          "Linearity": "±0.35 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø10 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-V020N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-v020n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 20,
+      "zMeasurementRangeMm": 2.6,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 0.45,
+      "xyResolutionUm": 20,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP40",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-V020N",
+          "Head": "CL-V020",
+          "Family": "20 mm vacuum and heat-resistant model",
+          "Type": "Optical unit",
+          "Reference distance": "20 mm",
+          "Reference measurement range": "±1.3 mm",
+          "Normalized Z measurement range": "2.6 mm",
+          "Linearity": "±0.45 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø20 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-V050N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-v050n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 50,
+      "zMeasurementRangeMm": 8.0,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 1.4,
+      "xyResolutionUm": 40,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP40",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-V050N",
+          "Head": "CL-V050",
+          "Family": "50 mm vacuum and heat-resistant model",
+          "Type": "Optical unit",
+          "Reference distance": "50 mm",
+          "Reference measurement range": "±4 mm",
+          "Normalized Z measurement range": "8 mm",
+          "Linearity": "±1.4 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø40 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "基恩士",
+      "series": "CL-3000",
+      "model": "CL-PT010N",
+      "technology": "光谱共焦",
+      "status": "在售",
+      "sourceUrl": "https://www.keyence.com/products/measure/laser-1d/cl-3000/models/cl-pt010n/",
+      "sourceDate": "2026-06-24",
+      "referenceDistanceMm": 10,
+      "zMeasurementRangeMm": 0.6,
+      "zResolutionUm": 0.25,
+      "measurementAccuracyUm": 0.22,
+      "xyResolutionUm": 3.5,
+      "lightSource": "彩色共焦/彩色激光同轴",
+      "laserClass": "Class I",
+      "structure": "传感器头 + 光学单元 + 控制器",
+      "ipRating": "IP64",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "镜面反射目标",
+          "精密小件"
+      ],
+      "accuracyCondition": "KEYENCE 官方单型号规格页；直线性按位移模式和基恩士标准目标的官网脚注条件",
+      "rawSpecs": {
+          "Series": "CL-3000",
+          "Model": "CL-PT010N",
+          "Head": "CL-PT010",
+          "Family": "Profile measurement model",
+          "Type": "Optical unit",
+          "Reference distance": "10 mm",
+          "Reference measurement range": "±0.3 mm",
+          "Normalized Z measurement range": "0.6 mm",
+          "Linearity": "±0.22 μm",
+          "Resolution": "0.25 μm",
+          "Spot diameter": "ø3.5 μm",
+          "Laser class": "Class I",
+          "Sampling cycle": "100/200/500/1000 μs (adjustable 4-stage)"
+      },
+      "notes": [
+          "仅录入光学单元；传感头、控制器和附件不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "深视智能",
+      "series": "SCI",
+      "model": "SCI20011",
+      "technology": "光谱共焦",
+      "status": "已发布",
+      "sourceUrl": "https://www.cnsszn.com/industrial-sensors/spectral-confocal-displacement-sensor/sci-series/250",
+      "sourceDate": "2026-06-24",
+      "workingDistanceMinMm": 70,
+      "workingDistanceMaxMm": 70,
+      "referenceDistanceMm": 70,
+      "zMeasurementRangeMm": 20,
+      "zResolutionUm": 0.025,
+      "measurementAccuracyUm": 2.2,
+      "xyResolutionUm": 55,
+      "lightSource": "光谱共焦白光/多波长",
+      "structure": "点光谱共焦传感器头 + 控制器",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "透明物体厚度",
+          "精密小件"
+      ],
+      "accuracyCondition": "深视智能官网 SCI 系列产品矩阵和型号页公开规格；测试条件未公开",
+      "rawSpecs": {
+          "Series": "SCI",
+          "Model": "SCI20011",
+          "Controller": "SCI501A/SCI502A, SCI501B/SCI502B",
+          "Fixture": "SCI-01/SCI-02 per official model page",
+          "Spot size": "55/115 μm",
+          "Working distance": "70 mm",
+          "Measurement range": "20 mm",
+          "Resolution": "0.025 μm",
+          "Linearity": "±2.2 μm",
+          "Angle characteristic": "±11°",
+          "Minimum measurable transparent object thickness": "660 μm"
+      },
+      "notes": [
+          "仅录入传感器头；控制器和线缆不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "深视智能",
+      "series": "SCI",
+      "model": "SCI100151",
+      "technology": "光谱共焦",
+      "status": "已发布",
+      "sourceUrl": "https://www.cnsszn.com/industrial-sensors/spectral-confocal-displacement-sensor/sci-series/385",
+      "sourceDate": "2026-06-24",
+      "workingDistanceMinMm": 40,
+      "workingDistanceMaxMm": 40,
+      "referenceDistanceMm": 40,
+      "zMeasurementRangeMm": 10,
+      "zResolutionUm": 0.012,
+      "measurementAccuracyUm": 1.6,
+      "xyResolutionUm": 19.2,
+      "lightSource": "光谱共焦白光/多波长",
+      "structure": "点光谱共焦传感器头 + 控制器",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "透明物体厚度",
+          "精密小件"
+      ],
+      "accuracyCondition": "深视智能官网 SCI 系列产品矩阵和型号页公开规格；测试条件未公开",
+      "rawSpecs": {
+          "Series": "SCI",
+          "Model": "SCI100151",
+          "Controller": "SCI501A/SCI502A, SCI501B/SCI502B",
+          "Fixture": "SCI-01/SCI-02 per official model page",
+          "Spot size": "19.2/40.3 μm",
+          "Working distance": "40 mm",
+          "Measurement range": "10 mm",
+          "Resolution": "0.012 μm",
+          "Linearity": "±1.6 μm",
+          "Angle characteristic": "±11°",
+          "Minimum measurable transparent object thickness": "300 μm"
+      },
+      "notes": [
+          "仅录入传感器头；控制器和线缆不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "深视智能",
+      "series": "SCI",
+      "model": "SCI10015",
+      "technology": "光谱共焦",
+      "status": "已发布",
+      "sourceUrl": "https://www.cnsszn.com/industrial-sensors/spectral-confocal-displacement-sensor/sci-series/249",
+      "sourceDate": "2026-06-24",
+      "workingDistanceMinMm": 40,
+      "workingDistanceMaxMm": 40,
+      "referenceDistanceMm": 40,
+      "zMeasurementRangeMm": 10,
+      "zResolutionUm": 0.012,
+      "measurementAccuracyUm": 1.6,
+      "xyResolutionUm": 19.2,
+      "lightSource": "光谱共焦白光/多波长",
+      "structure": "点光谱共焦传感器头 + 控制器",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "透明物体厚度",
+          "精密小件"
+      ],
+      "accuracyCondition": "深视智能官网 SCI 系列产品矩阵和型号页公开规格；测试条件未公开",
+      "rawSpecs": {
+          "Series": "SCI",
+          "Model": "SCI10015",
+          "Controller": "SCI501A/SCI502A, SCI501B/SCI502B",
+          "Fixture": "SCI-01/SCI-02 per official model page",
+          "Spot size": "19.2/40.3 μm",
+          "Working distance": "40 mm",
+          "Measurement range": "10 mm",
+          "Resolution": "0.012 μm",
+          "Linearity": "±1.6 μm",
+          "Angle characteristic": "±15°",
+          "Minimum measurable transparent object thickness": "300 μm"
+      },
+      "notes": [
+          "仅录入传感器头；控制器和线缆不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "深视智能",
+      "series": "SCI",
+      "model": "SCI04020",
+      "technology": "光谱共焦",
+      "status": "已发布",
+      "sourceUrl": "https://www.cnsszn.com/industrial-sensors/spectral-confocal-displacement-sensor/sci-series/247",
+      "sourceDate": "2026-06-24",
+      "workingDistanceMinMm": 40,
+      "workingDistanceMaxMm": 40,
+      "referenceDistanceMm": 40,
+      "zMeasurementRangeMm": 4,
+      "zResolutionUm": 0.006,
+      "measurementAccuracyUm": 0.8,
+      "xyResolutionUm": 16,
+      "lightSource": "光谱共焦白光/多波长",
+      "structure": "点光谱共焦传感器头 + 控制器",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "透明物体厚度",
+          "精密小件"
+      ],
+      "accuracyCondition": "深视智能官网 SCI 系列产品矩阵和型号页公开规格；测试条件未公开",
+      "rawSpecs": {
+          "Series": "SCI",
+          "Model": "SCI04020",
+          "Controller": "SCI501A/SCI502A, SCI501B/SCI502B",
+          "Fixture": "SCI-01/SCI-02 per official model page",
+          "Spot size": "16/32 μm",
+          "Working distance": "40 mm",
+          "Measurement range": "4 mm",
+          "Resolution": "0.006 μm",
+          "Linearity": "±0.8 μm",
+          "Angle characteristic": "±20°",
+          "Minimum measurable transparent object thickness": "130 μm"
+      },
+      "notes": [
+          "仅录入传感器头；控制器和线缆不单独作为产品行。"
+      ]
+    },
+    {
+      "manufacturer": "深视智能",
+      "series": "SCI",
+      "model": "SCI04025",
+      "technology": "光谱共焦",
+      "status": "已发布",
+      "sourceUrl": "https://www.cnsszn.com/industrial-sensors/spectral-confocal-displacement-sensor/sci-series/248",
+      "sourceDate": "2026-06-24",
+      "workingDistanceMinMm": 16,
+      "workingDistanceMaxMm": 16,
+      "referenceDistanceMm": 16,
+      "zMeasurementRangeMm": 4,
+      "zResolutionUm": 0.006,
+      "measurementAccuracyUm": 0.8,
+      "xyResolutionUm": 12,
+      "lightSource": "光谱共焦白光/多波长",
+      "structure": "点光谱共焦传感器头 + 控制器",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "透明物体厚度",
+          "精密小件"
+      ],
+      "accuracyCondition": "深视智能官网 SCI 系列产品矩阵和型号页公开规格；测试条件未公开",
+      "rawSpecs": {
+          "Series": "SCI",
+          "Model": "SCI04025",
+          "Controller": "SCI501A/SCI502A, SCI501B/SCI502B",
+          "Fixture": "SCI-01/SCI-02 per official model page",
+          "Spot size": "12/25.2 μm",
+          "Working distance": "16 mm",
+          "Measurement range": "4 mm",
+          "Resolution": "0.006 μm",
+          "Linearity": "±0.8 μm",
+          "Angle characteristic": "±25°",
+          "Minimum measurable transparent object thickness": "130 μm",
+          "Weight": "95 g"
+      },
+      "notes": [
+          "仅录入传感器头；控制器和线缆不单独作为产品行。"
+      ],
+      "weightG": 95
+    },
+    {
+      "manufacturer": "深视智能",
+      "series": "SCI",
+      "model": "SCI00532",
+      "technology": "光谱共焦",
+      "status": "已发布",
+      "sourceUrl": "https://www.cnsszn.com/industrial-sensors/spectral-confocal-displacement-sensor/sci-series/244",
+      "sourceDate": "2026-06-24",
+      "workingDistanceMinMm": 25,
+      "workingDistanceMaxMm": 25,
+      "referenceDistanceMm": 25,
+      "zMeasurementRangeMm": 0.5,
+      "zResolutionUm": 0.006,
+      "measurementAccuracyUm": 0.2,
+      "xyResolutionUm": 7,
+      "lightSource": "光谱共焦白光/多波长",
+      "structure": "点光谱共焦传感器头 + 控制器",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "透明物体厚度",
+          "精密小件"
+      ],
+      "accuracyCondition": "深视智能官网 SCI 系列产品矩阵和型号页公开规格；测试条件未公开",
+      "rawSpecs": {
+          "Series": "SCI",
+          "Model": "SCI00532",
+          "Controller": "SCI501A/SCI502A, SCI501B/SCI502B",
+          "Fixture": "SCI-01/SCI-02 per official model page",
+          "Spot size": "7/14 μm",
+          "Working distance": "25 mm",
+          "Measurement range": "0.5 mm",
+          "Resolution": "0.006 μm",
+          "Linearity": "±0.2 μm",
+          "Angle characteristic": "±32°",
+          "Minimum measurable transparent object thickness": "20 μm",
+          "Weight": "535 g"
+      },
+      "notes": [
+          "仅录入传感器头；控制器和线缆不单独作为产品行。"
+      ],
+      "weightG": 535
+    },
+    {
+      "manufacturer": "深视智能",
+      "series": "SCI",
+      "model": "SCI01236",
+      "technology": "光谱共焦",
+      "status": "已发布",
+      "sourceUrl": "https://www.cnsszn.com/industrial-sensors/spectral-confocal-displacement-sensor/sci-series/364",
+      "sourceDate": "2026-06-24",
+      "workingDistanceMinMm": 25,
+      "workingDistanceMaxMm": 25,
+      "referenceDistanceMm": 25,
+      "zMeasurementRangeMm": 1.2,
+      "zResolutionUm": 0.006,
+      "measurementAccuracyUm": 0.24,
+      "xyResolutionUm": 55,
+      "lightSource": "光谱共焦白光/多波长",
+      "structure": "点光谱共焦传感器头 + 控制器",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "透明物体厚度",
+          "精密小件"
+      ],
+      "accuracyCondition": "深视智能官网 SCI 系列产品矩阵和型号页公开规格；测试条件未公开",
+      "rawSpecs": {
+          "Series": "SCI",
+          "Model": "SCI01236",
+          "Controller": "SCI501A/SCI502A, SCI501B/SCI502B",
+          "Fixture": "SCI-01/SCI-02 per official model page",
+          "Spot size": "55/115 μm",
+          "Working distance": "25 mm",
+          "Measurement range": "1.2 mm",
+          "Resolution": "0.006 μm",
+          "Linearity": "±0.24 μm",
+          "Angle characteristic": "±36°",
+          "Minimum measurable transparent object thickness": "35 μm",
+          "Weight": "738 g"
+      },
+      "notes": [
+          "仅录入传感器头；控制器和线缆不单独作为产品行。"
+      ],
+      "weightG": 738
+    },
+    {
+      "manufacturer": "深视智能",
+      "series": "SCI",
+      "model": "SCI01045",
+      "technology": "光谱共焦",
+      "status": "已发布",
+      "sourceUrl": "https://www.cnsszn.com/industrial-sensors/spectral-confocal-displacement-sensor/sci-series/245",
+      "sourceDate": "2026-06-24",
+      "workingDistanceMinMm": 10,
+      "workingDistanceMaxMm": 10,
+      "referenceDistanceMm": 10,
+      "zMeasurementRangeMm": 1,
+      "zResolutionUm": 0.006,
+      "measurementAccuracyUm": 0.2,
+      "xyResolutionUm": 7.1,
+      "lightSource": "光谱共焦白光/多波长",
+      "structure": "点光谱共焦传感器头 + 控制器",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "透明物体厚度",
+          "精密小件"
+      ],
+      "accuracyCondition": "深视智能官网 SCI 系列产品矩阵和型号页公开规格；测试条件未公开",
+      "rawSpecs": {
+          "Series": "SCI",
+          "Model": "SCI01045",
+          "Controller": "SCI501A/SCI502A, SCI501B/SCI502B",
+          "Fixture": "SCI-01/SCI-02 per official model page",
+          "Spot size": "7.1/14.9 μm",
+          "Working distance": "10 mm",
+          "Measurement range": "1 mm",
+          "Resolution": "0.006 μm",
+          "Linearity": "±0.2 μm",
+          "Angle characteristic": "±45°",
+          "Minimum measurable transparent object thickness": "30 μm",
+          "Weight": "350 g"
+      },
+      "notes": [
+          "仅录入传感器头；控制器和线缆不单独作为产品行。"
+      ],
+      "weightG": 350
+    },
+    {
+      "manufacturer": "深视智能",
+      "series": "SCI",
+      "model": "SCI03560",
+      "technology": "光谱共焦",
+      "status": "已发布",
+      "sourceUrl": "https://www.cnsszn.com/industrial-sensors/spectral-confocal-displacement-sensor/sci-series/246",
+      "sourceDate": "2026-06-24",
+      "workingDistanceMinMm": 12.8,
+      "workingDistanceMaxMm": 12.8,
+      "referenceDistanceMm": 12.8,
+      "zMeasurementRangeMm": 3.5,
+      "zResolutionUm": 0.006,
+      "measurementAccuracyUm": 0.7,
+      "xyResolutionUm": 5.8,
+      "lightSource": "光谱共焦白光/多波长",
+      "structure": "点光谱共焦传感器头 + 控制器",
+      "outputTypes": [
+          "位移测量",
+          "高度"
+      ],
+      "materialScenarios": [
+          "高精度",
+          "透明",
+          "透明物体厚度",
+          "精密小件"
+      ],
+      "accuracyCondition": "深视智能官网 SCI 系列产品矩阵和型号页公开规格；测试条件未公开",
+      "rawSpecs": {
+          "Series": "SCI",
+          "Model": "SCI03560",
+          "Controller": "SCI501A/SCI502A, SCI501B/SCI502B",
+          "Fixture": "SCI-01/SCI-02 per official model page",
+          "Spot size": "5.8/12.2 μm",
+          "Working distance": "12.8 mm",
+          "Measurement range": "3.5 mm",
+          "Resolution": "0.006 μm",
+          "Linearity": "±0.7 μm",
+          "Angle characteristic": "±60°",
+          "Minimum measurable transparent object thickness": "150 μm",
+          "Weight": "2300 g"
+      },
+      "notes": [
+          "仅录入传感器头；控制器和线缆不单独作为产品行。"
+      ],
+      "weightG": 2300
     }
   ]
 }

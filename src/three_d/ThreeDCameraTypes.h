@@ -14,7 +14,8 @@ enum class ThreeDTechnology
     StereoStructuredLight,
     LineConfocal,
     InterferometryWhiteLight,
-    Other
+    Other,
+    SpectralConfocal
 };
 
 enum class ThreeDMatchStatus

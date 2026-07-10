@@ -29,6 +29,8 @@ QString canonicalTechnologyLabel(ThreeDTechnology technology)
         return QString::fromUtf8("干涉/白光类测量");
     case ThreeDTechnology::Other:
         return QString::fromUtf8("其它官方标注 3D 技术");
+    case ThreeDTechnology::SpectralConfocal:
+        return QString::fromUtf8("光谱共焦");
     }
     return QString::fromUtf8("其它官方标注 3D 技术");
 }
@@ -50,6 +52,8 @@ QString englishTechnologyLabel(ThreeDTechnology technology)
         return QStringLiteral("Interferometry / white-light measurement");
     case ThreeDTechnology::Other:
         return QStringLiteral("Other official 3D technology");
+    case ThreeDTechnology::SpectralConfocal:
+        return QStringLiteral("Spectral confocal");
     }
     return QStringLiteral("Other official 3D technology");
 }
@@ -77,6 +81,8 @@ QString threeDTechnologyLabel(ThreeDTechnology technology)
         return text("干涉/白光类测量", "Interferometry / white-light measurement");
     case ThreeDTechnology::Other:
         return text("其它官方标注 3D 技术", "Other official 3D technology");
+    case ThreeDTechnology::SpectralConfocal:
+        return text("光谱共焦", "Spectral confocal");
     }
     return text("其它官方标注 3D 技术", "Other official 3D technology");
 }
@@ -91,7 +97,8 @@ ThreeDTechnology threeDTechnologyFromLabel(const QString &label)
         ThreeDTechnology::StereoStructuredLight,
         ThreeDTechnology::LineConfocal,
         ThreeDTechnology::InterferometryWhiteLight,
-        ThreeDTechnology::Other
+        ThreeDTechnology::Other,
+        ThreeDTechnology::SpectralConfocal
     };
     for (ThreeDTechnology technology : values) {
         if (normalized == canonicalTechnologyLabel(technology)
@@ -111,6 +118,7 @@ QStringList threeDTechnologyLabels()
         << threeDTechnologyLabel(ThreeDTechnology::StructuredLightSnapshot)
         << threeDTechnologyLabel(ThreeDTechnology::StereoStructuredLight)
         << threeDTechnologyLabel(ThreeDTechnology::LineConfocal)
+        << threeDTechnologyLabel(ThreeDTechnology::SpectralConfocal)
         << threeDTechnologyLabel(ThreeDTechnology::InterferometryWhiteLight)
         << threeDTechnologyLabel(ThreeDTechnology::Other);
 }

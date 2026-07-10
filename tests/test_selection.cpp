@@ -2239,11 +2239,16 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
     QString error;
     QVERIFY2(repository.loadFromResource(QStringLiteral(":/data/three_d_cameras.json"), &error), qPrintable(error));
     QVERIFY(repository.cameras().size() >= 40);
+    QCOMPARE(threeDTechnologyFromLabel(QString::fromUtf8("光谱共焦")), ThreeDTechnology::SpectralConfocal);
+    QCOMPARE(threeDTechnologyFromLabel(QStringLiteral("Spectral confocal")), ThreeDTechnology::SpectralConfocal);
+    QVERIFY(threeDTechnologyLabels().contains(threeDTechnologyLabel(ThreeDTechnology::SpectralConfocal)));
 
     QSet<QString> brands;
     int lmiCount = 0;
     int keyenceCount = 0;
     int sinceVisionCount = 0;
+    int keyenceSpectralConfocalCount = 0;
+    int sinceVisionSpectralConfocalCount = 0;
     bool hasXRepeatability = false;
     bool hasProfileDataInterval = false;
     bool hasZLinearity = false;
@@ -2264,6 +2269,21 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
             ++keyenceCount;
         if (camera.manufacturer == QString::fromUtf8("深视智能"))
             ++sinceVisionCount;
+        if (camera.technology == ThreeDTechnology::SpectralConfocal) {
+            if (camera.manufacturer == QString::fromUtf8("基恩士"))
+                ++keyenceSpectralConfocalCount;
+            if (camera.manufacturer == QString::fromUtf8("深视智能"))
+                ++sinceVisionSpectralConfocalCount;
+            if (camera.manufacturer == QString::fromUtf8("基恩士") || camera.manufacturer == QString::fromUtf8("深视智能")) {
+                QCOMPARE(camera.sourceDate, QStringLiteral("2026-06-24"));
+                QVERIFY2(threeDHasValue(camera.zMeasurementRangeMm), qPrintable(camera.model));
+                QVERIFY2(threeDHasValue(camera.zResolutionUm), qPrintable(camera.model));
+                QVERIFY2(threeDHasValue(camera.measurementAccuracyUm), qPrintable(camera.model));
+                QVERIFY2(threeDHasValue(camera.xyResolutionUm), qPrintable(camera.model));
+                QVERIFY2(!threeDHasValue(camera.xFovReferenceMm), qPrintable(camera.model));
+                QVERIFY2(!threeDHasValue(camera.yFovReferenceMm), qPrintable(camera.model));
+            }
+        }
         hasXRepeatability = hasXRepeatability || threeDHasValue(camera.xRepeatabilityUm);
         hasProfileDataInterval = hasProfileDataInterval || threeDHasValue(camera.profileDataIntervalUm);
         hasZLinearity = hasZLinearity || threeDHasValue(camera.zLinearityPercentOfRange);
@@ -2276,6 +2296,8 @@ void SelectionEngineTest::threeDCameraCatalogLoadsFromResource()
     QVERIFY(sinceVisionCount >= 50);
     QVERIFY(brands.contains(QString::fromUtf8("基恩士")));
     QVERIFY(keyenceCount >= 32);
+    QVERIFY(keyenceSpectralConfocalCount >= 30);
+    QVERIFY(sinceVisionSpectralConfocalCount >= 9);
     QVERIFY(brands.contains(QString::fromUtf8("海康机器人")));
     QVERIFY2(hasXRepeatability, "Expected at least one camera with X repeatability.");
     QVERIFY2(hasProfileDataInterval, "Expected at least one camera with X data interval.");

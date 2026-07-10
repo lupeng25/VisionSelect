@@ -17,6 +17,7 @@ tests/debug/
 tests/release/
 
 # C++/MSVC artifacts
+.vs/
 *.obj
 *.ilk
 *.idb
