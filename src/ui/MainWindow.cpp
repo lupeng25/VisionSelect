@@ -7,6 +7,8 @@
 #include "selection/SelectionService.h"
 #include "ui/CatalogDialogs.h"
 #include "ui/UiHelpers.h"
+#include "ui/UiSettings.h"
+#include "ui/UiThemeManager.h"
 #include "ui/pages/CalculationPage.h"
 #include "ui/pages/CatalogPage.h"
 #include "ui/pages/InputPage.h"
@@ -16,9 +18,15 @@
 
 #include <QDateTime>
 #include <QAbstractItemView>
+#include <QAbstractButton>
 #include <QAbstractSpinBox>
+#include <QAction>
+#include <QActionGroup>
+#include <QAccessible>
 #include <QCheckBox>
+#include <QCloseEvent>
 #include <QComboBox>
+#include <QCursor>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFile>
@@ -26,10 +34,13 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QIcon>
 #include <QLabel>
+#include <QKeySequence>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainterPath>
 #include <QPushButton>
@@ -40,12 +51,15 @@
 #include <QStackedWidget>
 #include <QSpinBox>
 #include <QStyle>
+#include <QSplitter>
 #include <QTabWidget>
+#include <QTableView>
 #include <QTextEdit>
 #include <QTextStream>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QWindow>
 #include <QtConcurrent/QtConcurrent>
 
 #ifdef Q_OS_WIN
@@ -61,6 +75,15 @@ const int kCalculationPageIndex = 2;
 const int kThreeDCameraPageIndex = 3;
 const int kResultsPageIndex = 4;
 const int kCatalogPageIndex = 5;
+
+void announceAccessibleStatus(QWidget *source, const QString &message)
+{
+    if (!source || message.isEmpty())
+        return;
+    QAccessibleAnnouncementEvent event(source, message);
+    event.setPoliteness(QAccessible::AnnouncementPoliteness::Polite);
+    QAccessible::updateAccessibility(&event);
+}
 
 struct ComboState
 {
@@ -263,28 +286,12 @@ protected:
     void mousePressEvent(QMouseEvent *event) override
     {
         if (event->button() == Qt::LeftButton && window()) {
-            m_dragOffset = event->globalPosition().toPoint() - window()->frameGeometry().topLeft();
-            m_dragging = !window()->isMaximized();
-            event->accept();
-            return;
+            if (QWindow *handle = window()->windowHandle(); handle && handle->startSystemMove()) {
+                event->accept();
+                return;
+            }
         }
         QFrame::mousePressEvent(event);
-    }
-
-    void mouseMoveEvent(QMouseEvent *event) override
-    {
-        if (m_dragging && window() && !window()->isMaximized() && (event->buttons() & Qt::LeftButton)) {
-            window()->move(event->globalPosition().toPoint() - m_dragOffset);
-            event->accept();
-            return;
-        }
-        QFrame::mouseMoveEvent(event);
-    }
-
-    void mouseReleaseEvent(QMouseEvent *event) override
-    {
-        m_dragging = false;
-        QFrame::mouseReleaseEvent(event);
     }
 
     void mouseDoubleClickEvent(QMouseEvent *event) override
@@ -299,10 +306,6 @@ protected:
         }
         QFrame::mouseDoubleClickEvent(event);
     }
-
-private:
-    QPoint m_dragOffset;
-    bool m_dragging = false;
 };
 }
 
@@ -321,12 +324,52 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::finishSelectionCalculation);
 
     buildUi();
+    QAction *runSelectionAction = new QAction(this);
+    runSelectionAction->setObjectName(QStringLiteral("RunSelectionAction"));
+    runSelectionAction->setShortcut(QKeySequence(Qt::Key_F9));
+    runSelectionAction->setShortcutContext(Qt::WindowShortcut);
+    connect(runSelectionAction, &QAction::triggered, this, [this]() {
+        if (m_inputPage)
+            QMetaObject::invokeMethod(m_inputPage, "runSelectionRequested", Qt::DirectConnection);
+    });
+    addAction(runSelectionAction);
+
+    connect(&UiSettings::instance(), &UiSettings::densityChanged, this, [this](UiDensity) { applyDensity(); });
+    connect(&UiSettings::instance(), &UiSettings::preferredSidebarExpandedChanged,
+            this, [this](bool) { updateSidebarLayout(); });
+    connect(&UiThemeManager::instance(), &UiThemeManager::themeChanged, this, [this]() { applyDensity(); });
+    applyDensity();
+    updateSidebarLayout();
     connect(&LanguageManager::instance(), &LanguageManager::languageChanged, this, &MainWindow::rebuildPagesForLanguage);
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    savePersistentState(this);
+    UiSettings::instance().saveWindow(this);
+    QMainWindow::closeEvent(event);
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::WindowStateChange) {
+        updateWindowControlState();
+        updateWindowMask();
+    }
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
+    if (width() < 1180)
+        m_sidebarForcedCollapsed = true;
+    else if (width() >= 1280)
+        m_sidebarForcedCollapsed = false;
+    updateSidebarLayout();
+    const bool compactTopBar = width() < 1280;
+    for (QLabel *step : m_workflowStepLabels)
+        step->setVisible(!compactTopBar || step->property("state") == QLatin1String("active"));
     updateWindowMask();
 }
 
@@ -335,6 +378,17 @@ bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr
 #ifdef Q_OS_WIN
     Q_UNUSED(eventType)
     MSG *nativeMessage = static_cast<MSG *>(message);
+    if (nativeMessage && nativeMessage->message == WM_NCLBUTTONUP
+        && nativeMessage->wParam == HTMAXBUTTON) {
+        isMaximized() ? showNormal() : showMaximized();
+        updateWindowControlState();
+        return true;
+    }
+    if (nativeMessage && nativeMessage->message == WM_NCHITTEST && m_maximizeButton
+        && m_maximizeButton->rect().contains(m_maximizeButton->mapFromGlobal(QCursor::pos()))) {
+        *result = HTMAXBUTTON;
+        return true;
+    }
     if (nativeMessage && nativeMessage->message == WM_NCHITTEST
         && !isMaximized() && !isFullScreen()) {
         RECT windowRect;
@@ -363,8 +417,22 @@ bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr
                 *result = HTTOP;
             else if (bottom)
                 *result = HTBOTTOM;
-            else
+            else if (m_topBar && m_topBar->rect().contains(m_topBar->mapFromGlobal(QCursor::pos()))) {
+                QWidget *child = m_topBar->childAt(m_topBar->mapFromGlobal(QCursor::pos()));
+                if (qobject_cast<QAbstractButton *>(child) || qobject_cast<QComboBox *>(child))
+                    return QMainWindow::nativeEvent(eventType, message, result);
+                *result = HTCAPTION;
+            } else {
                 return QMainWindow::nativeEvent(eventType, message, result);
+            }
+            return true;
+        }
+    }
+    if (nativeMessage && nativeMessage->message == WM_NCHITTEST && m_topBar
+        && m_topBar->rect().contains(m_topBar->mapFromGlobal(QCursor::pos()))) {
+        QWidget *child = m_topBar->childAt(m_topBar->mapFromGlobal(QCursor::pos()));
+        if (!qobject_cast<QAbstractButton *>(child) && !qobject_cast<QComboBox *>(child)) {
+            *result = HTCAPTION;
             return true;
         }
     }
@@ -384,6 +452,19 @@ void MainWindow::updateWindowMask()
     setMask(QRegion(roundedRect.toFillPolygon().toPolygon()));
 }
 
+void MainWindow::updateWindowControlState()
+{
+    if (!m_maximizeButton)
+        return;
+    const bool maximized = isMaximized();
+    m_maximizeButton->setText(maximized ? QStringLiteral("❐") : QStringLiteral("□"));
+    const QString action = maximized
+        ? localizedText("还原", "Restore")
+        : localizedText("最大化", "Maximize");
+    m_maximizeButton->setToolTip(action);
+    m_maximizeButton->setAccessibleName(action);
+}
+
 void MainWindow::buildUi()
 {
     QWidget *root = new QWidget(this);
@@ -391,7 +472,8 @@ void MainWindow::buildUi()
     QVBoxLayout *shellLayout = new QVBoxLayout(root);
     shellLayout->setContentsMargins(0, 0, 0, 0);
     shellLayout->setSpacing(0);
-    shellLayout->addWidget(createTopBar());
+    m_topBar = createTopBar();
+    shellLayout->addWidget(m_topBar);
 
     QWidget *workspace = new QWidget(root);
     workspace->setObjectName(QStringLiteral("ShellWorkspace"));
@@ -399,15 +481,12 @@ void MainWindow::buildUi()
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
 
-    rootLayout->addWidget(createSidebar());
+    m_sidebar = qobject_cast<QFrame *>(createSidebar());
+    rootLayout->addWidget(m_sidebar);
 
     m_pages = new QStackedWidget(root);
     m_inputPage = new InputPage;
-    connect(m_inputPage, &InputPage::calculateRequested, this, &MainWindow::calculate);
-    connect(m_inputPage, &InputPage::resultsRequested, this, [this]() {
-        calculate();
-        setActivePage(kResultsPageIndex);
-    });
+    connect(m_inputPage, &InputPage::runSelectionRequested, this, &MainWindow::runSelectionAndShowResults);
     m_pages->addWidget(m_inputPage);
     for (int i = 1; i <= kCatalogPageIndex; ++i)
         m_pages->addWidget(new QWidget);
@@ -416,6 +495,7 @@ void MainWindow::buildUi()
     shellLayout->addWidget(createStatusBar());
 
     setCentralWidget(root);
+    UiThemeManager::instance().applyDensityProperty(root);
     retranslateUi();
     setActivePage(0);
 }
@@ -470,30 +550,26 @@ QWidget *MainWindow::createTopBar()
 
     QToolButton *minimizeButton = new QToolButton(bar);
     minimizeButton->setObjectName(QStringLiteral("WindowControlButton"));
+    minimizeButton->setAccessibleName(localizedText("最小化", "Minimize"));
     minimizeButton->setText(QStringLiteral("—"));
     minimizeButton->setToolTip(localizedText("最小化", "Minimize"));
     connect(minimizeButton, &QToolButton::clicked, this, &MainWindow::showMinimized);
     layout->addWidget(minimizeButton, 0, Qt::AlignVCenter);
 
-    QToolButton *maximizeButton = new QToolButton(bar);
-    maximizeButton->setObjectName(QStringLiteral("WindowControlButton"));
-    maximizeButton->setText(QStringLiteral("□"));
-    maximizeButton->setToolTip(localizedText("最大化", "Maximize"));
-    connect(maximizeButton, &QToolButton::clicked, this, [this, maximizeButton]() {
-        if (isMaximized()) {
-            showNormal();
-            maximizeButton->setText(QStringLiteral("□"));
-            maximizeButton->setToolTip(localizedText("最大化", "Maximize"));
-        } else {
-            showMaximized();
-            maximizeButton->setText(QStringLiteral("❐"));
-            maximizeButton->setToolTip(localizedText("还原", "Restore"));
-        }
+    m_maximizeButton = new QToolButton(bar);
+    m_maximizeButton->setObjectName(QStringLiteral("WindowControlButton"));
+    m_maximizeButton->setAccessibleName(localizedText("最大化", "Maximize"));
+    m_maximizeButton->setText(QStringLiteral("□"));
+    m_maximizeButton->setToolTip(localizedText("最大化", "Maximize"));
+    connect(m_maximizeButton, &QToolButton::clicked, this, [this]() {
+        isMaximized() ? showNormal() : showMaximized();
+        updateWindowControlState();
     });
-    layout->addWidget(maximizeButton, 0, Qt::AlignVCenter);
+    layout->addWidget(m_maximizeButton, 0, Qt::AlignVCenter);
 
     QToolButton *closeButton = new QToolButton(bar);
     closeButton->setObjectName(QStringLiteral("WindowCloseButton"));
+    closeButton->setAccessibleName(localizedText("关闭", "Close"));
     closeButton->setText(QStringLiteral("×"));
     closeButton->setToolTip(localizedText("关闭", "Close"));
     connect(closeButton, &QToolButton::clicked, this, &MainWindow::close);
@@ -505,11 +581,21 @@ QWidget *MainWindow::createSidebar()
 {
     QFrame *sidebar = new QFrame;
     sidebar->setObjectName(QStringLiteral("Sidebar"));
-    sidebar->setFixedWidth(104);
+    sidebar->setFixedWidth(176);
 
     QVBoxLayout *layout = new QVBoxLayout(sidebar);
     layout->setContentsMargins(8, 12, 8, 10);
     layout->setSpacing(6);
+
+    m_sidebarToggleButton = new QToolButton(sidebar);
+    m_sidebarToggleButton->setObjectName(QStringLiteral("SidebarToggleButton"));
+    m_sidebarToggleButton->setToolTip(localizedText("折叠或展开导航", "Collapse or expand navigation"));
+    m_sidebarToggleButton->setAccessibleName(m_sidebarToggleButton->toolTip());
+    m_sidebarToggleButton->setFocusPolicy(Qt::StrongFocus);
+    connect(m_sidebarToggleButton, &QToolButton::clicked, this, [this]() {
+        UiSettings::instance().setPreferredSidebarExpanded(!UiSettings::instance().preferredSidebarExpanded());
+    });
+    layout->addWidget(m_sidebarToggleButton, 0, Qt::AlignRight);
 
     QLabel *railMark = new QLabel(sidebar);
     railMark->setObjectName(QStringLiteral("RailMark"));
@@ -544,7 +630,8 @@ QWidget *MainWindow::createSidebar()
         button->setFixedHeight(44);
         button->setIcon(QIcon(iconPath));
         button->setIconSize(QSize(20, 20));
-        button->setFocusPolicy(Qt::NoFocus);
+        button->setFocusPolicy(Qt::StrongFocus);
+        button->setAccessibleName(navigationLabels().at(pageIndex));
         button->setToolTip(navigationLabels().at(pageIndex));
         connect(button, &QPushButton::clicked, this, [this, pageIndex]() { setActivePage(pageIndex); });
         m_navButtons[pageIndex] = button;
@@ -570,10 +657,52 @@ QWidget *MainWindow::createSidebar()
     m_licenseButton->setIcon(QIcon(QStringLiteral(":/icons/ui/info.png")));
     m_licenseButton->setIconSize(QSize(18, 18));
     m_licenseButton->setCursor(Qt::PointingHandCursor);
+    m_licenseButton->setFocusPolicy(Qt::StrongFocus);
+    m_licenseButton->setAccessibleName(localizedText("授权信息", "License information"));
     connect(m_licenseButton, &QPushButton::clicked, this, &MainWindow::showLicenseInfo);
     layout->addWidget(m_licenseButton);
 
-    layout->addWidget(m_languageCombo);
+    m_languageCombo->hide();
+    m_interfaceButton = new QToolButton(sidebar);
+    m_interfaceButton->setObjectName(QStringLiteral("SidebarInterfaceButton"));
+    m_interfaceButton->setPopupMode(QToolButton::InstantPopup);
+    m_interfaceButton->setFocusPolicy(Qt::StrongFocus);
+    m_interfaceButton->setToolTip(localizedText("语言与界面密度", "Language and interface density"));
+    m_interfaceButton->setAccessibleName(m_interfaceButton->toolTip());
+    QMenu *interfaceMenu = new QMenu(m_interfaceButton);
+    QActionGroup *languageGroup = new QActionGroup(interfaceMenu);
+    languageGroup->setExclusive(true);
+    for (const QString &language : LanguageManager::instance().availableLanguages()) {
+        QAction *action = interfaceMenu->addAction(LanguageManager::instance().displayName(language));
+        action->setCheckable(true);
+        action->setData(language);
+        languageGroup->addAction(action);
+        connect(action, &QAction::triggered, this, [language]() { LanguageManager::instance().setLanguage(language); });
+    }
+    interfaceMenu->addSeparator();
+    QActionGroup *densityGroup = new QActionGroup(interfaceMenu);
+    densityGroup->setExclusive(true);
+    QAction *comfortableAction = interfaceMenu->addAction(localizedText("舒适密度", "Comfortable density"));
+    comfortableAction->setCheckable(true);
+    comfortableAction->setData(QStringLiteral("comfortable"));
+    densityGroup->addAction(comfortableAction);
+    QAction *compactAction = interfaceMenu->addAction(localizedText("紧凑密度", "Compact density"));
+    compactAction->setCheckable(true);
+    compactAction->setData(QStringLiteral("compact"));
+    densityGroup->addAction(compactAction);
+    connect(comfortableAction, &QAction::triggered, this, []() { UiSettings::instance().setDensity(UiDensity::Comfortable); });
+    connect(compactAction, &QAction::triggered, this, []() { UiSettings::instance().setDensity(UiDensity::Compact); });
+    connect(interfaceMenu, &QMenu::aboutToShow, this, [languageGroup, densityGroup]() {
+        const QString language = LanguageManager::instance().currentLanguage();
+        for (QAction *action : languageGroup->actions())
+            action->setChecked(action->data().toString() == language);
+        const QString density = UiSettings::instance().density() == UiDensity::Compact
+            ? QStringLiteral("compact") : QStringLiteral("comfortable");
+        for (QAction *action : densityGroup->actions())
+            action->setChecked(action->data().toString() == density);
+    });
+    m_interfaceButton->setMenu(interfaceMenu);
+    layout->addWidget(m_interfaceButton);
 
     return sidebar;
 }
@@ -608,6 +737,87 @@ QWidget *MainWindow::createStatusBar()
     units->setObjectName(QStringLiteral("ShellUnits"));
     layout->addWidget(units);
     return bar;
+}
+
+void MainWindow::updateSidebarLayout()
+{
+    if (!m_sidebar)
+        return;
+    const bool expanded = UiSettings::instance().preferredSidebarExpanded() && !m_sidebarForcedCollapsed;
+    m_sidebar->setFixedWidth(expanded ? 176 : 64);
+    m_sidebar->setProperty("expanded", expanded);
+    const QStringList labels = railNavigationLabels();
+    const QStringList fullLabels = navigationLabels();
+    for (int i = 0; i < m_navButtons.size() && i < labels.size(); ++i) {
+        QPushButton *button = m_navButtons.at(i);
+        if (!button)
+            continue;
+        button->setText(expanded ? labels.at(i) : QString());
+        button->setToolTip(fullLabels.at(i));
+        button->setAccessibleName(fullLabels.at(i));
+        button->setProperty("collapsed", !expanded);
+    }
+    for (QLabel *section : m_navSectionLabels)
+        section->setVisible(expanded);
+    if (m_sidebarToggleButton) {
+        m_sidebarToggleButton->setText(expanded ? QStringLiteral("‹") : QStringLiteral("›"));
+        m_sidebarToggleButton->setToolTip(expanded
+            ? localizedText("折叠导航", "Collapse navigation")
+            : localizedText("展开导航", "Expand navigation"));
+    }
+    if (m_licenseButton)
+        m_licenseButton->setText(expanded ? localizedText("授权信息", "License") : QString());
+    if (m_interfaceButton)
+        m_interfaceButton->setText(expanded ? localizedText("界面", "Interface") : QStringLiteral("⚙"));
+    m_sidebar->style()->unpolish(m_sidebar);
+    m_sidebar->style()->polish(m_sidebar);
+}
+
+void MainWindow::applyDensity()
+{
+    UiThemeManager::instance().applyDensityProperty(centralWidget() ? centralWidget() : this);
+    for (QTableView *table : findChildren<QTableView *>())
+        table->verticalHeader()->setDefaultSectionSize(UiSettings::tableRowHeight());
+}
+
+void MainWindow::restorePersistentState(QWidget *root)
+{
+    if (!root)
+        return;
+    for (QSplitter *splitter : root->findChildren<QSplitter *>()) {
+        if (!splitter->objectName().isEmpty())
+            UiSettings::instance().restoreSplitter(splitter->objectName(), splitter);
+    }
+    for (QTableView *table : root->findChildren<QTableView *>()) {
+        if (!table->objectName().isEmpty())
+            UiSettings::instance().restoreHeader(table->objectName(), table->horizontalHeader());
+    }
+}
+
+void MainWindow::savePersistentState(QWidget *root) const
+{
+    if (!root)
+        return;
+    for (QSplitter *splitter : root->findChildren<QSplitter *>()) {
+        if (!splitter->objectName().isEmpty())
+            UiSettings::instance().saveSplitter(splitter->objectName(), splitter);
+    }
+    for (QTableView *table : root->findChildren<QTableView *>()) {
+        if (!table->objectName().isEmpty())
+            UiSettings::instance().saveHeader(table->objectName(), table->horizontalHeader());
+    }
+}
+
+void MainWindow::runSelectionAndShowResults()
+{
+    if (!m_inputPage || selectionCalculationRunning())
+        return;
+    m_request = m_inputPage->request();
+    ensureResultsPage();
+    if (m_resultsPage)
+        m_resultsPage->setBusy(m_request);
+    startSelectionCalculation(m_request);
+    setActivePage(kResultsPageIndex);
 }
 
 QStringList MainWindow::navigationLabels() const
@@ -695,6 +905,7 @@ void MainWindow::refreshSidebarSummary()
 void MainWindow::retranslateUi()
 {
     setWindowTitle(tr("VisionSelect - Industrial Machine Vision Selection Assistant"));
+    updateWindowControlState();
     if (m_topProductLabel)
         m_topProductLabel->setText(localizedText("工程控制台", "Engineering Control Console"));
     if (m_brandSubtitleLabel)
@@ -727,6 +938,7 @@ void MainWindow::retranslateUi()
     if (m_licenseButton)
         m_licenseButton->setText(localizedText("授权", "License"));
     syncLanguageCombo();
+    updateSidebarLayout();
 }
 
 void MainWindow::rebuildPagesForLanguage()
@@ -749,11 +961,7 @@ void MainWindow::rebuildPagesForLanguage()
 
     m_inputPage = new InputPage;
     m_inputPage->setRequest(savedRequest);
-    connect(m_inputPage, &InputPage::calculateRequested, this, &MainWindow::calculate);
-    connect(m_inputPage, &InputPage::resultsRequested, this, [this]() {
-        calculate();
-        setActivePage(kResultsPageIndex);
-    });
+    connect(m_inputPage, &InputPage::runSelectionRequested, this, &MainWindow::runSelectionAndShowResults);
     replaceStackPage(m_pages, 0, m_inputPage);
 
     m_pureCalculationPage = nullptr;
@@ -901,7 +1109,10 @@ void MainWindow::ensureResultsPage()
     m_resultsPage = new ResultsPage;
     connect(m_resultsPage, &ResultsPage::exportPdfRequested, this, &MainWindow::exportReportPdf);
     connect(m_resultsPage, &ResultsPage::exportBomRequested, this, &MainWindow::exportBomCsv);
+    connect(m_resultsPage, &ResultsPage::inputRequested, this, [this]() { setActivePage(0); });
+    connect(m_resultsPage, &ResultsPage::retryRequested, this, &MainWindow::runSelectionAndShowResults);
     replaceStackPage(m_pages, kResultsPageIndex, m_resultsPage);
+    restorePersistentState(m_resultsPage);
     if (!m_results.isEmpty())
         m_resultsPage->setResults(m_results, m_request);
 }
@@ -979,8 +1190,13 @@ void MainWindow::startSelectionCalculation(const SelectionRequest &request)
 
     m_request = request;
     m_results.clear();
+    if (m_inputPage)
+        m_inputPage->setBusy(true);
     if (m_resultsPage)
         m_resultsPage->setBusy(request);
+    announceAccessibleStatus(m_resultsPage ? static_cast<QWidget *>(m_resultsPage)
+                                           : static_cast<QWidget *>(this),
+                             localizedText("正在计算候选方案。", "Calculating candidate solutions."));
     if (m_pages && m_pages->currentIndex() == kCalculationPageIndex)
         refreshCalculationAssistant();
 
@@ -999,12 +1215,31 @@ void MainWindow::finishSelectionCalculation()
     m_request = result.request;
     m_results = result.results;
 
-    if (!result.error.isEmpty())
-        showError(result.error);
+    if (m_inputPage)
+        m_inputPage->setBusy(false);
+    if (!result.error.isEmpty()) {
+        if (m_resultsPage)
+            m_resultsPage->setError(result.error);
+        else
+            showError(result.error);
+        announceAccessibleStatus(m_resultsPage ? static_cast<QWidget *>(m_resultsPage)
+                                               : static_cast<QWidget *>(this),
+                                 localizedText("选型计算失败：%1", "Selection failed: %1").arg(result.error));
+    }
     if (m_pages && m_pages->currentIndex() == kCalculationPageIndex)
         refreshCalculationAssistant();
-    if (m_resultsPage)
+    if (m_resultsPage && result.error.isEmpty())
         m_resultsPage->setResults(m_results, m_request);
+    if (result.error.isEmpty()) {
+        announceAccessibleStatus(m_resultsPage ? static_cast<QWidget *>(m_resultsPage)
+                                               : static_cast<QWidget *>(this),
+                                 m_results.isEmpty()
+                                     ? localizedText("选型完成，没有可显示的候选方案。",
+                                                     "Selection completed with no candidates to display.")
+                                     : localizedText("选型完成，共生成 %1 个候选方案。",
+                                                     "Selection completed with %1 candidate solutions.")
+                                           .arg(m_results.size()));
+    }
     refreshSidebarSummary();
 
     if (m_hasPendingSelectionRequest) {
@@ -1287,8 +1522,20 @@ void MainWindow::removeCamera()
     const qint64 id = m_catalogPage ? m_catalogPage->selectedCameraId() : -1;
     if (id < 0)
         return;
-    CameraSpec camera;
     QString error;
+    bool builtIn = false;
+    if (!m_catalog.productIsBuiltIn(CatalogDomain::Camera, id, &builtIn, &error)) {
+        showError(error);
+        return;
+    }
+    if (builtIn) {
+        QMessageBox::information(this,
+                                 localizedText("内置目录", "Built-in Catalog"),
+                                 localizedText("内置相机不能单独删除。请使用“更多”菜单中的“恢复内置目录”统一管理。",
+                                               "Built-in cameras cannot be deleted individually. Use Restore Built-in Catalog from the More menu."));
+        return;
+    }
+    CameraSpec camera;
     if (!m_catalog.cameraById(id, &camera, &error)) {
         showError(error);
         return;
@@ -1350,8 +1597,20 @@ void MainWindow::removeLens()
     const qint64 id = m_catalogPage ? m_catalogPage->selectedLensId() : -1;
     if (id < 0)
         return;
-    LensSpec lens;
     QString error;
+    bool builtIn = false;
+    if (!m_catalog.productIsBuiltIn(CatalogDomain::Lens, id, &builtIn, &error)) {
+        showError(error);
+        return;
+    }
+    if (builtIn) {
+        QMessageBox::information(this,
+                                 localizedText("内置目录", "Built-in Catalog"),
+                                 localizedText("内置镜头不能单独删除。请使用“更多”菜单中的“恢复内置目录”统一管理。",
+                                               "Built-in lenses cannot be deleted individually. Use Restore Built-in Catalog from the More menu."));
+        return;
+    }
+    LensSpec lens;
     if (!m_catalog.lensById(id, &lens, &error)) {
         showError(error);
         return;
@@ -1412,8 +1671,20 @@ void MainWindow::removeLight()
     const qint64 id = m_catalogPage ? m_catalogPage->selectedLightId() : -1;
     if (id < 0)
         return;
-    LightSpec light;
     QString error;
+    bool builtIn = false;
+    if (!m_catalog.productIsBuiltIn(CatalogDomain::Light, id, &builtIn, &error)) {
+        showError(error);
+        return;
+    }
+    if (builtIn) {
+        QMessageBox::information(this,
+                                 localizedText("内置目录", "Built-in Catalog"),
+                                 localizedText("内置光源不能单独删除。请使用“更多”菜单中的“恢复内置目录”统一管理。",
+                                               "Built-in lights cannot be deleted individually. Use Restore Built-in Catalog from the More menu."));
+        return;
+    }
+    LightSpec light;
     if (!m_catalog.lightById(id, &light, &error)) {
         showError(error);
         return;

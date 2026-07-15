@@ -10,11 +10,15 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if (-not $env:QT_ROOT) {
-    throw '请设置 QT_ROOT，例如 D:\Qt6\6.10.1\mingw_64。'
+    throw 'QT_ROOT is required, for example D:\Qt6\6.10.1\mingw_64.'
 }
 
 if ($Toolchain -eq 'MinGW' -and -not $env:MINGW_ROOT) {
-    throw 'MinGW 构建还需要设置 MINGW_ROOT，例如 D:\Qt6\Tools\mingw1310_64。'
+    throw 'MINGW_ROOT is required for MinGW, for example D:\Qt6\Tools\mingw1310_64.'
+}
+
+if ($Toolchain -eq 'MinGW') {
+    $env:PATH = "$env:MINGW_ROOT\bin;$env:PATH"
 }
 
 $preset = if ($Toolchain -eq 'MSVC') {
@@ -35,6 +39,7 @@ if ($Test) {
 }
 
 if ($Install) {
-    cmake --install "build/$preset" --prefix "dist/VisionSelect"
+    $installPrefix = Join-Path $PSScriptRoot 'dist\VisionSelect'
+    cmake --install "build/$preset" --prefix $installPrefix
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }

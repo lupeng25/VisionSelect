@@ -62,8 +62,11 @@ $mojibakeTerms = Get-MojibakeTerms
 foreach ($relativePath in $files) {
     if (-not (Test-IsTextPath $relativePath)) { continue }
 
-    $checked++
     $fullPath = Join-Path $Root ($relativePath -replace '/', '\')
+    # git ls-files includes tracked paths deleted from the working tree until they are committed.
+    if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { continue }
+
+    $checked++
     [byte[]]$bytes = [System.IO.File]::ReadAllBytes($fullPath)
     if ($bytes.Length -eq 0) { continue }
 

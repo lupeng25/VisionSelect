@@ -13,6 +13,9 @@
 #include <QVector>
 
 class QComboBox;
+class QCloseEvent;
+class QEvent;
+class QFrame;
 class InputPage;
 class QLabel;
 class PureCalculationPage;
@@ -21,6 +24,8 @@ class QResizeEvent;
 class ResultsPage;
 class QStackedWidget;
 class ThreeDCameraPage;
+class QToolButton;
+class QWidget;
 
 struct SelectionJobResult {
     SelectionRequest request;
@@ -36,6 +41,8 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
 protected:
+    void changeEvent(QEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 
@@ -49,6 +56,12 @@ private:
 
     QStackedWidget *m_pages = nullptr;
     QVector<QPushButton *> m_navButtons;
+    QFrame *m_sidebar = nullptr;
+    QWidget *m_topBar = nullptr;
+    QToolButton *m_sidebarToggleButton = nullptr;
+    QToolButton *m_interfaceButton = nullptr;
+    QToolButton *m_maximizeButton = nullptr;
+    bool m_sidebarForcedCollapsed = false;
 
     QLabel *m_summaryLabel = nullptr;
     QLabel *m_brandSubtitleLabel = nullptr;
@@ -81,6 +94,12 @@ private:
 
     void buildUi();
     void updateWindowMask();
+    void updateWindowControlState();
+    void updateSidebarLayout();
+    void applyDensity();
+    void runSelectionAndShowResults();
+    void restorePersistentState(QWidget *root);
+    void savePersistentState(QWidget *root) const;
     QWidget *createTopBar();
     QWidget *createSidebar();
     QWidget *createStatusBar();

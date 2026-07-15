@@ -17,6 +17,8 @@ class QSpinBox;
 class QTableWidget;
 class QTextBrowser;
 class QTextEdit;
+class QSplitter;
+class QFrame;
 
 class ThreeDCameraPage : public QWidget
 {
@@ -24,6 +26,7 @@ class ThreeDCameraPage : public QWidget
 
 public:
     explicit ThreeDCameraPage(QWidget *parent = nullptr);
+    ~ThreeDCameraPage() override;
     void activate();
 
 private:
@@ -65,6 +68,8 @@ private:
     QDoubleSpinBox *m_readoutMarginSpin = nullptr;
     QDoubleSpinBox *m_encoderFrequencySpin = nullptr;
     QTextEdit *m_samplingOutput = nullptr;
+    QSplitter *m_productSplitter = nullptr;
+    QFrame *m_advancedFilters = nullptr;
 
     void buildFilters(QLayout *parentLayout);
     void buildSamplingPanel(QLayout *parentLayout);

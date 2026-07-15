@@ -9,6 +9,7 @@
 class QLabel;
 class QTableWidget;
 class QTextEdit;
+class QSplitter;
 
 class CalculationPage : public QWidget
 {
@@ -19,6 +20,7 @@ public:
     using LensEstimate = LensCalculationEstimate;
 
     explicit CalculationPage(QWidget *parent = nullptr);
+    ~CalculationPage() override;
 
     void setSummary(const QString &text);
     void setCameraEstimates(const QVector<CameraEstimate> &estimates);
@@ -36,6 +38,7 @@ private:
     QTableWidget *m_cameraTable = nullptr;
     QTableWidget *m_lensTable = nullptr;
     QTextEdit *m_details = nullptr;
+    QSplitter *m_splitter = nullptr;
     int m_selectedCameraEstimateRow = -1;
 };
 

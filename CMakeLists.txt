@@ -18,7 +18,9 @@ endif()
 
 set(VS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(VS_RESOURCE_FILES
-    resources/style.qss
+    resources/styles/base.qss
+    resources/styles/light.qss
+    resources/styles/high-contrast.qss
     resources/data/cameras.csv
     resources/data/lenses.csv
     resources/data/lights.csv
@@ -27,7 +29,12 @@ set(VS_RESOURCE_FILES
     resources/i18n/visionselect_en_US.qm
     resources/license/public_key.json
     resources/icons/visionselect_icon_256.png
+    resources/icons/visionselect_icon_64.png
     resources/icons/ui/assistant.png
+    resources/icons/ui/arrow-down.svg
+    resources/icons/ui/arrow-down-light.svg
+    resources/icons/ui/arrow-up.svg
+    resources/icons/ui/arrow-up-light.svg
     resources/icons/ui/calculate.png
     resources/icons/ui/camera3d.png
     resources/icons/ui/catalog.png
@@ -82,7 +89,12 @@ add_library(visionselect_license STATIC
 target_include_directories(visionselect_license PUBLIC "${VS_INCLUDE_DIR}")
 target_link_libraries(visionselect_license PUBLIC visionselect_core Qt6::Core Crypt32 Bcrypt User32)
 
-add_library(visionselect_ui_support STATIC src/ui/UiHelpers.cpp)
+add_library(visionselect_ui_support STATIC
+    src/ui/ResultPresentation.cpp
+    src/ui/UiHelpers.cpp
+    src/ui/UiSettings.cpp
+    src/ui/UiThemeManager.cpp
+)
 target_include_directories(visionselect_ui_support PUBLIC "${VS_INCLUDE_DIR}")
 target_link_libraries(visionselect_ui_support PUBLIC visionselect_core Qt6::Widgets)
 
@@ -161,7 +173,28 @@ qt_add_resources(VisionSelectTests visionselect_test_resources
     FILES ${VS_RESOURCE_FILES}
 )
 add_test(NAME VisionSelectTests COMMAND VisionSelectTests)
-set_tests_properties(VisionSelectTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+set_tests_properties(VisionSelectTests PROPERTIES
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
+)
+
+qt_add_executable(VisionSelectUiTests
+    tests/test_ui.cpp
+)
+target_include_directories(VisionSelectUiTests PRIVATE "${VS_INCLUDE_DIR}")
+target_link_libraries(VisionSelectUiTests PRIVATE
+    visionselect_ui
+    Qt6::Test
+    Qt6::Widgets
+)
+qt_add_resources(VisionSelectUiTests visionselect_ui_test_resources
+    PREFIX "/"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+    FILES ${VS_RESOURCE_FILES}
+)
+add_test(NAME VisionSelectUiTests COMMAND VisionSelectUiTests)
+set_tests_properties(VisionSelectUiTests PROPERTIES
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
+)
 
 include(GNUInstallDirs)
 install(TARGETS VisionSelect VisionSelectLicenseGenerator

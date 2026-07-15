@@ -9,6 +9,8 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QPushButton;
+class QSplitter;
 class QTextEdit;
 
 class InputPage : public QWidget
@@ -17,12 +19,13 @@ class InputPage : public QWidget
 
 public:
     explicit InputPage(QWidget *parent = nullptr);
+    ~InputPage() override;
     SelectionRequest request() const;
     void setRequest(const SelectionRequest &request);
+    void setBusy(bool busy);
 
 signals:
-    void calculateRequested();
-    void resultsRequested();
+    void runSelectionRequested();
 
 private:
     void refreshSummary();
@@ -53,6 +56,8 @@ private:
     QLabel *m_surfaceSummaryLabel = nullptr;
     QLabel *m_exposureSummaryLabel = nullptr;
     QLabel *m_processSummaryLabel = nullptr;
+    QSplitter *m_splitter = nullptr;
+    QPushButton *m_runButton = nullptr;
 };
 
 #endif

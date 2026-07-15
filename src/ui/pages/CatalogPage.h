@@ -23,6 +23,7 @@ class CatalogPage : public QWidget
 
 public:
     explicit CatalogPage(QWidget *parent = nullptr);
+    ~CatalogPage() override;
 
     void setCatalog(const CatalogRepository *catalog);
     void refreshCurrentPage();

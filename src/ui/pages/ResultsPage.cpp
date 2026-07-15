@@ -1,16 +1,22 @@
 #include "ui/pages/ResultsPage.h"
 
 #include "selection/SelectionEngine.h"
+#include "ui/ResultPresentation.h"
 #include "ui/UiHelpers.h"
+#include "ui/UiSettings.h"
 
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLayoutItem>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QTextEdit>
+#include <QSplitter>
+#include <QStyle>
 #include <QVBoxLayout>
 #include <QtGlobal>
 
@@ -91,37 +97,58 @@ ResultsPage::ResultsPage(QWidget *parent)
     layout->addWidget(cards);
 
     m_table = new QTableWidget;
+    m_table->setObjectName(QStringLiteral("results/table"));
+    m_table->setAccessibleName(localizedText("推荐方案表", "Recommended plans table"));
     setupTable(m_table);
     m_table->setColumnCount(11);
     m_table->setHorizontalHeaderLabels({
-        localizedText("类型", "Type"), localizedText("状态", "Status"), localizedText("得分", "Score"),
+        localizedText("类型", "Type"), localizedText("状态", "Status"), localizedText("匹配度", "Match"),
         localizedText("相机", "Camera"), localizedText("镜头", "Lens"), localizedText("光源", "Light"),
         QStringLiteral("FOV(mm)"), localizedText("物方像素", "Obj Pixel"),
         localizedText("倍率/焦距", "Mag/Focal"), QStringLiteral("WD/DOF"),
         localizedText("风险", "Risk")
     });
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-    const int resultColumnWidths[] = {70, 86, 54, 156, 156, 150, 88, 92, 96, 102};
+    const int resultColumnWidths[] = {70, 96, 78, 150, 150, 140, 96, 96, 100, 110};
     for (int column = 0; column < 10; ++column)
         m_table->setColumnWidth(column, resultColumnWidths[column]);
     m_table->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Stretch);
-    connect(m_table, &QTableWidget::cellClicked, this, [this](int row, int) {
+    m_table->setMinimumWidth(640);
+    connect(m_table, &QTableWidget::currentCellChanged, this, [this](int row, int, int, int) {
         const int sourceRow = rowSourceIndex(m_table, row);
         refreshDetails(sourceRow >= 0 ? sourceRow : row);
+        selectCard(sourceRow >= 0 ? sourceRow : row);
     });
 
     m_details = new QTextEdit;
+    m_details->setObjectName(QStringLiteral("ResultsDetails"));
+    m_details->setAccessibleName(localizedText("方案工程详情", "Plan engineering details"));
     m_details->setReadOnly(true);
     m_details->setMinimumHeight(150);
 
-    layout->addWidget(m_table, 1);
-    layout->addWidget(m_details);
+    m_splitter = new QSplitter(Qt::Vertical, this);
+    m_splitter->setObjectName(QStringLiteral("results/main"));
+    m_splitter->addWidget(m_table);
+    m_splitter->addWidget(m_details);
+    m_splitter->setStretchFactor(0, 3);
+    m_splitter->setStretchFactor(1, 1);
+    m_splitter->setSizes({430, 180});
+    UiSettings::instance().restoreSplitter(QStringLiteral("results/main"), m_splitter);
+    UiSettings::instance().restoreHeader(QStringLiteral("results/table"), m_table->horizontalHeader());
+    layout->addWidget(m_splitter, 1);
+}
+
+ResultsPage::~ResultsPage()
+{
+    UiSettings::instance().saveSplitter(QStringLiteral("results/main"), m_splitter);
+    UiSettings::instance().saveHeader(QStringLiteral("results/table"), m_table ? m_table->horizontalHeader() : nullptr);
 }
 
 void ResultsPage::setBusy(const SelectionRequest &request)
 {
     Q_UNUSED(request)
     m_results.clear();
+    m_presentations.clear();
 
     if (m_cardsLayout) {
         while (QLayoutItem *child = m_cardsLayout->takeAt(0)) {
@@ -133,7 +160,7 @@ void ResultsPage::setBusy(const SelectionRequest &request)
             localizedText("候选检索", "Candidate Search"),
             localizedText("正在从产品库检索候选并进行评分。",
                           "Fetching catalog candidates and scoring recommendations."),
-            QStringLiteral("warn")));
+            QStringLiteral("warning")));
     }
 
     if (m_summaryLabel)
@@ -148,10 +175,43 @@ void ResultsPage::setBusy(const SelectionRequest &request)
                                              "Please wait; results will update automatically when calculation completes."));
 }
 
+void ResultsPage::setError(const QString &message)
+{
+    m_results.clear();
+    m_presentations.clear();
+    while (QLayoutItem *child = m_cardsLayout->takeAt(0)) {
+        if (child->widget())
+            child->widget()->deleteLater();
+        delete child;
+    }
+    QFrame *stateCard = new QFrame;
+    stateCard->setObjectName(QStringLiteral("SectionCard"));
+    QVBoxLayout *stateLayout = new QVBoxLayout(stateCard);
+    stateLayout->addWidget(statusBadge(localizedText("计算失败", "Calculation failed"), QStringLiteral("error")));
+    QLabel *messageLabel = new QLabel(message);
+    messageLabel->setWordWrap(true);
+    messageLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    stateLayout->addWidget(messageLabel);
+    QHBoxLayout *actions = new QHBoxLayout;
+    QPushButton *backButton = actionButton(localizedText("返回修改", "Back to inputs"), QString(), true);
+    QPushButton *retryButton = actionButton(localizedText("重试", "Retry"));
+    connect(backButton, &QPushButton::clicked, this, &ResultsPage::inputRequested);
+    connect(retryButton, &QPushButton::clicked, this, &ResultsPage::retryRequested);
+    actions->addStretch();
+    actions->addWidget(backButton);
+    actions->addWidget(retryButton);
+    stateLayout->addLayout(actions);
+    m_cardsLayout->addWidget(stateCard);
+    m_summaryLabel->setText(localizedText("未能生成推荐方案", "Unable to generate recommendations"));
+    m_table->setRowCount(0);
+    m_details->setPlainText(message);
+}
+
 void ResultsPage::setResults(const QVector<SelectionResult> &results,
                              const SelectionRequest &request)
 {
     m_results = results;
+    m_presentations = buildResultPresentations(results);
     refreshTable(request);
 }
 
@@ -172,7 +232,7 @@ void ResultsPage::refreshCards(const SelectionRequest &request)
         m_cardsLayout->addWidget(metricCard(localizedText("暂无推荐方案", "No Recommendations"),
             localizedText("请先计算", "Calculate first"),
             localizedText("返回需求建模页输入约束后生成候选方案。", "Return to requirements and generate candidate plans."),
-            QStringLiteral("warn")));
+            QStringLiteral("warning")));
         return;
     }
 
@@ -200,9 +260,15 @@ void ResultsPage::refreshCards(const SelectionRequest &request)
     for (int index : cardIndexes) {
         const int i = index;
         const SelectionResult &r = m_results.at(i);
+        const ResultPresentation presentation = m_presentations.value(i);
         QFrame *card = new QFrame;
         card->setObjectName(QStringLiteral("PlanCard"));
-        setWidgetState(card, r.hardConstraintsPassed ? QStringLiteral("good") : QStringLiteral("bad"));
+        card->setProperty("sourceIndex", i);
+        card->setProperty("selected", i == 0);
+        card->setCursor(Qt::PointingHandCursor);
+        card->setAccessibleName(localizedText("推荐方案卡", "Recommendation card") + QStringLiteral(" %1").arg(i + 1));
+        card->installEventFilter(this);
+        setWidgetState(card, presentation.compatible ? QStringLiteral("success") : QStringLiteral("error"));
         QVBoxLayout *cardLayout = new QVBoxLayout(card);
         cardLayout->setContentsMargins(14, 12, 14, 12);
         cardLayout->setSpacing(7);
@@ -211,11 +277,19 @@ void ResultsPage::refreshCards(const SelectionRequest &request)
         QLabel *rank = new QLabel(QStringLiteral("#%1  %2").arg(i + 1).arg(lensCategory(r)));
         rank->setObjectName(QStringLiteral("MetricLabel"));
         top->addWidget(rank, 1);
-        top->addWidget(statusBadge(compatibilityText(r), r.hardConstraintsPassed ? QStringLiteral("good") : QStringLiteral("bad")));
+        top->addWidget(statusBadge(compatibilityText(r), presentation.compatible ? QStringLiteral("success") : QStringLiteral("error")));
         cardLayout->addLayout(top);
 
-        QLabel *score = new QLabel(QStringLiteral("%1").arg(r.score.score, 0, 'f', 1));
+        const QString matchText = !presentation.compatible
+            ? localizedText("不兼容", "Incompatible")
+            : (presentation.matchAvailable
+                ? localizedText("相对匹配度 %1%", "Relative match %1%").arg(presentation.relativeMatchPercent)
+                : localizedText("暂无有效匹配度", "No valid match score"));
+        QLabel *score = new QLabel(matchText);
         score->setObjectName(QStringLiteral("MetricValue"));
+        score->setToolTip(localizedText("算法原始分：%1；相对匹配度仅用于本批候选比较。",
+                                        "Raw algorithm score: %1. Relative match is only comparable within this batch.")
+                              .arg(r.score.score, 0, 'f', 1));
         cardLayout->addWidget(score);
 
         QLabel *bom = new QLabel(QStringLiteral("%1\n%2\n%3")
@@ -234,7 +308,16 @@ void ResultsPage::refreshCards(const SelectionRequest &request)
         calculation->setWordWrap(true);
         cardLayout->addWidget(calculation);
 
-        QLabel *risk = statusBadge(riskSummary(r), (r.score.risks.isEmpty() && r.hardFailures.isEmpty()) ? QStringLiteral("good") : QStringLiteral("warn"));
+        const QString riskText = presentation.riskItems.isEmpty()
+            ? localizedText("✓ 0 项风险", "✓ No risks")
+            : localizedText("⚠ %1 项风险：%2", "⚠ %1 risks: %2")
+                  .arg(presentation.riskItems.size())
+                  .arg(presentation.riskItems.first());
+        const QString riskState = presentation.riskLevel == ResultRiskLevel::Error
+            ? QStringLiteral("error")
+            : (presentation.riskLevel == ResultRiskLevel::Warning ? QStringLiteral("warning") : QStringLiteral("success"));
+        QLabel *risk = statusBadge(riskText, riskState);
+        risk->setToolTip(presentation.riskItems.join(localizedText("；", "; ")));
         risk->setWordWrap(true);
         cardLayout->addWidget(risk);
         m_cardsLayout->addWidget(card, 1);
@@ -258,9 +341,17 @@ void ResultsPage::refreshTable(const SelectionRequest &request)
     m_table->setRowCount(m_results.size());
     for (int row = 0; row < m_results.size(); ++row) {
         const SelectionResult &r = m_results.at(row);
+        const ResultPresentation presentation = m_presentations.value(row);
         m_table->setItem(row, 0, indexedItem(lensCategory(r), row));
         m_table->setItem(row, 1, item(compatibilityText(r)));
-        m_table->setItem(row, 2, item(number(r.score.score, 1)));
+        const QString matchText = !presentation.compatible
+            ? localizedText("不兼容", "Incompatible")
+            : (presentation.matchAvailable
+                ? QStringLiteral("%1%").arg(presentation.relativeMatchPercent)
+                : QStringLiteral("—"));
+        QTableWidgetItem *matchItem = item(matchText);
+        matchItem->setToolTip(localizedText("算法原始分：%1", "Raw algorithm score: %1").arg(r.score.score, 0, 'f', 1));
+        m_table->setItem(row, 2, matchItem);
         m_table->setItem(row, 3, item(productLabel(r.camera.manufacturer, r.camera.model)));
         m_table->setItem(row, 4, item(productLabel(r.lens.manufacturer, r.lens.model)));
         m_table->setItem(row, 5, item(productLabel(r.light.manufacturer, r.light.model)));
@@ -274,7 +365,9 @@ void ResultsPage::refreshTable(const SelectionRequest &request)
         m_table->setItem(row, 9, item(r.isTelecentric()
             ? QStringLiteral("WD %1 / DOF %2").arg(r.lens.nominalWorkingDistanceMm, 0, 'f', 0).arg(r.estimatedDofMm, 0, 'f', 1)
             : QStringLiteral("min WD %1 / DOF %2").arg(r.lens.minWorkingDistanceMm, 0, 'f', 0).arg(r.estimatedDofMm, 0, 'f', 1)));
-        m_table->setItem(row, 10, item(riskSummary(r)));
+        m_table->setItem(row, 10, item(presentation.riskItems.isEmpty()
+            ? localizedText("✓ 无主要风险", "✓ No major risk")
+            : localizedText("%1 项：%2", "%1: %2").arg(presentation.riskItems.size()).arg(presentation.riskItems.first())));
     }
     m_table->setSortingEnabled(true);
     if (!m_results.isEmpty()) {
@@ -298,6 +391,14 @@ void ResultsPage::refreshDetails(int row)
         + htmlText(productLabel(r.light.manufacturer, r.light.model)) + QStringLiteral("</h3>");
     text += localizedText("<p><b>公式：</b>%1</p>", "<p><b>Formula:</b> %1</p>").arg(htmlText(r.formulaSummary));
     text += localizedText("<p><b>适配状态：</b>%1</p>", "<p><b>Compatibility:</b> %1</p>").arg(htmlText(compatibilityText(r)));
+    const ResultPresentation presentation = m_presentations.value(row);
+    const QString relativeText = presentation.matchAvailable
+        ? QStringLiteral("%1%").arg(presentation.relativeMatchPercent)
+        : localizedText("不可用", "Unavailable");
+    text += localizedText("<p><b>相对匹配度：</b>%1；<b>算法原始分：</b>%2。相对匹配度仅用于本批兼容候选比较。</p>",
+                          "<p><b>Relative match:</b> %1; <b>raw algorithm score:</b> %2. Relative match is only comparable within this compatible batch.</p>")
+        .arg(relativeText)
+        .arg(r.score.score, 0, 'f', 1);
     text += localizedText("<p><b>有效 FOV：</b>%1 x %2 mm；<b>物方像素：</b>%3 um/px；<b>接口带宽需求：</b>%4 MB/s。</p>",
                           "<p><b>Effective FOV:</b> %1 x %2 mm; <b>object pixel:</b> %3 um/px; <b>required bandwidth:</b> %4 MB/s.</p>")
         .arg(r.effectiveFovWidthMm, 0, 'f', 2)
@@ -345,4 +446,34 @@ void ResultsPage::refreshDetails(int row)
         : riskSummary(r);
     text += localizedText("<p><b>风险提示：</b>%1</p>", "<p><b>Risks:</b> %1</p>").arg(htmlText(riskText));
     m_details->setHtml(text);
+}
+
+bool ResultsPage::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::MouseButtonRelease) {
+        QFrame *card = qobject_cast<QFrame *>(watched);
+        QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+        if (card && card->objectName() == QLatin1String("PlanCard") && mouseEvent->button() == Qt::LeftButton) {
+            const int sourceIndex = card->property("sourceIndex").toInt();
+            selectRowBySourceIndex(m_table, sourceIndex);
+            refreshDetails(sourceIndex);
+            selectCard(sourceIndex);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void ResultsPage::selectCard(int sourceIndex)
+{
+    for (QFrame *card : findChildren<QFrame *>()) {
+        if (card->objectName() != QLatin1String("PlanCard"))
+            continue;
+        const bool selected = card->property("sourceIndex").toInt() == sourceIndex;
+        if (card->property("selected").toBool() == selected)
+            continue;
+        card->setProperty("selected", selected);
+        card->style()->unpolish(card);
+        card->style()->polish(card);
+    }
 }

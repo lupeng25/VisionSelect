@@ -2,6 +2,7 @@
 
 #include "core/Localization.h"
 #include "i18n/LanguageManager.h"
+#include "ui/UiSettings.h"
 
 #include <QAbstractItemView>
 #include <QApplication>
@@ -184,7 +185,7 @@ void setupTable(QTableWidget *table)
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::SingleSelection);
     table->verticalHeader()->setVisible(false);
-    table->verticalHeader()->setDefaultSectionSize(34);
+    table->verticalHeader()->setDefaultSectionSize(UiSettings::tableRowHeight());
     table->horizontalHeader()->setStretchLastSection(true);
     table->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     table->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);

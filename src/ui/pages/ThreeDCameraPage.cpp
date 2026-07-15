@@ -2,7 +2,9 @@
 
 #include "ui/CatalogDialogs.h"
 #include "ui/UiHelpers.h"
+#include "ui/UiSettings.h"
 
+#include <QAction>
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
@@ -19,6 +21,7 @@
 #include <QLabel>
 #include <QList>
 #include <QMessageBox>
+#include <QMenu>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
@@ -31,6 +34,7 @@
 #include <QTableWidgetItem>
 #include <QTextBrowser>
 #include <QTextEdit>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 using namespace UiHelpers;
@@ -458,13 +462,16 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
 
     buildFilters(productLayout);
 
-    QSplitter *splitter = new QSplitter(Qt::Vertical);
+    m_productSplitter = new QSplitter(Qt::Vertical);
+    m_productSplitter->setObjectName(QStringLiteral("threeD/products"));
     m_table = new QTableWidget;
+    m_table->setObjectName(QStringLiteral("threeD/table"));
+    m_table->setAccessibleName(localizedText("3D 相机匹配结果", "3D camera matching results"));
     setupTable(m_table);
     m_table->setSortingEnabled(false);
     m_table->setWordWrap(false);
     m_table->setTextElideMode(Qt::ElideRight);
-    m_table->verticalHeader()->setDefaultSectionSize(30);
+    m_table->verticalHeader()->setDefaultSectionSize(UiSettings::tableRowHeight());
     m_table->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     m_table->setColumnCount(10);
     m_table->setHorizontalHeaderLabels({
@@ -492,15 +499,19 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     m_table->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Stretch);
     connect(m_table, &QTableWidget::cellClicked, this, [this](int row, int) { showDetailsForRow(row); });
     connect(m_table, &QTableWidget::cellActivated, this, [this](int row, int) { showDetailsForRow(row); });
-    splitter->addWidget(m_table);
+    m_productSplitter->addWidget(m_table);
 
     m_details = new QTextBrowser;
+    m_details->setAccessibleName(localizedText("3D 相机型号详情", "3D camera model details"));
     m_details->setOpenExternalLinks(true);
     m_details->setMinimumHeight(170);
-    splitter->addWidget(m_details);
-    splitter->setStretchFactor(0, 3);
-    splitter->setStretchFactor(1, 1);
-    productLayout->addWidget(splitter, 1);
+    m_productSplitter->addWidget(m_details);
+    m_productSplitter->setStretchFactor(0, 3);
+    m_productSplitter->setStretchFactor(1, 1);
+    m_productSplitter->setSizes({450, 180});
+    UiSettings::instance().restoreSplitter(QStringLiteral("threeD/products"), m_productSplitter);
+    UiSettings::instance().restoreHeader(QStringLiteral("threeD/table"), m_table->horizontalHeader());
+    productLayout->addWidget(m_productSplitter, 1);
     tabs->addTab(productTab, localizedText("产品筛选", "Product Filters"));
 
     QWidget *samplingTab = new QWidget;
@@ -515,6 +526,14 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     m_summaryLabel->setText(localizedText(
         "3D 型号库将在首次进入页面或应用筛选时加载。该页面只做 3D 查询过滤，不参与 2D 评分、推荐、BOM 或 PDF 导出。",
         "The 3D model library loads when this page is first opened or filters are applied. This page only queries and filters 3D products; it does not affect 2D scoring, recommendations, BOM, or PDF export."));
+}
+
+ThreeDCameraPage::~ThreeDCameraPage()
+{
+    UiSettings::instance().saveSplitter(QStringLiteral("threeD/products"), m_productSplitter);
+    UiSettings::instance().saveHeader(QStringLiteral("threeD/table"), m_table ? m_table->horizontalHeader() : nullptr);
+    UiSettings::instance().setValue(QStringLiteral("ui/threeD/advancedExpanded"),
+                                    m_advancedFilters ? m_advancedFilters->isVisible() : false);
 }
 
 void ThreeDCameraPage::activate()
@@ -552,6 +571,13 @@ void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
     headerLayout->addWidget(headerText, 1);
     headerLayout->addWidget(statusBadge(localizedText("独立 3D 查询", "Standalone 3D Query"), QStringLiteral("info")),
         0, Qt::AlignRight | Qt::AlignTop);
+    QToolButton *advancedButton = new QToolButton(panel);
+    advancedButton->setObjectName(QStringLiteral("SecondaryButton"));
+    advancedButton->setText(localizedText("高级筛选", "Advanced Filters"));
+    advancedButton->setCheckable(true);
+    advancedButton->setFocusPolicy(Qt::StrongFocus);
+    advancedButton->setAccessibleName(advancedButton->text());
+    headerLayout->addWidget(advancedButton, 0, Qt::AlignRight | Qt::AlignTop);
     panelLayout->addLayout(headerLayout);
 
     m_brandCombo = new QComboBox;
@@ -586,6 +612,8 @@ void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
         label->setObjectName(QStringLiteral("FilterFieldLabel"));
         label->setWordWrap(false);
         label->setToolTip(labelText);
+        label->setBuddy(control);
+        control->setAccessibleName(labelText);
         prepareControl(control);
         layout->addWidget(label);
         layout->addWidget(control);
@@ -649,13 +677,23 @@ void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
     groupsLayout->setSpacing(12);
     groupsLayout->addWidget(attributes.frame, 1);
     groupsLayout->addWidget(geometry.frame, 1);
-    groupsLayout->addWidget(performance.frame, 1);
     panelLayout->addLayout(groupsLayout);
+    m_advancedFilters = performance.frame;
+    const bool advancedExpanded = UiSettings::instance().boolValue(QStringLiteral("ui/threeD/advancedExpanded"), false);
+    advancedButton->setChecked(advancedExpanded);
+    m_advancedFilters->setVisible(advancedExpanded);
+    panelLayout->addWidget(m_advancedFilters);
+    connect(advancedButton, &QToolButton::toggled, this, [this](bool expanded) {
+        if (m_advancedFilters)
+            m_advancedFilters->setVisible(expanded);
+        UiSettings::instance().setValue(QStringLiteral("ui/threeD/advancedExpanded"), expanded);
+    });
 
     QPushButton *addButton = actionButton(localizedText("新增型号", "Add Model"), QStringLiteral(":/icons/ui/catalog.png"), true);
     QPushButton *copyButton = actionButton(localizedText("复制型号", "Copy Model"), QStringLiteral(":/icons/ui/compare.png"), true);
     QPushButton *editButton = actionButton(localizedText("编辑型号", "Edit Model"), QStringLiteral(":/icons/ui/info.png"), true);
     QPushButton *removeButton = actionButton(localizedText("删除自定义", "Delete Custom"), QStringLiteral(":/icons/ui/error.png"), true);
+    removeButton->setObjectName(QStringLiteral("DangerButton"));
     QPushButton *applyButton = actionButton(localizedText("应用筛选", "Apply Filters"), QStringLiteral(":/icons/ui/calculate.png"));
     QPushButton *clearButton = actionButton(localizedText("清空条件", "Clear"), QStringLiteral(":/icons/ui/info.png"), true);
 
@@ -665,10 +703,24 @@ void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
     QLabel *hintLabel = new QLabel(localizedText("数值为“不限”时不会参与过滤。", "Numeric fields set to Any are ignored."));
     hintLabel->setObjectName(QStringLiteral("FilterHint"));
     actionLayout->addWidget(hintLabel, 1);
-    actionLayout->addWidget(addButton);
-    actionLayout->addWidget(copyButton);
-    actionLayout->addWidget(editButton);
-    actionLayout->addWidget(removeButton);
+    QToolButton *managementButton = new QToolButton;
+    managementButton->setObjectName(QStringLiteral("SecondaryButton"));
+    managementButton->setProperty("hasMenu", true);
+    managementButton->setText(localizedText("型号管理", "Model Management"));
+    managementButton->setPopupMode(QToolButton::InstantPopup);
+    managementButton->setFocusPolicy(Qt::StrongFocus);
+    QMenu *managementMenu = new QMenu(managementButton);
+    const auto addManagementAction = [managementMenu](const QString &text, QPushButton *target) {
+        QAction *action = managementMenu->addAction(text);
+        QObject::connect(action, &QAction::triggered, target, &QPushButton::click);
+    };
+    addManagementAction(localizedText("新增型号", "Add Model"), addButton);
+    addManagementAction(localizedText("复制型号", "Copy Model"), copyButton);
+    addManagementAction(localizedText("编辑型号", "Edit Model"), editButton);
+    managementMenu->addSeparator();
+    addManagementAction(localizedText("删除自定义型号…", "Delete Custom Model…"), removeButton);
+    managementButton->setMenu(managementMenu);
+    actionLayout->addWidget(managementButton);
     actionLayout->addWidget(clearButton);
     actionLayout->addWidget(applyButton);
     panelLayout->addLayout(actionLayout);
@@ -694,8 +746,8 @@ void ThreeDCameraPage::buildSamplingPanel(QLayout *parentLayout)
     inputScroll->setObjectName(QStringLiteral("ParameterScroll"));
     inputScroll->setWidgetResizable(true);
     inputScroll->setFrameShape(QFrame::NoFrame);
-    inputScroll->setMinimumWidth(390);
-    inputScroll->setMaximumWidth(500);
+    inputScroll->setMinimumWidth(320);
+    inputScroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     QWidget *inputPanel = new QWidget;
     inputPanel->setObjectName(QStringLiteral("ParameterInputPanel"));
     QVBoxLayout *inputLayout = new QVBoxLayout(inputPanel);
@@ -718,6 +770,8 @@ void ThreeDCameraPage::buildSamplingPanel(QLayout *parentLayout)
         layout->setSpacing(5);
         QLabel *label = new QLabel(labelText);
         label->setObjectName(QStringLiteral("ParameterFieldLabel"));
+        label->setBuddy(control);
+        control->setAccessibleName(labelText);
         label->setToolTip(labelText);
         prepareControl(control);
         layout->addWidget(label);

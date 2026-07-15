@@ -2122,6 +2122,41 @@ int CatalogRepository::productCount(CatalogDomain domain, QString *errorMessage)
     return query.value(0).toInt();
 }
 
+bool CatalogRepository::productIsBuiltIn(CatalogDomain domain, qint64 id, bool *builtIn,
+                                         QString *errorMessage) const
+{
+    ScopedErrorLocalizer localizeError(errorMessage);
+    if (builtIn)
+        *builtIn = false;
+    if (!openDatabase(errorMessage))
+        return false;
+
+    QString table;
+    switch (domain) {
+    case CatalogDomain::Camera:
+        table = QStringLiteral("camera_products");
+        break;
+    case CatalogDomain::Lens:
+        table = QStringLiteral("lens_products");
+        break;
+    case CatalogDomain::Light:
+        table = QStringLiteral("light_products");
+        break;
+    }
+
+    QSqlQuery query(m_db);
+    query.prepare(QStringLiteral("SELECT source_kind FROM %1 WHERE id=?").arg(table));
+    query.addBindValue(id);
+    if (!query.exec() || !query.next()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Unable to query catalog product source: %1").arg(sqlErrorText(query));
+        return false;
+    }
+    if (builtIn)
+        *builtIn = query.value(0).toString() == QLatin1String("builtin");
+    return true;
+}
+
 bool CatalogRepository::cameraById(qint64 id, CameraSpec *camera, QString *errorMessage) const
 {
     ScopedErrorLocalizer localizeError(errorMessage);
@@ -2336,7 +2371,7 @@ bool CatalogRepository::removeCameraById(qint64 id, QString *errorMessage)
     if (!openDatabase(errorMessage))
         return false;
     QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("DELETE FROM camera_products WHERE id=?"));
+    query.prepare(QStringLiteral("DELETE FROM camera_products WHERE id=? AND source_kind<>'builtin'"));
     query.addBindValue(id);
     if (!query.exec()) {
         if (errorMessage)
@@ -2345,7 +2380,7 @@ bool CatalogRepository::removeCameraById(qint64 id, QString *errorMessage)
     }
     if (query.numRowsAffected() != 1) {
         if (errorMessage)
-            *errorMessage = QStringLiteral("Camera product ID %1 does not exist.").arg(id);
+            *errorMessage = QStringLiteral("Built-in camera products cannot be deleted directly, or product ID %1 does not exist.").arg(id);
         return false;
     }
     return refreshSnapshotsIfLoaded(errorMessage);
@@ -2357,7 +2392,7 @@ bool CatalogRepository::removeLensById(qint64 id, QString *errorMessage)
     if (!openDatabase(errorMessage))
         return false;
     QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("DELETE FROM lens_products WHERE id=?"));
+    query.prepare(QStringLiteral("DELETE FROM lens_products WHERE id=? AND source_kind<>'builtin'"));
     query.addBindValue(id);
     if (!query.exec()) {
         if (errorMessage)
@@ -2366,7 +2401,7 @@ bool CatalogRepository::removeLensById(qint64 id, QString *errorMessage)
     }
     if (query.numRowsAffected() != 1) {
         if (errorMessage)
-            *errorMessage = QStringLiteral("Lens product ID %1 does not exist.").arg(id);
+            *errorMessage = QStringLiteral("Built-in lens products cannot be deleted directly, or product ID %1 does not exist.").arg(id);
         return false;
     }
     return refreshSnapshotsIfLoaded(errorMessage);
@@ -2378,7 +2413,7 @@ bool CatalogRepository::removeLightById(qint64 id, QString *errorMessage)
     if (!openDatabase(errorMessage))
         return false;
     QSqlQuery query(m_db);
-    query.prepare(QStringLiteral("DELETE FROM light_products WHERE id=?"));
+    query.prepare(QStringLiteral("DELETE FROM light_products WHERE id=? AND source_kind<>'builtin'"));
     query.addBindValue(id);
     if (!query.exec()) {
         if (errorMessage)
@@ -2387,7 +2422,7 @@ bool CatalogRepository::removeLightById(qint64 id, QString *errorMessage)
     }
     if (query.numRowsAffected() != 1) {
         if (errorMessage)
-            *errorMessage = QStringLiteral("Light product ID %1 does not exist.").arg(id);
+            *errorMessage = QStringLiteral("Built-in light products cannot be deleted directly, or product ID %1 does not exist.").arg(id);
         return false;
     }
     m_lightCandidateCache.clear();

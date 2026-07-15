@@ -1,6 +1,7 @@
 #include "ui/pages/CalculationPage.h"
 
 #include "ui/UiHelpers.h"
+#include "ui/UiSettings.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -10,6 +11,7 @@
 #include <QStringList>
 #include <QTableWidget>
 #include <QTextEdit>
+#include <QSplitter>
 #include <QVBoxLayout>
 
 using namespace UiHelpers;
@@ -61,9 +63,10 @@ CalculationPage::CalculationPage(QWidget *parent)
 
     QLabel *cameraTitle = new QLabel(localizedText("相机估算", "Camera Estimates"));
     cameraTitle->setObjectName(QStringLiteral("SectionTitle"));
-    layout->addWidget(cameraTitle);
 
     m_cameraTable = new QTableWidget;
+    m_cameraTable->setObjectName(QStringLiteral("calculation/cameras"));
+    m_cameraTable->setAccessibleName(localizedText("相机候选估算表", "Camera candidate estimates"));
     setupTable(m_cameraTable);
     m_cameraTable->setColumnCount(10);
     m_cameraTable->setHorizontalHeaderLabels({
@@ -73,20 +76,24 @@ CalculationPage::CalculationPage(QWidget *parent)
         localizedText("普通焦距", "Fixed Focal"), QStringLiteral("PMAG"),
         localizedText("带宽", "Bandwidth"), localizedText("判断", "Verdict")
     });
-    m_cameraTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    m_cameraTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    const int cameraWidths[] = {150, 110, 118, 86, 92, 104, 100, 96, 138};
+    for (int column = 0; column < 9; ++column)
+        m_cameraTable->setColumnWidth(column, cameraWidths[column]);
     m_cameraTable->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Stretch);
+    m_cameraTable->horizontalHeader()->setMinimumSectionSize(70);
     connect(m_cameraTable, &QTableWidget::cellClicked, this, [this](int row, int) {
         const int sourceRow = rowSourceIndex(m_cameraTable, row);
         m_selectedCameraEstimateRow = sourceRow >= 0 ? sourceRow : row;
         emit cameraSelectionChanged(m_selectedCameraEstimateRow);
     });
-    layout->addWidget(m_cameraTable, 1);
 
     QLabel *lensTitle = new QLabel(localizedText("镜头候选", "Lens Candidates"));
     lensTitle->setObjectName(QStringLiteral("SectionTitle"));
-    layout->addWidget(lensTitle);
 
     m_lensTable = new QTableWidget;
+    m_lensTable->setObjectName(QStringLiteral("calculation/lenses"));
+    m_lensTable->setAccessibleName(localizedText("镜头候选估算表", "Lens candidate estimates"));
     setupTable(m_lensTable);
     m_lensTable->setColumnCount(10);
     m_lensTable->setHorizontalHeaderLabels({
@@ -96,14 +103,51 @@ CalculationPage::CalculationPage(QWidget *parent)
         localizedText("物方像素", "Object Pixel"), QStringLiteral("WD/DOF"),
         localizedText("像圈", "Image Circle"), localizedText("判断", "Verdict")
     });
-    m_lensTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    m_lensTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    const int lensWidths[] = {86, 110, 150, 80, 108, 100, 104, 124, 100};
+    for (int column = 0; column < 9; ++column)
+        m_lensTable->setColumnWidth(column, lensWidths[column]);
     m_lensTable->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Stretch);
-    layout->addWidget(m_lensTable, 1);
+    m_lensTable->horizontalHeader()->setMinimumSectionSize(70);
 
     m_details = new QTextEdit;
+    m_details->setAccessibleName(localizedText("候选工程详情", "Candidate engineering details"));
     m_details->setReadOnly(true);
     m_details->setMinimumHeight(120);
-    layout->addWidget(m_details);
+
+    QWidget *cameraPane = new QWidget;
+    QVBoxLayout *cameraPaneLayout = new QVBoxLayout(cameraPane);
+    cameraPaneLayout->setContentsMargins(0, 0, 0, 0);
+    cameraPaneLayout->setSpacing(6);
+    cameraPaneLayout->addWidget(cameraTitle);
+    cameraPaneLayout->addWidget(m_cameraTable);
+    QWidget *lensPane = new QWidget;
+    QVBoxLayout *lensPaneLayout = new QVBoxLayout(lensPane);
+    lensPaneLayout->setContentsMargins(0, 0, 0, 0);
+    lensPaneLayout->setSpacing(6);
+    lensPaneLayout->addWidget(lensTitle);
+    lensPaneLayout->addWidget(m_lensTable);
+
+    m_splitter = new QSplitter(Qt::Vertical, this);
+    m_splitter->setObjectName(QStringLiteral("calculation/main"));
+    m_splitter->addWidget(cameraPane);
+    m_splitter->addWidget(lensPane);
+    m_splitter->addWidget(m_details);
+    m_splitter->setStretchFactor(0, 2);
+    m_splitter->setStretchFactor(1, 2);
+    m_splitter->setStretchFactor(2, 1);
+    m_splitter->setSizes({250, 250, 140});
+    UiSettings::instance().restoreSplitter(QStringLiteral("calculation/main"), m_splitter);
+    UiSettings::instance().restoreHeader(QStringLiteral("calculation/cameras"), m_cameraTable->horizontalHeader());
+    UiSettings::instance().restoreHeader(QStringLiteral("calculation/lenses"), m_lensTable->horizontalHeader());
+    layout->addWidget(m_splitter, 1);
+}
+
+CalculationPage::~CalculationPage()
+{
+    UiSettings::instance().saveSplitter(QStringLiteral("calculation/main"), m_splitter);
+    UiSettings::instance().saveHeader(QStringLiteral("calculation/cameras"), m_cameraTable ? m_cameraTable->horizontalHeader() : nullptr);
+    UiSettings::instance().saveHeader(QStringLiteral("calculation/lenses"), m_lensTable ? m_lensTable->horizontalHeader() : nullptr);
 }
 
 void CalculationPage::setSummary(const QString &text)

@@ -84,6 +84,8 @@ public:
     CatalogPageResult<LightSpec> queryLights(const CatalogQuery &query, QString *errorMessage = nullptr) const;
     QStringList distinctValues(CatalogDomain domain, const QString &field, QString *errorMessage = nullptr) const;
     int productCount(CatalogDomain domain, QString *errorMessage = nullptr) const;
+    bool productIsBuiltIn(CatalogDomain domain, qint64 id, bool *builtIn,
+                          QString *errorMessage = nullptr) const;
 
     bool cameraById(qint64 id, CameraSpec *camera, QString *errorMessage = nullptr) const;
     bool lensById(qint64 id, LensSpec *lens, QString *errorMessage = nullptr) const;

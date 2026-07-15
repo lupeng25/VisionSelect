@@ -1,0 +1,35 @@
+QWidget { color: palette(text); background: palette(window); }
+QMainWindow, QWidget#ApplicationShell, QWidget#ShellWorkspace, QStackedWidget { background: palette(window); }
+QFrame#ShellTopBar, QFrame#Sidebar { color: palette(window-text); background: palette(window); border: 2px solid palette(text); }
+QLabel#TopBarBrand, QLabel#TopBarProduct, QLabel#TopBarPage, QLabel#WorkflowStep,
+QLabel#SidebarSectionLabel, QFrame#Sidebar QLabel { color: palette(text); }
+QPushButton, QToolButton, QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox,
+QTextEdit, QTextBrowser, QPlainTextEdit, QTableView, QTableWidget,
+QFrame#SectionCard, QFrame#MetricCard, QFrame#PlanCard, QFrame#FilterPanel,
+QFrame#ParameterGroup, QFrame#CalculationResultPanel, QFrame#EditorGroup,
+QFrame#OutlineSection, QFrame#InspectorRow, QFrame#FilterGroup {
+    color: palette(text); background: palette(base); border: 2px solid palette(text); border-radius: 0;
+}
+QPushButton:hover, QToolButton:hover, QPushButton:focus, QToolButton:focus {
+    color: palette(highlighted-text); background: palette(highlight); border: 2px solid palette(text);
+}
+QPushButton[active="true"], QLabel#WorkflowStep[state="active"], QFrame#PlanCard[selected="true"] {
+    color: palette(highlighted-text); background: palette(highlight); border: 3px solid palette(text);
+}
+QHeaderView::section { color: palette(text); background: palette(button); border: 1px solid palette(text); padding: 7px; font-weight: 800; }
+QTableView, QTableWidget { selection-color: palette(highlighted-text); selection-background-color: palette(highlight); gridline-color: palette(text); }
+QLabel#StatusBadge, QLabel#ShellStatusPill { color: palette(text); background: palette(base); border: 2px solid palette(text); border-radius: 0; }
+QSplitter::handle, QScrollBar::handle:vertical, QScrollBar::handle:horizontal { background: palette(text); }
+QCheckBox, QRadioButton { color: palette(text); background: transparent; }
+QComboBox::drop-down, QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    color: palette(button-text); background: palette(button); border: 2px solid palette(text); border-radius: 0;
+}
+QComboBox::down-arrow, QToolButton::menu-indicator,
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url(:/icons/ui/arrow-down-light.svg); }
+QComboBox::down-arrow:on, QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url(:/icons/ui/arrow-up-light.svg); }
+QComboBox QAbstractItemView, QMenu { color: palette(text); background: palette(base); border: 2px solid palette(text); border-radius: 0; }
+QComboBox QAbstractItemView::item:selected, QComboBox QAbstractItemView::item:hover,
+QMenu::item:selected { color: palette(highlighted-text); background: palette(highlight); }
+QScrollBar:vertical, QScrollBar:horizontal, QAbstractScrollArea::corner { background: palette(base); border: 1px solid palette(text); }
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal { background: palette(text); border: 2px solid palette(base); border-radius: 0; }

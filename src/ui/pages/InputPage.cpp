@@ -2,6 +2,7 @@
 
 #include "selection/CalculationAssistant.h"
 #include "ui/UiHelpers.h"
+#include "ui/UiSettings.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -13,9 +14,11 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QList>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
+#include <QSplitter>
 #include <QStringList>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -23,10 +26,15 @@
 using namespace UiHelpers;
 
 namespace {
-QLabel *fieldLabel(const QString &text)
+QLabel *fieldLabel(const QString &text, QWidget *buddy = nullptr)
 {
     QLabel *label = new QLabel(text);
     label->setObjectName(QStringLiteral("EditorFieldLabel"));
+    label->setMinimumWidth(96);
+    label->setWordWrap(true);
+    label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    if (buddy)
+        label->setBuddy(buddy);
     return label;
 }
 
@@ -79,9 +87,35 @@ QFrame *editorGroup(const QString &number, const QString &title, QGridLayout **g
 void addGridField(QGridLayout *grid, int row, int pair, const QString &label, QWidget *control)
 {
     const int column = pair * 2;
-    grid->addWidget(fieldLabel(label), row, column);
+    grid->addWidget(fieldLabel(label, control), row, column);
+    control->setAccessibleName(label);
+    control->setMinimumWidth(0);
+    if (QComboBox *combo = qobject_cast<QComboBox *>(control)) {
+        combo->setMinimumContentsLength(0);
+        combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    }
     control->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     grid->addWidget(control, row, column + 1);
+}
+
+bool requestsEqual(const SelectionRequest &left, const SelectionRequest &right)
+{
+    return left.projectNotes == right.projectNotes
+        && left.objectWidthMm == right.objectWidthMm
+        && left.objectHeightMm == right.objectHeightMm
+        && left.placementMarginMm == right.placementMarginMm
+        && left.minFeatureUm == right.minFeatureUm
+        && left.measurementToleranceUm == right.measurementToleranceUm
+        && left.workingDistanceMm == right.workingDistanceMm
+        && left.heightVariationMm == right.heightVariationMm
+        && left.motionMode == right.motionMode
+        && left.motionSpeedMmS == right.motionSpeedMmS
+        && left.requiredFps == right.requiredFps
+        && left.detectionType == right.detectionType
+        && left.surfaceType == right.surfaceType
+        && left.reflective == right.reflective
+        && left.preferMono == right.preferMono
+        && left.allowTelecentric == right.allowTelecentric;
 }
 
 QFrame *inspectorRow(const QString &label, QLabel **valueLabel)
@@ -112,13 +146,13 @@ InputPage::InputPage(QWidget *parent)
     outer->setContentsMargins(0, 0, 0, 0);
     outer->setSpacing(0);
 
-    QHBoxLayout *body = new QHBoxLayout;
-    body->setContentsMargins(0, 0, 0, 0);
-    body->setSpacing(0);
+    m_splitter = new QSplitter(Qt::Horizontal, this);
+    m_splitter->setObjectName(QStringLiteral("InputMainSplitter"));
+    m_splitter->setChildrenCollapsible(true);
 
     QFrame *outline = new QFrame;
     outline->setObjectName(QStringLiteral("RequirementOutline"));
-    outline->setFixedWidth(250);
+    outline->setMinimumWidth(210);
     QVBoxLayout *outlineLayout = new QVBoxLayout(outline);
     outlineLayout->setContentsMargins(12, 14, 12, 12);
     outlineLayout->setSpacing(8);
@@ -147,10 +181,12 @@ InputPage::InputPage(QWidget *parent)
     notesTitle->setObjectName(QStringLiteral("OutlineFieldTitle"));
     outlineLayout->addWidget(notesTitle);
     m_notesEdit = new QTextEdit;
+    notesTitle->setBuddy(m_notesEdit);
+    m_notesEdit->setAccessibleName(localizedText("项目备注", "Project notes"));
     m_notesEdit->setPlaceholderText(localizedText("输入项目或工位备注…", "Add project or station notes…"));
     m_notesEdit->setFixedHeight(68);
     outlineLayout->addWidget(m_notesEdit);
-    body->addWidget(outline);
+    m_splitter->addWidget(outline);
 
     QFrame *editor = new QFrame;
     editor->setObjectName(QStringLiteral("RequirementEditor"));
@@ -171,7 +207,39 @@ InputPage::InputPage(QWidget *parent)
     editorCopy->addWidget(editorSubtitle);
     editorHeader->addLayout(editorCopy, 1);
     QPushButton *resetButton = actionButton(localizedText("重置参数", "Reset"), QStringLiteral(":/icons/ui/calculate.png"), true);
-    connect(resetButton, &QPushButton::clicked, this, [this]() { setRequest(SelectionRequest()); });
+    resetButton->setAccessibleDescription(localizedText("恢复默认需求参数", "Restore the default requirement values"));
+    connect(resetButton, &QPushButton::clicked, this, [this]() {
+        const SelectionRequest defaults;
+        if (requestsEqual(request(), defaults))
+            return;
+        if (QMessageBox::question(this,
+                                  localizedText("重置参数", "Reset Parameters"),
+                                  localizedText("确定恢复默认参数吗？当前输入和备注将被清除。",
+                                                "Restore the defaults? Current inputs and notes will be cleared."))
+            == QMessageBox::Yes) {
+            setRequest(defaults);
+        }
+    });
+    QPushButton *outlineButton = actionButton(QStringLiteral("◀"), QString(), true);
+    outlineButton->setAccessibleDescription(localizedText("显示或隐藏需求大纲", "Show or hide the requirement outline"));
+    connect(outlineButton, &QPushButton::clicked, this, [this]() {
+        QList<int> sizes = m_splitter->sizes();
+        if (sizes.size() == 3) {
+            sizes[0] = sizes[0] > 0 ? 0 : 230;
+            m_splitter->setSizes(sizes);
+        }
+    });
+    QPushButton *summaryButton = actionButton(QStringLiteral("▶"), QString(), true);
+    summaryButton->setAccessibleDescription(localizedText("显示或隐藏实时约束摘要", "Show or hide the live constraint summary"));
+    connect(summaryButton, &QPushButton::clicked, this, [this]() {
+        QList<int> sizes = m_splitter->sizes();
+        if (sizes.size() == 3) {
+            sizes[2] = sizes[2] > 0 ? 0 : 300;
+            m_splitter->setSizes(sizes);
+        }
+    });
+    editorHeader->addWidget(outlineButton, 0, Qt::AlignTop);
+    editorHeader->addWidget(summaryButton, 0, Qt::AlignTop);
     editorHeader->addWidget(resetButton, 0, Qt::AlignTop);
     editorLayout->addLayout(editorHeader);
 
@@ -254,18 +322,20 @@ InputPage::InputPage(QWidget *parent)
     layout->addStretch();
     scroll->setWidget(content);
     editorLayout->addWidget(scroll, 1);
-    body->addWidget(editor, 1);
+    editor->setMinimumWidth(480);
+    m_splitter->addWidget(editor);
+    m_splitter->setCollapsible(1, false);
 
     QFrame *summaryPanel = new QFrame;
     summaryPanel->setObjectName(QStringLiteral("ConstraintInspector"));
-    summaryPanel->setFixedWidth(332);
+    summaryPanel->setMinimumWidth(270);
     QVBoxLayout *summaryLayout = new QVBoxLayout(summaryPanel);
     summaryLayout->setContentsMargins(14, 14, 14, 12);
     summaryLayout->setSpacing(8);
     QHBoxLayout *inspectorHeader = new QHBoxLayout;
     QLabel *summaryTitle = new QLabel(localizedText("实时约束", "Live Constraints"));
     summaryTitle->setObjectName(QStringLiteral("PaneTitle"));
-    QLabel *passBadge = statusBadge(localizedText("通过", "Pass"), QStringLiteral("good"));
+    QLabel *passBadge = statusBadge(localizedText("通过", "Pass"), QStringLiteral("success"));
     inspectorHeader->addWidget(summaryTitle, 1);
     inspectorHeader->addWidget(passBadge);
     summaryLayout->addLayout(inspectorHeader);
@@ -305,8 +375,13 @@ InputPage::InputPage(QWidget *parent)
     riskLayout->addWidget(m_processSummaryLabel);
     summaryLayout->addWidget(risk);
     summaryLayout->addStretch();
-    body->addWidget(summaryPanel);
-    outer->addLayout(body, 1);
+    m_splitter->addWidget(summaryPanel);
+    m_splitter->setStretchFactor(0, 22);
+    m_splitter->setStretchFactor(1, 50);
+    m_splitter->setStretchFactor(2, 28);
+    m_splitter->setSizes({250, 600, 330});
+    UiSettings::instance().restoreSplitter(QStringLiteral("input/main"), m_splitter);
+    outer->addWidget(m_splitter, 1);
 
     QFrame *commandBar = new QFrame;
     commandBar->setObjectName(QStringLiteral("PageCommandBar"));
@@ -317,12 +392,13 @@ InputPage::InputPage(QWidget *parent)
                                                     "Live constraints refresh immediately when inputs change."));
     commandHint->setObjectName(QStringLiteral("CommandHint"));
     buttonLayout->addWidget(commandHint, 1);
-    QPushButton *resultButton = actionButton(localizedText("计算并查看结果", "Calculate and Review"), QStringLiteral(":/icons/ui/results.png"), true);
-    QPushButton *calculateButton = actionButton(localizedText("运行选型  F9", "Run Selection  F9"), QStringLiteral(":/icons/ui/calculate.png"));
-    connect(calculateButton, &QPushButton::clicked, this, &InputPage::calculateRequested);
-    connect(resultButton, &QPushButton::clicked, this, &InputPage::resultsRequested);
-    buttonLayout->addWidget(resultButton);
-    buttonLayout->addWidget(calculateButton);
+    m_runButton = actionButton(localizedText("运行选型并查看结果  F9", "Run Selection and Review  F9"),
+                               QStringLiteral(":/icons/ui/results.png"));
+    m_runButton->setObjectName(QStringLiteral("RunSelectionButton"));
+    m_runButton->setAccessibleDescription(localizedText("执行选型并跳转到结果页",
+                                                        "Run selection and open the results page"));
+    connect(m_runButton, &QPushButton::clicked, this, &InputPage::runSelectionRequested);
+    buttonLayout->addWidget(m_runButton);
     outer->addWidget(commandBar);
 
     const QList<QDoubleSpinBox *> spins = {
@@ -337,7 +413,33 @@ InputPage::InputPage(QWidget *parent)
     connect(m_reflectiveCheck, &QCheckBox::toggled, this, &InputPage::refreshSummary);
     connect(m_monoCheck, &QCheckBox::toggled, this, &InputPage::refreshSummary);
     connect(m_allowTelecentricCheck, &QCheckBox::toggled, this, &InputPage::refreshSummary);
+
+    QWidget::setTabOrder(m_widthSpin, m_heightSpin);
+    QWidget::setTabOrder(m_heightSpin, m_marginSpin);
+    QWidget::setTabOrder(m_marginSpin, m_minFeatureSpin);
+    QWidget::setTabOrder(m_minFeatureSpin, m_toleranceSpin);
+    QWidget::setTabOrder(m_toleranceSpin, m_detectionCombo);
+    QWidget::setTabOrder(m_detectionCombo, m_surfaceCombo);
+    QWidget::setTabOrder(m_surfaceCombo, m_wdSpin);
+    QWidget::setTabOrder(m_wdSpin, m_heightVariationSpin);
+    QWidget::setTabOrder(m_heightVariationSpin, m_motionModeCombo);
+    QWidget::setTabOrder(m_motionModeCombo, m_speedSpin);
+    QWidget::setTabOrder(m_speedSpin, m_fpsSpin);
+    QWidget::setTabOrder(m_fpsSpin, m_reflectiveCheck);
+    QWidget::setTabOrder(m_allowTelecentricCheck, m_notesEdit);
+    QWidget::setTabOrder(m_notesEdit, m_runButton);
     refreshSummary();
+}
+
+InputPage::~InputPage()
+{
+    UiSettings::instance().saveSplitter(QStringLiteral("input/main"), m_splitter);
+}
+
+void InputPage::setBusy(bool busy)
+{
+    if (m_runButton)
+        m_runButton->setEnabled(!busy);
 }
 
 void InputPage::refreshSummary()

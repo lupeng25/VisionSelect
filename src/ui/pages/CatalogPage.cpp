@@ -1,13 +1,17 @@
 #include "ui/pages/CatalogPage.h"
 
 #include "ui/UiHelpers.h"
+#include "ui/UiSettings.h"
 
 #include <QAbstractTableModel>
+#include <QAction>
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -15,6 +19,7 @@
 #include <QTabWidget>
 #include <QTableView>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 using namespace UiHelpers;
@@ -71,7 +76,7 @@ void setupTableView(QTableView *view)
     view->setEditTriggers(QAbstractItemView::NoEditTriggers);
     view->setSortingEnabled(false);
     view->verticalHeader()->setVisible(false);
-    view->verticalHeader()->setDefaultSectionSize(34);
+    view->verticalHeader()->setDefaultSectionSize(UiSettings::tableRowHeight());
     view->horizontalHeader()->setStretchLastSection(true);
     view->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     view->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
@@ -129,6 +134,50 @@ QPushButton *secondaryButton(const QString &text)
     QPushButton *button = new QPushButton(text);
     button->setObjectName(QStringLiteral("SecondaryButton"));
     return button;
+}
+
+QToolButton *menuButton(const QString &text)
+{
+    QToolButton *button = new QToolButton;
+    button->setObjectName(QStringLiteral("SecondaryButton"));
+    button->setProperty("hasMenu", true);
+    button->setText(text);
+    button->setPopupMode(QToolButton::InstantPopup);
+    button->setFocusPolicy(Qt::StrongFocus);
+    return button;
+}
+
+void addMenuAction(QMenu *menu, const QString &text, QPushButton *target)
+{
+    QAction *action = menu->addAction(text);
+    QObject::connect(action, &QAction::triggered, target, &QPushButton::click);
+}
+
+void configureColumnMenu(QToolButton *button, QTableView *table)
+{
+    QMenu *menu = new QMenu(button);
+    QObject::connect(menu, &QMenu::aboutToShow, menu, [menu, table]() {
+        menu->clear();
+        if (!table || !table->model())
+            return;
+        for (int column = 0; column < table->model()->columnCount(); ++column) {
+            QAction *action = menu->addAction(table->model()->headerData(column, Qt::Horizontal).toString());
+            action->setCheckable(true);
+            action->setChecked(!table->isColumnHidden(column));
+            QObject::connect(action, &QAction::toggled, table, [table, column](bool visible) {
+                table->setColumnHidden(column, !visible);
+            });
+        }
+        menu->addSeparator();
+        QAction *reset = menu->addAction(localizedText("恢复默认列布局", "Reset column layout"));
+        QObject::connect(reset, &QAction::triggered, table, [table]() {
+            for (int column = 0; column < table->model()->columnCount(); ++column) {
+                table->setColumnHidden(column, false);
+                table->setColumnWidth(column, column == 0 ? 150 : 110);
+            }
+        });
+    });
+    button->setMenu(menu);
 }
 }
 
@@ -292,6 +341,9 @@ private:
 CatalogPage::CatalogPage(QWidget *parent)
     : QWidget(parent)
 {
+    m_cameraOffset = UiSettings::instance().intValue(QStringLiteral("ui/catalog/cameraOffset"), 0);
+    m_lensOffset = UiSettings::instance().intValue(QStringLiteral("ui/catalog/lensOffset"), 0);
+    m_lightOffset = UiSettings::instance().intValue(QStringLiteral("ui/catalog/lightOffset"), 0);
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(28, 24, 28, 24);
     layout->setSpacing(14);
@@ -324,23 +376,49 @@ CatalogPage::CatalogPage(QWidget *parent)
     QPushButton *addCameraButton = new QPushButton(localizedText("新增相机", "Add Camera"));
     QPushButton *editCameraButton = secondaryButton(localizedText("编辑", "Edit"));
     QPushButton *removeCameraButton = secondaryButton(localizedText("删除", "Delete"));
+    editCameraButton->setObjectName(QStringLiteral("CatalogCameraEditButton"));
+    removeCameraButton->setObjectName(QStringLiteral("CatalogCameraDeleteButton"));
+    removeCameraButton->setProperty("danger", true);
+    editCameraButton->setEnabled(false);
+    removeCameraButton->setEnabled(false);
     QPushButton *importCameraButton = secondaryButton(localizedText("导入 CSV", "Import CSV"));
     QPushButton *exportCameraButton = secondaryButton(localizedText("导出 CSV", "Export CSV"));
     QPushButton *exportFilteredCameraButton = secondaryButton(localizedText("导出筛选", "Export Filtered"));
     QPushButton *resetCameraButton = secondaryButton(localizedText("重置内置", "Reset Built-in"));
+    QToolButton *cameraDataButton = menuButton(localizedText("导入/导出", "Import / Export"));
+    cameraDataButton->setObjectName(QStringLiteral("CatalogCameraDataMenu"));
+    QMenu *cameraDataMenu = new QMenu(cameraDataButton);
+    addMenuAction(cameraDataMenu, localizedText("导入 CSV", "Import CSV"), importCameraButton);
+    addMenuAction(cameraDataMenu, localizedText("导出全部", "Export All"), exportCameraButton);
+    addMenuAction(cameraDataMenu, localizedText("导出当前筛选", "Export Filtered"), exportFilteredCameraButton);
+    cameraDataButton->setMenu(cameraDataMenu);
+    QToolButton *cameraMoreButton = menuButton(localizedText("更多", "More"));
+    QMenu *cameraMoreMenu = new QMenu(cameraMoreButton);
+    addMenuAction(cameraMoreMenu, localizedText("恢复内置目录…", "Restore Built-in Catalog…"), resetCameraButton);
+    cameraMoreButton->setMenu(cameraMoreMenu);
+    QToolButton *cameraColumnsButton = menuButton(localizedText("列", "Columns"));
     cameraActions->addWidget(addCameraButton);
     cameraActions->addWidget(editCameraButton);
     cameraActions->addWidget(removeCameraButton);
-    cameraActions->addWidget(importCameraButton);
-    cameraActions->addWidget(exportCameraButton);
-    cameraActions->addWidget(exportFilteredCameraButton);
-    cameraActions->addWidget(resetCameraButton);
+    cameraActions->addWidget(cameraDataButton);
+    cameraActions->addWidget(cameraColumnsButton);
+    cameraActions->addWidget(cameraMoreButton);
     cameraActions->addStretch();
     cameraLayout->addLayout(cameraActions);
     m_cameraModel = new CatalogTableModel(CatalogDomain::Camera, this);
     m_cameraTable = new QTableView;
+    m_cameraTable->setObjectName(QStringLiteral("catalog/cameras"));
+    m_cameraTable->setAccessibleName(localizedText("相机产品目录", "Camera product catalog"));
     setupTableView(m_cameraTable);
     m_cameraTable->setModel(m_cameraModel);
+    configureColumnMenu(cameraColumnsButton, m_cameraTable);
+    UiSettings::instance().restoreHeader(QStringLiteral("catalog/cameras"), m_cameraTable->horizontalHeader());
+    connect(m_cameraTable->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, [this, editCameraButton, removeCameraButton]() {
+        const bool selected = m_cameraTable->selectionModel()->hasSelection();
+        editCameraButton->setEnabled(selected);
+        removeCameraButton->setEnabled(selected);
+    });
     cameraLayout->addWidget(m_cameraTable, 1);
     QHBoxLayout *cameraPager = new QHBoxLayout;
     m_cameraPrevButton = secondaryButton(localizedText("上一页", "Previous"));
@@ -377,23 +455,49 @@ CatalogPage::CatalogPage(QWidget *parent)
     QPushButton *addLensButton = new QPushButton(localizedText("新增镜头", "Add Lens"));
     QPushButton *editLensButton = secondaryButton(localizedText("编辑", "Edit"));
     QPushButton *removeLensButton = secondaryButton(localizedText("删除", "Delete"));
+    editLensButton->setObjectName(QStringLiteral("CatalogLensEditButton"));
+    removeLensButton->setObjectName(QStringLiteral("CatalogLensDeleteButton"));
+    removeLensButton->setProperty("danger", true);
+    editLensButton->setEnabled(false);
+    removeLensButton->setEnabled(false);
     QPushButton *importLensButton = secondaryButton(localizedText("导入 CSV", "Import CSV"));
     QPushButton *exportLensButton = secondaryButton(localizedText("导出 CSV", "Export CSV"));
     QPushButton *exportFilteredLensButton = secondaryButton(localizedText("导出筛选", "Export Filtered"));
     QPushButton *resetLensButton = secondaryButton(localizedText("重置内置", "Reset Built-in"));
+    QToolButton *lensDataButton = menuButton(localizedText("导入/导出", "Import / Export"));
+    lensDataButton->setObjectName(QStringLiteral("CatalogLensDataMenu"));
+    QMenu *lensDataMenu = new QMenu(lensDataButton);
+    addMenuAction(lensDataMenu, localizedText("导入 CSV", "Import CSV"), importLensButton);
+    addMenuAction(lensDataMenu, localizedText("导出全部", "Export All"), exportLensButton);
+    addMenuAction(lensDataMenu, localizedText("导出当前筛选", "Export Filtered"), exportFilteredLensButton);
+    lensDataButton->setMenu(lensDataMenu);
+    QToolButton *lensMoreButton = menuButton(localizedText("更多", "More"));
+    QMenu *lensMoreMenu = new QMenu(lensMoreButton);
+    addMenuAction(lensMoreMenu, localizedText("恢复内置目录…", "Restore Built-in Catalog…"), resetLensButton);
+    lensMoreButton->setMenu(lensMoreMenu);
+    QToolButton *lensColumnsButton = menuButton(localizedText("列", "Columns"));
     lensActions->addWidget(addLensButton);
     lensActions->addWidget(editLensButton);
     lensActions->addWidget(removeLensButton);
-    lensActions->addWidget(importLensButton);
-    lensActions->addWidget(exportLensButton);
-    lensActions->addWidget(exportFilteredLensButton);
-    lensActions->addWidget(resetLensButton);
+    lensActions->addWidget(lensDataButton);
+    lensActions->addWidget(lensColumnsButton);
+    lensActions->addWidget(lensMoreButton);
     lensActions->addStretch();
     lensLayout->addLayout(lensActions);
     m_lensModel = new CatalogTableModel(CatalogDomain::Lens, this);
     m_lensTable = new QTableView;
+    m_lensTable->setObjectName(QStringLiteral("catalog/lenses"));
+    m_lensTable->setAccessibleName(localizedText("镜头产品目录", "Lens product catalog"));
     setupTableView(m_lensTable);
     m_lensTable->setModel(m_lensModel);
+    configureColumnMenu(lensColumnsButton, m_lensTable);
+    UiSettings::instance().restoreHeader(QStringLiteral("catalog/lenses"), m_lensTable->horizontalHeader());
+    connect(m_lensTable->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, [this, editLensButton, removeLensButton]() {
+        const bool selected = m_lensTable->selectionModel()->hasSelection();
+        editLensButton->setEnabled(selected);
+        removeLensButton->setEnabled(selected);
+    });
     lensLayout->addWidget(m_lensTable, 1);
     QHBoxLayout *lensPager = new QHBoxLayout;
     m_lensPrevButton = secondaryButton(localizedText("上一页", "Previous"));
@@ -430,23 +534,49 @@ CatalogPage::CatalogPage(QWidget *parent)
     QPushButton *addLightButton = new QPushButton(localizedText("新增光源", "Add Light"));
     QPushButton *editLightButton = secondaryButton(localizedText("编辑", "Edit"));
     QPushButton *removeLightButton = secondaryButton(localizedText("删除", "Delete"));
+    editLightButton->setObjectName(QStringLiteral("CatalogLightEditButton"));
+    removeLightButton->setObjectName(QStringLiteral("CatalogLightDeleteButton"));
+    removeLightButton->setProperty("danger", true);
+    editLightButton->setEnabled(false);
+    removeLightButton->setEnabled(false);
     QPushButton *importLightButton = secondaryButton(localizedText("导入 CSV", "Import CSV"));
     QPushButton *exportLightButton = secondaryButton(localizedText("导出 CSV", "Export CSV"));
     QPushButton *exportFilteredLightButton = secondaryButton(localizedText("导出筛选", "Export Filtered"));
     QPushButton *resetLightButton = secondaryButton(localizedText("重置内置", "Reset Built-in"));
+    QToolButton *lightDataButton = menuButton(localizedText("导入/导出", "Import / Export"));
+    lightDataButton->setObjectName(QStringLiteral("CatalogLightDataMenu"));
+    QMenu *lightDataMenu = new QMenu(lightDataButton);
+    addMenuAction(lightDataMenu, localizedText("导入 CSV", "Import CSV"), importLightButton);
+    addMenuAction(lightDataMenu, localizedText("导出全部", "Export All"), exportLightButton);
+    addMenuAction(lightDataMenu, localizedText("导出当前筛选", "Export Filtered"), exportFilteredLightButton);
+    lightDataButton->setMenu(lightDataMenu);
+    QToolButton *lightMoreButton = menuButton(localizedText("更多", "More"));
+    QMenu *lightMoreMenu = new QMenu(lightMoreButton);
+    addMenuAction(lightMoreMenu, localizedText("恢复内置目录…", "Restore Built-in Catalog…"), resetLightButton);
+    lightMoreButton->setMenu(lightMoreMenu);
+    QToolButton *lightColumnsButton = menuButton(localizedText("列", "Columns"));
     lightActions->addWidget(addLightButton);
     lightActions->addWidget(editLightButton);
     lightActions->addWidget(removeLightButton);
-    lightActions->addWidget(importLightButton);
-    lightActions->addWidget(exportLightButton);
-    lightActions->addWidget(exportFilteredLightButton);
-    lightActions->addWidget(resetLightButton);
+    lightActions->addWidget(lightDataButton);
+    lightActions->addWidget(lightColumnsButton);
+    lightActions->addWidget(lightMoreButton);
     lightActions->addStretch();
     lightLayout->addLayout(lightActions);
     m_lightModel = new CatalogTableModel(CatalogDomain::Light, this);
     m_lightTable = new QTableView;
+    m_lightTable->setObjectName(QStringLiteral("catalog/lights"));
+    m_lightTable->setAccessibleName(localizedText("光源产品目录", "Light product catalog"));
     setupTableView(m_lightTable);
     m_lightTable->setModel(m_lightModel);
+    configureColumnMenu(lightColumnsButton, m_lightTable);
+    UiSettings::instance().restoreHeader(QStringLiteral("catalog/lights"), m_lightTable->horizontalHeader());
+    connect(m_lightTable->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, [this, editLightButton, removeLightButton]() {
+        const bool selected = m_lightTable->selectionModel()->hasSelection();
+        editLightButton->setEnabled(selected);
+        removeLightButton->setEnabled(selected);
+    });
     lightLayout->addWidget(m_lightTable, 1);
     QHBoxLayout *lightPager = new QHBoxLayout;
     m_lightPrevButton = secondaryButton(localizedText("上一页", "Previous"));
@@ -533,9 +663,21 @@ CatalogPage::CatalogPage(QWidget *parent)
     connect(m_lightTable, &QTableView::doubleClicked, this, [this](const QModelIndex &) { emit lightEditRequested(); });
 
     layout->addWidget(m_tabs, 1);
+    m_tabs->setCurrentIndex(qBound(0, UiSettings::instance().intValue(QStringLiteral("ui/catalog/tab"), 0), 2));
     updatePageLabel(CatalogDomain::Camera);
     updatePageLabel(CatalogDomain::Lens);
     updatePageLabel(CatalogDomain::Light);
+}
+
+CatalogPage::~CatalogPage()
+{
+    UiSettings::instance().saveHeader(QStringLiteral("catalog/cameras"), m_cameraTable ? m_cameraTable->horizontalHeader() : nullptr);
+    UiSettings::instance().saveHeader(QStringLiteral("catalog/lenses"), m_lensTable ? m_lensTable->horizontalHeader() : nullptr);
+    UiSettings::instance().saveHeader(QStringLiteral("catalog/lights"), m_lightTable ? m_lightTable->horizontalHeader() : nullptr);
+    UiSettings::instance().setValue(QStringLiteral("ui/catalog/cameraOffset"), m_cameraOffset);
+    UiSettings::instance().setValue(QStringLiteral("ui/catalog/lensOffset"), m_lensOffset);
+    UiSettings::instance().setValue(QStringLiteral("ui/catalog/lightOffset"), m_lightOffset);
+    UiSettings::instance().setValue(QStringLiteral("ui/catalog/tab"), m_tabs ? m_tabs->currentIndex() : 0);
 }
 
 void CatalogPage::setCatalog(const CatalogRepository *catalog)

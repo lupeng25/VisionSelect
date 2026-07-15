@@ -1,0 +1,94 @@
+QWidget {
+    font-size: 13px;
+}
+
+QLabel {
+    background: transparent;
+}
+
+QCheckBox, QRadioButton {
+    background: transparent;
+}
+
+QWidget#FilterHeaderText,
+QWidget#FilterField,
+QWidget#FilterCheckGroup,
+QWidget#ParameterInputPanel,
+QWidget#ParameterField,
+QWidget#CalculationResultHeader {
+    background: transparent;
+}
+
+QWidget#ApplicationShell {
+    border-radius: 12px;
+}
+
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox,
+QTextEdit, QTextBrowser, QPlainTextEdit, QPushButton, QToolButton {
+    min-height: 20px;
+}
+
+QWidget#ApplicationShell[density="comfortable"] QLineEdit,
+QWidget#ApplicationShell[density="comfortable"] QSpinBox,
+QWidget#ApplicationShell[density="comfortable"] QDoubleSpinBox,
+QWidget#ApplicationShell[density="comfortable"] QComboBox,
+QWidget#ApplicationShell[density="comfortable"] QPushButton {
+    padding-top: 7px;
+    padding-bottom: 7px;
+}
+
+QWidget#ApplicationShell[density="compact"] QLineEdit,
+QWidget#ApplicationShell[density="compact"] QSpinBox,
+QWidget#ApplicationShell[density="compact"] QDoubleSpinBox,
+QWidget#ApplicationShell[density="compact"] QComboBox,
+QWidget#ApplicationShell[density="compact"] QPushButton {
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+QPushButton:focus, QToolButton:focus, QComboBox:focus,
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus,
+QTextEdit:focus, QTextBrowser:focus, QPlainTextEdit:focus,
+QTableView:focus, QTableWidget:focus, QTabBar::tab:focus {
+    border: 2px solid palette(highlight);
+}
+
+QSplitter::handle:horizontal { width: 5px; }
+QSplitter::handle:vertical { height: 5px; }
+
+QScrollBar:vertical { width: 12px; }
+QScrollBar:horizontal { height: 12px; }
+
+QComboBox { padding-right: 34px; }
+QComboBox::drop-down {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 28px;
+}
+QComboBox::down-arrow { width: 12px; height: 8px; }
+
+QSpinBox, QDoubleSpinBox { padding-right: 30px; }
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 24px;
+}
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 24px;
+}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow,
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { width: 10px; height: 7px; }
+
+QToolButton::menu-indicator {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    right: 4px;
+    width: 10px;
+    height: 7px;
+}
+QToolButton[hasMenu="true"] { padding-right: 18px; }
+
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
