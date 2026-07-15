@@ -13,6 +13,14 @@ enum class ThreeDTriggerMode
     Encoder
 };
 
+enum class ThreeDCalculationStatus
+{
+    Valid,
+    Warning,
+    InvalidInput,
+    Infeasible
+};
+
 struct ThreeDMotionSamplingInput
 {
     double scanDistanceMm = 300.0;
@@ -48,6 +56,7 @@ struct ThreeDMotionSamplingResult
     double encoderProfileRateHz = -1.0;
     double encoderProfileIntervalMm = -1.0;
     double encoderAxisSpeedMmS = -1.0;
+    ThreeDCalculationStatus status = ThreeDCalculationStatus::Valid;
     bool valid = true;
     bool xPixelPitchKnown = false;
     bool usesManualXPixelPitch = false;

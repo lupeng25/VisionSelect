@@ -6,6 +6,7 @@
 #include <QFont>
 #include <QFontMetrics>
 #include <QPainter>
+#include <QPageSize>
 #include <QPdfWriter>
 #include <QTextOption>
 #include <QtGlobal>
@@ -189,7 +190,7 @@ bool PdfReportWriter::write(const QString &filePath,
     }
 
     QPdfWriter writer(filePath);
-    writer.setPageSize(QPagedPaintDevice::A4);
+    writer.setPageSize(QPageSize(QPageSize::A4));
     writer.setResolution(96);
     writer.setTitle(lt("工业机器视觉选型报告", "Industrial Machine Vision Selection Report"));
 

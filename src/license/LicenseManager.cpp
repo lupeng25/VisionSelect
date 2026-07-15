@@ -3,7 +3,6 @@
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QFile>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSettings>
@@ -245,7 +244,16 @@ LicenseStatus LicenseManager::validateKeyForMachine(const QString &licenseKey,
 
 bool LicenseManager::saveLicenseKey(const QString &licenseKey, QString *errorMessage) const
 {
-    const LicenseStatus checked = validateKey(licenseKey);
+    LicenseStatus checked = validateKey(licenseKey);
+    if (checked.code == LicenseStatusCode::StorageError) {
+        QString repairError;
+        if (!repairClockState(licenseKey, &repairError)) {
+            if (errorMessage)
+                *errorMessage = repairError;
+            return false;
+        }
+        checked = validateKey(licenseKey);
+    }
     if (!checked.isValid()) {
         if (errorMessage)
             *errorMessage = checked.message;
@@ -268,10 +276,26 @@ QString LicenseManager::storedLicenseKey() const
     return settings.value(QString::fromLatin1(kSettingsKey)).toString();
 }
 
-void LicenseManager::clearStoredLicense() const
+void LicenseManager::removeInstalledLicense() const
 {
     QSettings settings;
     settings.remove(QString::fromLatin1(kSettingsKey));
+}
+
+bool LicenseManager::repairClockState(const QString &licenseKey, QString *errorMessage) const
+{
+    const LicenseStatus checked = validateKeyForMachine(licenseKey, machineCode(), QDate::currentDate());
+    if (!checked.isValid()) {
+        if (errorMessage)
+            *errorMessage = checked.message;
+        return false;
+    }
+    if (!writeLastSeenDate(QDate::currentDate())) {
+        if (errorMessage)
+            *errorMessage = QCoreApplication::translate("LicenseManager", "Unable to repair the protected license clock.");
+        return false;
+    }
+    return true;
 }
 
 QString LicenseManager::machineCodeForSeeds(const QStringList &seeds)
@@ -305,7 +329,7 @@ bool LicenseManager::parseKey(const QString &licenseKey,
 {
     const QString key = compactKey(licenseKey);
     const QStringList parts = key.split(QLatin1Char('-'));
-    if (parts.size() != 3 || parts.at(0) != QLatin1String("VS1")) {
+    if (parts.size() != 3 || parts.at(0) != QLatin1String("VS2")) {
         if (errorMessage)
             *errorMessage = QCoreApplication::translate("LicenseManager", "The license key format is invalid.");
         return false;
@@ -336,12 +360,9 @@ bool LicenseManager::parseKey(const QString &licenseKey,
     parsed.machineCode = object.value(QStringLiteral("machineCode")).toString().toUpper();
     parsed.issuedAt = jsonDate(object, QStringLiteral("issuedAt"));
     parsed.expiresAt = jsonDate(object, QStringLiteral("expiresAt"));
-    const QJsonArray features = object.value(QStringLiteral("features")).toArray();
-    for (const QJsonValue &feature : features)
-        parsed.features << feature.toString();
-
     if (parsed.productId.isEmpty() || parsed.licensee.isEmpty() || parsed.serial.isEmpty()
-        || parsed.machineCode.isEmpty() || !parsed.expiresAt.isValid()) {
+        || parsed.machineCode.isEmpty() || !parsed.issuedAt.isValid() || !parsed.expiresAt.isValid()
+        || parsed.issuedAt > parsed.expiresAt) {
         if (errorMessage)
             *errorMessage = QCoreApplication::translate("LicenseManager", "The license payload is missing required fields.");
         return false;

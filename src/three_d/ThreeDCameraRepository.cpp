@@ -13,6 +13,8 @@
 #include <QStandardPaths>
 #include <QSet>
 
+#include <cmath>
+
 namespace {
 QString text(const char *zhUtf8, const char *enUtf8)
 {
@@ -27,8 +29,11 @@ bool quarantineCorruptUserFile(const QString &path, QString *error)
 {
     const QString quarantinePath = path + QStringLiteral(".corrupt-")
         + QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMddHHmmsszzz"));
-    if (QFile::rename(path, quarantinePath))
-        return true;
+    if (QFile::rename(path, quarantinePath)) {
+        setError(error, text("自定义 3D 相机 JSON 已损坏，已隔离到：%1",
+                             "Custom 3D camera JSON is corrupt and was quarantined at: %1").arg(quarantinePath));
+        return false;
+    }
     setError(error, text("自定义 3D 相机 JSON 已损坏，且无法隔离文件：%1",
                          "Custom 3D camera JSON is corrupt and could not be quarantined: %1").arg(path));
     return false;
@@ -107,6 +112,38 @@ bool validateCameraSpec(const ThreeDCameraSpec &spec, const QString &sourceName,
         || spec.status.trimmed().isEmpty() || (requireSourceUrl && spec.sourceUrl.trimmed().isEmpty())) {
         setError(error, text("%1 缺少品牌、系列、型号、技术路线、状态或来源。",
                              "%1 is missing brand, series, model, technology, status, or source.").arg(sourceName));
+        return false;
+    }
+    const QList<double> values = {
+        spec.referenceDistanceMm, spec.workingDistanceMinMm, spec.workingDistanceMaxMm,
+        spec.zMeasurementRangeMm, spec.xFovNearMm, spec.xFovReferenceMm, spec.xFovFarMm,
+        spec.yFovNearMm, spec.yFovReferenceMm, spec.yFovFarMm, spec.zRepeatabilityUm,
+        spec.xRepeatabilityUm, spec.zResolutionUm, spec.zLinearityPercentOfRange,
+        spec.measurementAccuracyUm, spec.xyResolutionUm, spec.profileDataIntervalUm,
+        spec.scanRateMinHz, spec.scanRateMaxHz, spec.acquisitionTimeMs, spec.frameRateHz,
+        spec.encoderRateMaxHz, spec.exposureTimeMinUs, spec.exposureTimeMaxUs,
+        spec.readoutTimeUs, spec.wavelengthNm, spec.weightG
+    };
+    for (double value : values) {
+        if (value >= 0.0 && !std::isfinite(value)) {
+            setError(error, text("%1 包含非有限数值。", "%1 contains a non-finite numeric value.").arg(sourceName));
+            return false;
+        }
+    }
+    const auto orderedRange = [](double minimum, double maximum) {
+        return minimum < 0.0 || maximum < 0.0 || minimum <= maximum;
+    };
+    if (!orderedRange(spec.workingDistanceMinMm, spec.workingDistanceMaxMm)
+        || !orderedRange(spec.scanRateMinHz, spec.scanRateMaxHz)
+        || !orderedRange(spec.exposureTimeMinUs, spec.exposureTimeMaxUs)
+        || (spec.referenceDistanceMm >= 0.0
+            && spec.workingDistanceMinMm >= 0.0
+            && spec.referenceDistanceMm < spec.workingDistanceMinMm)
+        || (spec.referenceDistanceMm >= 0.0
+            && spec.workingDistanceMaxMm >= 0.0
+            && spec.referenceDistanceMm > spec.workingDistanceMaxMm)
+        || spec.profilePoints == 0) {
+        setError(error, text("%1 的数值范围或字段关系无效。", "%1 has an invalid numeric range or field relationship.").arg(sourceName));
         return false;
     }
     return true;
@@ -296,7 +333,12 @@ bool ThreeDCameraRepository::loadFromResource(const QString &resourcePath, QStri
         return false;
     }
 
-    const QJsonArray array = document.object().value(QStringLiteral("cameras")).toArray();
+    const QJsonObject root = document.object();
+    if (root.value(QStringLiteral("schemaVersion")).toInt(-1) != 1) {
+        setError(error, text("不支持 3D 相机数据版本。", "Unsupported 3D camera data schema version."));
+        return false;
+    }
+    const QJsonArray array = root.value(QStringLiteral("cameras")).toArray();
     if (array.isEmpty()) {
         setError(error, text("3D 相机数据为空。", "3D camera data is empty."));
         return false;
@@ -481,7 +523,12 @@ bool ThreeDCameraRepository::loadUserCameras(QString *error)
         return quarantineCorruptUserFile(path, error);
     }
 
-    const QJsonArray array = document.object().value(QStringLiteral("cameras")).toArray();
+    const QJsonObject root = document.object();
+    if (root.value(QStringLiteral("schemaVersion")).toInt(-1) != 1) {
+        setError(error, text("不支持自定义 3D 相机数据版本。", "Unsupported custom 3D camera data schema version."));
+        return false;
+    }
+    const QJsonArray array = root.value(QStringLiteral("cameras")).toArray();
     for (int i = 0; i < array.size(); ++i) {
         ThreeDCameraSpec spec = specFromJson(array.at(i).toObject(), true);
         if (!validateCameraSpec(spec, text("第 %1 条自定义 3D 相机", "Custom 3D camera record %1").arg(i + 1), false, error))

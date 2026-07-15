@@ -4,7 +4,6 @@
 #include <QByteArray>
 #include <QDate>
 #include <QString>
-#include <QStringList>
 
 enum class LicenseStatusCode {
     Valid,
@@ -25,7 +24,6 @@ struct LicenseInfo {
     QString machineCode;
     QDate issuedAt;
     QDate expiresAt;
-    QStringList features;
 };
 
 struct LicenseStatus {
@@ -54,7 +52,8 @@ public:
 
     bool saveLicenseKey(const QString &licenseKey, QString *errorMessage = nullptr) const;
     QString storedLicenseKey() const;
-    void clearStoredLicense() const;
+    void removeInstalledLicense() const;
+    bool repairClockState(const QString &licenseKey, QString *errorMessage = nullptr) const;
 
     static QString machineCodeForSeeds(const QStringList &seeds);
 

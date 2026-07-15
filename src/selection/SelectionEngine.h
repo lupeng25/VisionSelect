@@ -39,11 +39,13 @@ private:
                                  const QString &languageCode = QString()) const;
 
     LightSpec chooseLight(const SelectionRequest &request,
+                          const CameraSpec &camera,
                           const LensSpec &lens,
                           const QVector<LightSpec> &lights,
                           QStringList *reasons) const;
 
     double scoreLight(const SelectionRequest &request,
+                      const CameraSpec &camera,
                       const LensSpec &lens,
                       const LightSpec &light,
                       QStringList *reasons) const;

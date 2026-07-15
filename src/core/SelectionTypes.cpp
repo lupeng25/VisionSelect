@@ -200,6 +200,16 @@ QString surfaceTypeLabel(SurfaceType type)
     return selectionText("未知", "Unknown");
 }
 
+QString motionModeLabel(MotionMode mode)
+{
+    switch (mode) {
+    case MotionMode::Static: return selectionText("静止", "Static");
+    case MotionMode::StopAndGo: return selectionText("启停", "Stop-and-go");
+    case MotionMode::Continuous: return selectionText("连续运动", "Continuous");
+    }
+    return selectionText("未知", "Unknown");
+}
+
 QString lensTypeLabel(LensType type)
 {
     switch (type) {
@@ -269,6 +279,16 @@ SurfaceType surfaceTypeFromIndex(int index)
     case 4: return SurfaceType::Plastic;
     case 5: return SurfaceType::Mixed;
     default: return SurfaceType::Mixed;
+    }
+}
+
+MotionMode motionModeFromIndex(int index)
+{
+    switch (index) {
+    case 0: return MotionMode::Static;
+    case 1: return MotionMode::StopAndGo;
+    case 2: return MotionMode::Continuous;
+    default: return MotionMode::Static;
     }
 }
 

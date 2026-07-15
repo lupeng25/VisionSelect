@@ -5,10 +5,10 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QFile>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QXmlStreamReader>
+#include <QUuid>
 
 #include <cstring>
 
@@ -47,19 +47,6 @@ bool requirePart(const QByteArray &value, const char *name, QString *errorMessag
         *errorMessage = CoreI18n::localizedText("私钥 XML 缺少 %1。", "Private key XML is missing %1.")
             .arg(QString::fromLatin1(name));
     return false;
-}
-
-QStringList normalizedFeatures(const QStringList &features)
-{
-    QStringList normalized;
-    for (const QString &feature : features) {
-        const QString trimmed = feature.trimmed();
-        if (!trimmed.isEmpty())
-            normalized << trimmed;
-    }
-    if (normalized.isEmpty())
-        normalized << QStringLiteral("standard");
-    return normalized;
 }
 
 bool rsaPartFits(QByteArray value, int size)
@@ -114,7 +101,7 @@ bool LicenseIssuer::loadPrivateKeyXml(const QByteArray &xml, QString *errorMessa
         if (!reader.isStartElement())
             continue;
 
-        const QStringRef name = reader.name();
+        const auto name = reader.name();
         if (name == QLatin1String("Modulus"))
             m_modulus = readBase64Element(&reader);
         else if (name == QLatin1String("Exponent"))
@@ -218,15 +205,11 @@ bool LicenseIssuer::issue(const LicenseIssueRequest &request,
             *errorMessage = issuerError("必须填写序列号。", "Serial is required.");
         return false;
     }
-    if (!expiresAt.isValid() || expiresAt < QDate::currentDate()) {
+    if (!expiresAt.isValid() || expiresAt < issuedAt) {
         if (errorMessage)
             *errorMessage = issuerError("到期日期必须是今天或之后。", "Expiration date must be today or later.");
         return false;
     }
-
-    QJsonArray features;
-    for (const QString &feature : normalizedFeatures(request.features))
-        features.append(feature);
 
     QJsonObject payload;
     payload.insert(QStringLiteral("productId"), QString::fromLatin1(kProductId));
@@ -235,7 +218,6 @@ bool LicenseIssuer::issue(const LicenseIssueRequest &request,
     payload.insert(QStringLiteral("machineCode"), machineCode);
     payload.insert(QStringLiteral("issuedAt"), issuedAt.toString(Qt::ISODate));
     payload.insert(QStringLiteral("expiresAt"), expiresAt.toString(Qt::ISODate));
-    payload.insert(QStringLiteral("features"), features);
 
     const QByteArray payloadJson = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     const QByteArray payloadBase64 = payloadJson.toBase64();
@@ -248,7 +230,7 @@ bool LicenseIssuer::issue(const LicenseIssueRequest &request,
         result->payloadBase64 = payloadBase64;
         result->signature = signature;
         result->normalizedMachineCode = machineCode;
-        result->licenseKey = QStringLiteral("VS1-%1-%2")
+        result->licenseKey = QStringLiteral("VS2-%1-%2")
             .arg(QString::fromLatin1(payloadBase64),
                  QString::fromLatin1(signature.toBase64()));
     }
@@ -267,7 +249,7 @@ QByteArray LicenseIssuer::publicExponent() const
 
 QString LicenseIssuer::defaultSerial()
 {
-    return QStringLiteral("VS-%1").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMddHHmmss")));
+    return QStringLiteral("VS-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces).toUpper());
 }
 
 QString LicenseIssuer::normalizeMachineCode(QString machineCode)

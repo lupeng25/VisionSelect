@@ -134,6 +134,7 @@ struct PairCandidate
 {
     int cameraIndex;
     int lensIndex;
+    LightSpec light;
     double score;
     bool hardConstraintsPassed;
 };
@@ -208,11 +209,86 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
     const QString resultLanguage = languageCode.isEmpty()
         ? LanguageManager::instance().currentLanguage()
         : languageCode;
-    QVector<LightSpec> bestLights;
-    bestLights.reserve(lenses.size());
-    for (const LensSpec &lens : lenses) {
-        bestLights.append(chooseLight(request, lens, lights, nullptr));
-    }
+
+    const auto rankedCameraIndexes = [&]() {
+        QVector<int> indexes;
+        indexes.reserve(cameras.size());
+        for (int i = 0; i < cameras.size(); ++i)
+            indexes.append(i);
+        if (indexes.size() <= 96)
+            return indexes;
+
+        const double targetPixelUm = targetObjectPixelUm(request);
+        const double requiredWidth = requiredFovWidth(request) * 1000.0 / targetPixelUm;
+        const double requiredHeight = requiredFovHeight(request) * 1000.0 / targetPixelUm;
+        std::sort(indexes.begin(), indexes.end(), [&](int left, int right) {
+            const CameraSpec &a = cameras.at(left);
+            const CameraSpec &b = cameras.at(right);
+            const auto score = [&](const CameraSpec &camera) {
+                double value = 0.0;
+                value -= qAbs(camera.resolutionX - requiredWidth) / qMax(1.0, requiredWidth) * 30.0;
+                value -= qAbs(camera.resolutionY - requiredHeight) / qMax(1.0, requiredHeight) * 30.0;
+                if (camera.resolutionX < requiredWidth || camera.resolutionY < requiredHeight)
+                    value -= 120.0;
+                if (camera.maxFps > 0.0 && camera.maxFps < request.requiredFps)
+                    value -= 80.0;
+                if (request.preferMono && camera.isMono())
+                    value += 8.0;
+                if (request.hasContinuousMotion() && camera.isGlobalShutter())
+                    value += 30.0;
+                return value;
+            };
+            return score(a) > score(b);
+        });
+        indexes.resize(96);
+        return indexes;
+    }();
+
+    const auto rankedLensIndexes = [&]() {
+        QVector<int> fixed;
+        QVector<int> objectTelecentric;
+        QVector<int> biTelecentric;
+        for (int i = 0; i < lenses.size(); ++i) {
+            const LensSpec &lens = lenses.at(i);
+            if (!request.allowTelecentric && lens.isTelecentric())
+                continue;
+            if (lens.lensType == LensType::FixedFocal)
+                fixed.append(i);
+            else if (lens.lensType == LensType::ObjectTelecentric)
+                objectTelecentric.append(i);
+            else
+                biTelecentric.append(i);
+        }
+        const auto rank = [&](QVector<int> *indexes) {
+            std::sort(indexes->begin(), indexes->end(), [&](int left, int right) {
+                const LensSpec &a = lenses.at(left);
+                const LensSpec &b = lenses.at(right);
+                const auto score = [&](const LensSpec &lens) {
+                    double value = lens.megapixelRating * 2.0 - lens.distortionPercent * 8.0;
+                    if (lens.isTelecentric()) {
+                        value += measurementNeedsTelecentric(request) ? 25.0 : 0.0;
+                        value += lens.dofMm;
+                    } else if (fixedFocalGeometryValid(request, lens)) {
+                        value += 12.0;
+                    } else {
+                        value -= 80.0;
+                    }
+                    return value;
+                };
+                return score(a) > score(b);
+            });
+        };
+        rank(&fixed);
+        rank(&objectTelecentric);
+        rank(&biTelecentric);
+
+        QVector<int> indexes;
+        indexes.reserve(fixed.size() + objectTelecentric.size() + biTelecentric.size());
+        indexes += fixed;
+        indexes += objectTelecentric;
+        indexes += biTelecentric;
+        return indexes;
+    }();
 
     QVector<PairCandidate> candidates;
     QVector<PairCandidate> fixedFocalCandidates;
@@ -239,17 +315,37 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
             (*pool)[worstIndex] = candidate;
     };
 
-    for (int cameraIndex = 0; cameraIndex < cameras.size(); ++cameraIndex) {
+    // scoreLight only depends on the camera and two lens traits.  Build this
+    // small matrix once so catalog-scale selection stays O(cameras * lenses).
+    constexpr int lightProfileCount = 4;
+    QVector<LightSpec> lightByCameraProfile;
+    lightByCameraProfile.reserve(rankedCameraIndexes.size() * lightProfileCount);
+    for (int cameraIndex : rankedCameraIndexes) {
         const CameraSpec &camera = cameras.at(cameraIndex);
-        for (int lensIndex = 0; lensIndex < lenses.size(); ++lensIndex) {
+        for (int profile = 0; profile < lightProfileCount; ++profile) {
+            LensSpec lightProfileLens;
+            lightProfileLens.lensType = (profile & 2) != 0
+                ? LensType::ObjectTelecentric : LensType::FixedFocal;
+            lightProfileLens.coaxialIllumination = (profile & 1) != 0;
+            lightByCameraProfile.append(chooseLight(request, camera, lightProfileLens, lights, nullptr));
+        }
+    }
+
+    for (int rankedCameraIndex = 0; rankedCameraIndex < rankedCameraIndexes.size(); ++rankedCameraIndex) {
+        const int cameraIndex = rankedCameraIndexes.at(rankedCameraIndex);
+        const CameraSpec &camera = cameras.at(cameraIndex);
+        for (int lensIndex : rankedLensIndexes) {
             const LensSpec &lens = lenses.at(lensIndex);
             if (!request.allowTelecentric && lens.isTelecentric())
                 continue;
-            const LightSpec &light = bestLights.at(lensIndex);
+            const int lightProfile = (lens.isTelecentric() ? 2 : 0)
+                + (lens.coaxialIllumination ? 1 : 0);
+            const LightSpec &light = lightByCameraProfile.at(rankedCameraIndex * lightProfileCount + lightProfile);
             const SelectionResult quickResult = evaluatePair(request, camera, lens, light, false);
             PairCandidate candidate;
             candidate.cameraIndex = cameraIndex;
             candidate.lensIndex = lensIndex;
+            candidate.light = light;
             candidate.score = quickResult.score.score;
             candidate.hardConstraintsPassed = quickResult.hardConstraintsPassed;
             appendCandidate(&candidates, limit, candidate);
@@ -333,8 +429,7 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
     for (const PairCandidate &candidate : candidates) {
         const CameraSpec &camera = cameras.at(candidate.cameraIndex);
         const LensSpec &lens = lenses.at(candidate.lensIndex);
-        const LightSpec &light = bestLights.at(candidate.lensIndex);
-        results.append(evaluatePair(request, camera, lens, light, true, resultLanguage));
+        results.append(evaluatePair(request, camera, lens, candidate.light, true, resultLanguage));
     }
 
     std::sort(results.begin(), results.end(), betterCandidate);
@@ -426,7 +521,7 @@ double SelectionEngine::interfaceCapacityMBps(const CameraSpec &camera)
 
 double SelectionEngine::maxExposureUsForOnePixelBlur(const SelectionRequest &request)
 {
-    if (request.motionSpeedMmS <= 0.0)
+    if (!request.hasContinuousMotion())
         return 0.0;
     const double targetPixelMm = targetObjectPixelUm(request) / 1000.0;
     return targetPixelMm / request.motionSpeedMmS * 1000000.0;
@@ -460,15 +555,9 @@ double SelectionEngine::lightCoverageMarginPercent(const SelectionRequest &reque
     if (requiredW <= 0.0 || requiredH <= 0.0 || light.activeWidthMm <= 0.0 || light.activeHeightMm <= 0.0)
         return -100.0;
 
-    const bool directionalDefectLight = request.detectionType == DetectionType::DefectInspection
-        && (light.lightType == LightType::Bar || light.isDarkFieldLike());
-    if (directionalDefectLight) {
-        const double requiredLongSide = qMax(requiredW, requiredH);
-        const double activeLongSide = qMax(light.activeWidthMm, light.activeHeightMm);
-        return (activeLongSide / requiredLongSide - 1.0) * 100.0;
-    }
-
-    return (qMin(light.activeWidthMm / requiredW, light.activeHeightMm / requiredH) - 1.0) * 100.0;
+    const double normalCoverage = qMin(light.activeWidthMm / requiredW, light.activeHeightMm / requiredH);
+    const double rotatedCoverage = qMin(light.activeWidthMm / requiredH, light.activeHeightMm / requiredW);
+    return (qMax(normalCoverage, rotatedCoverage) - 1.0) * 100.0;
 }
 
 SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
@@ -502,7 +591,7 @@ SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
         scoreFixedFocalLens(request, camera, lens, &result, includeDetails);
 
     QStringList lightReasons;
-    result.score.score += scoreLight(request, lens, light, includeDetails ? &lightReasons : nullptr);
+    result.score.score += scoreLight(request, camera, lens, light, includeDetails ? &lightReasons : nullptr);
     if (includeDetails)
         result.score.reasons.append(lightReasons);
 
@@ -516,6 +605,7 @@ SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
 }
 
 LightSpec SelectionEngine::chooseLight(const SelectionRequest &request,
+                                      const CameraSpec &camera,
                                       const LensSpec &lens,
                                       const QVector<LightSpec> &lights,
                                       QStringList *reasons) const
@@ -528,7 +618,7 @@ LightSpec SelectionEngine::chooseLight(const SelectionRequest &request,
     QStringList bestReasons;
     for (const LightSpec &light : lights) {
         QStringList localReasons;
-        const double score = scoreLight(request, lens, light, reasons ? &localReasons : nullptr);
+        const double score = scoreLight(request, camera, lens, light, reasons ? &localReasons : nullptr);
         if (score > bestScore) {
             bestScore = score;
             best = &light;
@@ -542,6 +632,7 @@ LightSpec SelectionEngine::chooseLight(const SelectionRequest &request,
 }
 
 double SelectionEngine::scoreLight(const SelectionRequest &request,
+                                  const CameraSpec &camera,
                                   const LensSpec &lens,
                                   const LightSpec &light,
                                   QStringList *reasons) const
@@ -597,7 +688,7 @@ double SelectionEngine::scoreLight(const SelectionRequest &request,
             reasons->append(QString::fromUtf8("光源覆盖需求 FOV，覆盖余量约 %1%").arg(coverageMargin, 0, 'f', 0));
     }
 
-    if (request.motionSpeedMmS > 20.0) {
+    if (request.hasContinuousMotion() && request.motionSpeedMmS > 20.0) {
         if (isStrobeLight(light)) {
             score += 12.0;
             if (reasons)
@@ -608,6 +699,9 @@ double SelectionEngine::scoreLight(const SelectionRequest &request,
                 reasons->append(QString::fromUtf8("高速运动场景建议确认频闪能力和曝光时间"));
         }
     }
+
+    if (request.hasContinuousMotion() && camera.isGlobalShutter() && isStrobeLight(light))
+        score += 4.0;
 
     if (reflective
         && light.lightType != LightType::Coaxial
@@ -644,7 +738,10 @@ void SelectionEngine::scoreCamera(const SelectionRequest &request,
         ADD_DETAIL_RISK(QString::fromUtf8("\351\234\200\346\261\202\345\201\217\345\220\221\351\273\221\347\231\275\346\265\213\351\207\217\357\274\214\344\275\206\350\257\245\347\233\270\346\234\272\344\270\272\345\275\251\350\211\262\345\236\213\345\217\267"));
     }
 
-    if (camera.maxFps >= request.requiredFps) {
+    if (camera.maxFps <= 0.0) {
+        result->score.score -= 4.0;
+        ADD_DETAIL_RISK(QStringLiteral("Camera maximum frame rate is unknown and cannot be verified."));
+    } else if (camera.maxFps >= request.requiredFps) {
         result->score.score += 8.0;
         ADD_DETAIL_REASON(QString::fromUtf8("\347\233\270\346\234\272\345\270\247\347\216\207\346\273\241\350\266\263\350\212\202\346\213\215\351\234\200\346\261\202"));
     } else {
@@ -685,11 +782,12 @@ void SelectionEngine::scoreCamera(const SelectionRequest &request,
             .arg(result->storagePerHourGB, 0, 'f', 0));
     }
 
-    if (request.motionSpeedMmS > 20.0) {
+    if (request.hasContinuousMotion()) {
         if (camera.isGlobalShutter()) {
             result->score.score += 14.0;
             ADD_DETAIL_REASON(QString::fromUtf8("\351\253\230\351\200\237\350\277\220\345\212\250\347\233\256\346\240\207\344\274\230\345\205\210\345\205\250\345\261\200\345\277\253\351\227\250"));
         } else {
+            ADD_DETAIL_HARD_FAILURE(QStringLiteral("Continuous motion requires a global-shutter camera."));
             result->score.score -= 26.0;
             ADD_DETAIL_RISK(QString::fromUtf8("\351\253\230\351\200\237\350\277\220\345\212\250\345\234\272\346\231\257\344\275\277\347\224\250\345\215\267\345\270\230\345\277\253\351\227\250\345\255\230\345\234\250\345\275\242\345\217\230\351\243\216\351\231\251"));
         }

@@ -31,7 +31,6 @@ private:
     QLabel *m_licenseeLabel = nullptr;
     QLabel *m_serialLabel = nullptr;
     QLabel *m_expiresLabel = nullptr;
-    QLabel *m_featuresLabel = nullptr;
     QLabel *m_outputLabel = nullptr;
     QLabel *m_hintLabel = nullptr;
 
@@ -40,7 +39,6 @@ private:
     QLineEdit *m_machineCodeEdit = nullptr;
     QLineEdit *m_licenseeEdit = nullptr;
     QLineEdit *m_serialEdit = nullptr;
-    QLineEdit *m_featuresEdit = nullptr;
     QDateEdit *m_expiresEdit = nullptr;
     QPlainTextEdit *m_outputEdit = nullptr;
     QPushButton *m_browseButton = nullptr;
@@ -50,7 +48,6 @@ private:
     QPushButton *m_newSerialButton = nullptr;
 
     QString text(const char *zhUtf8, const char *enUtf8) const;
-    QStringList featureList() const;
     void browsePrivateKey();
     bool loadPrivateKey();
     void generateLicense();

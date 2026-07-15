@@ -219,6 +219,11 @@ InputPage::InputPage(QWidget *parent)
     m_heightVariationSpin = makeSpin(0.0, 200.0, defaultRequest.heightVariationMm, QStringLiteral(" mm"));
     m_speedSpin = makeSpin(0.0, 10000.0, defaultRequest.motionSpeedMmS, QStringLiteral(" mm/s"));
     m_fpsSpin = makeSpin(1.0, 1000.0, defaultRequest.requiredFps, QStringLiteral(" fps"));
+    m_motionModeCombo = new QComboBox;
+    m_motionModeCombo->addItems({motionModeLabel(MotionMode::Static),
+                                 motionModeLabel(MotionMode::StopAndGo),
+                                 motionModeLabel(MotionMode::Continuous)});
+    m_motionModeCombo->setCurrentIndex(static_cast<int>(defaultRequest.motionMode));
 
     QGridLayout *cycleGrid = nullptr;
     QFrame *cycleGroup = editorGroup(QStringLiteral("3."), localizedText("成像节拍与安装", "Imaging Cycle and Installation"), &cycleGrid);
@@ -226,8 +231,9 @@ InputPage::InputPage(QWidget *parent)
     addGridField(cycleGrid, 0, 1, localizedText("表面材质", "Surface material"), m_surfaceCombo);
     addGridField(cycleGrid, 1, 0, localizedText("工作距离 (WD)", "Working distance (WD)"), m_wdSpin);
     addGridField(cycleGrid, 1, 1, localizedText("高度波动", "Height variation"), m_heightVariationSpin);
-    addGridField(cycleGrid, 2, 0, localizedText("运动速度", "Motion speed"), m_speedSpin);
-    addGridField(cycleGrid, 2, 1, localizedText("节拍 / 帧率", "Cycle / frame rate"), m_fpsSpin);
+    addGridField(cycleGrid, 2, 0, localizedText("运动模式", "Motion mode"), m_motionModeCombo);
+    addGridField(cycleGrid, 2, 1, localizedText("运动速度", "Motion speed"), m_speedSpin);
+    addGridField(cycleGrid, 3, 0, localizedText("节拍 / 帧率", "Cycle / frame rate"), m_fpsSpin);
 
     m_reflectiveCheck = new QCheckBox(localizedText("反光/高光表面", "Reflective / glossy surface"));
     m_reflectiveCheck->setChecked(defaultRequest.reflective);
@@ -327,6 +333,7 @@ InputPage::InputPage(QWidget *parent)
         connect(spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &InputPage::refreshSummary);
     connect(m_detectionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &InputPage::refreshSummary);
     connect(m_surfaceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &InputPage::refreshSummary);
+    connect(m_motionModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &InputPage::refreshSummary);
     connect(m_reflectiveCheck, &QCheckBox::toggled, this, &InputPage::refreshSummary);
     connect(m_monoCheck, &QCheckBox::toggled, this, &InputPage::refreshSummary);
     connect(m_allowTelecentricCheck, &QCheckBox::toggled, this, &InputPage::refreshSummary);
@@ -386,6 +393,7 @@ SelectionRequest InputPage::request() const
     request.measurementToleranceUm = m_toleranceSpin->value();
     request.workingDistanceMm = m_wdSpin->value();
     request.heightVariationMm = m_heightVariationSpin->value();
+    request.motionMode = motionModeFromIndex(m_motionModeCombo->currentIndex());
     request.motionSpeedMmS = m_speedSpin->value();
     request.requiredFps = m_fpsSpin->value();
     request.detectionType = detectionTypeFromIndex(m_detectionCombo->currentIndex());
@@ -407,6 +415,7 @@ void InputPage::setRequest(const SelectionRequest &request)
     m_toleranceSpin->setValue(request.measurementToleranceUm);
     m_wdSpin->setValue(request.workingDistanceMm);
     m_heightVariationSpin->setValue(request.heightVariationMm);
+    m_motionModeCombo->setCurrentIndex(static_cast<int>(request.motionMode));
     m_speedSpin->setValue(request.motionSpeedMmS);
     m_fpsSpin->setValue(request.requiredFps);
     m_detectionCombo->setCurrentIndex(static_cast<int>(request.detectionType));

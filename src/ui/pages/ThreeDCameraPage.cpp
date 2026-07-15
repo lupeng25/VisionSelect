@@ -1022,9 +1022,13 @@ void ThreeDCameraPage::refreshSampling()
     const QString encoderAxisSpeedText = threeDHasValue(result.encoderAxisSpeedMmS)
         ? QStringLiteral("%1 mm/s").arg(result.encoderAxisSpeedMmS, 0, 'f', 2)
         : localizedText("未计算", "Not calculated");
-    const QString stateText = result.valid && result.risks.isEmpty()
+    const QString stateText = result.status == ThreeDCalculationStatus::Valid
         ? localizedText("参数正常", "Parameters OK")
-        : result.valid ? localizedText("需要确认", "Needs confirmation") : localizedText("输入无效", "Invalid input");
+        : result.status == ThreeDCalculationStatus::Warning
+            ? localizedText("需要确认", "Needs confirmation")
+            : result.status == ThreeDCalculationStatus::Infeasible
+                ? localizedText("参数不可行", "Parameters infeasible")
+                : localizedText("输入无效", "Invalid input");
 
     QString html;
     html += QStringLiteral("<h3>%1</h3>").arg(htmlEscape(localizedText("3D 参数设定结果", "3D Parameter Setup Result")));

@@ -7,11 +7,11 @@ $ErrorActionPreference = "Stop"
 
 $textExtensions = @(
     ".bat", ".cpp", ".csv", ".editorconfig", ".gitattributes", ".gitignore",
-    ".h", ".json", ".md", ".pri", ".pro", ".ps1", ".qrc", ".qss", ".txt", ".ui"
+    ".h", ".json", ".md", ".pri", ".pro", ".ps1", ".qrc", ".qss", ".txt", ".ui", ".yml", ".yaml"
 )
 
 $textNames = @(
-    "AGENTS.md", "README.md", "VisionSelect.pro"
+    "AGENTS.md", "README.md", "VisionSelect.pro", "CMakeLists.txt"
 )
 
 function Test-IsTextPath([string]$Path) {

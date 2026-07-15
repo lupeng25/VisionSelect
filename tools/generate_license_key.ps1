@@ -7,8 +7,7 @@ param(
     [string]$MachineCode,
     [string]$Licensee,
     [string]$ExpiresAt,
-    [string]$Serial = ("VS-" + (Get-Date -Format "yyyyMMddHHmmss")),
-    [string[]]$Features = @("standard"),
+    [string]$Serial = ("VS-" + [Guid]::NewGuid().ToString("N").ToUpperInvariant()),
     [switch]$CreateKeyPair
 )
 
@@ -81,11 +80,10 @@ $payload = [ordered]@{
     machineCode = $MachineCode.ToUpperInvariant()
     issuedAt = (Get-Date -Format "yyyy-MM-dd")
     expiresAt = $expiresDate
-    features = $Features
 }
 $payloadJson = $payload | ConvertTo-Json -Compress
 $payloadBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($payloadJson))
 $signature = $rsa.SignData([System.Text.Encoding]::UTF8.GetBytes($payloadBase64), [System.Security.Cryptography.CryptoConfig]::MapNameToOID("SHA256"))
-$licenseKey = "VS1-$payloadBase64-$([Convert]::ToBase64String($signature))"
+$licenseKey = "VS2-$payloadBase64-$([Convert]::ToBase64String($signature))"
 
 Write-Output $licenseKey

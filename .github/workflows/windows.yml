@@ -1,0 +1,33 @@
+name: Windows CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - uses: jurplel/install-qt-action@v4
+        id: qt
+        with:
+          version: 6.10.1
+          arch: win64_msvc2022_64
+          cache: true
+      - name: 配置与构建
+        shell: pwsh
+        env:
+          QT_ROOT: ${{ steps.qt.outputs.dir }}
+        run: |
+          cmake --preset windows-msvc2022
+          cmake --build --preset windows-msvc2022 --parallel
+      - name: 执行测试
+        shell: pwsh
+        run: ctest --test-dir build/windows-msvc2022 --output-on-failure
+      - name: 检查文本编码
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/check_text_encoding.ps1

@@ -72,7 +72,7 @@ double cameraScore(const SelectionRequest &request,
 
     if (request.preferMono)
         score += estimate.camera.isMono() ? 8.0 : -8.0;
-    if (request.motionSpeedMmS > 20.0)
+    if (request.hasContinuousMotion() && request.motionSpeedMmS > 20.0)
         score += estimate.camera.isGlobalShutter() ? 14.0 : -20.0;
 
     const double mpExcess = estimate.camera.megapixels() - requirement.requiredMegapixels;
@@ -173,7 +173,7 @@ RequirementEstimate CalculationAssistant::estimateRequirement(const SelectionReq
     estimate.requiredMegapixels = estimate.requiredResolutionX * estimate.requiredResolutionY / 1000000.0;
     estimate.requiredBandwidthMBps12Bit = estimate.requiredResolutionX * estimate.requiredResolutionY
         * 12.0 * qMax(1.0, request.requiredFps) / 8.0 / 1000000.0;
-    estimate.hasMotionConstraint = request.motionSpeedMmS > 0.0;
+    estimate.hasMotionConstraint = request.hasContinuousMotion();
     if (estimate.hasMotionConstraint)
         estimate.maxExposureUsForOnePixelBlur = SelectionEngine::maxExposureUsForOnePixelBlur(request);
     estimate.telecentricPreferred = telecentricPreferred(request);
@@ -234,9 +234,9 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
             .arg(result.bandwidthUtilizationPercent, 0, 'f', 0));
     }
 
-    if (input.request.motionSpeedMmS > 20.0 && !camera.isGlobalShutter()) {
+    if (input.request.hasContinuousMotion() && input.request.motionSpeedMmS > 20.0 && !camera.isGlobalShutter()) {
         result.risks.append(QString::fromUtf8("高速运动建议使用全局快门相机"));
-    } else if (input.request.motionSpeedMmS > 20.0) {
+    } else if (input.request.hasContinuousMotion() && input.request.motionSpeedMmS > 20.0) {
         result.reasons.append(QString::fromUtf8("高速运动场景已选择全局快门"));
     }
 
@@ -383,9 +383,9 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
         || mode.contains(QStringLiteral("trigger"))
         || mode.contains(QString::fromUtf8("频闪"))
         || mode.contains(QString::fromUtf8("触发"));
-    if (input.request.motionSpeedMmS > 20.0 && !strobe)
+    if (input.request.hasContinuousMotion() && input.request.motionSpeedMmS > 20.0 && !strobe)
         result.risks.append(QString::fromUtf8("高速运动建议使用频闪/触发光源以压低曝光时间"));
-    else if (input.request.motionSpeedMmS > 20.0)
+    else if (input.request.hasContinuousMotion() && input.request.motionSpeedMmS > 20.0)
         result.reasons.append(QString::fromUtf8("高速运动已选择频闪/触发光源"));
 
     const bool reflective = input.request.reflective
@@ -423,7 +423,7 @@ QVector<CameraCalculationEstimate> CalculationAssistant::estimateCameras(const S
         estimate.objectPixelSizeUm = objectPixelUm(request, camera);
         estimate.meetsSampling = estimate.objectPixelSizeUm <= requirement.targetObjectPixelUm;
         estimate.meetsFps = camera.maxFps >= request.requiredFps;
-        estimate.globalShutterRecommended = request.motionSpeedMmS > 20.0 && !camera.isGlobalShutter();
+        estimate.globalShutterRecommended = request.hasContinuousMotion() && request.motionSpeedMmS > 20.0 && !camera.isGlobalShutter();
         estimate.fixedFocalLengthMm = estimatedFixedFocalLengthMm(request, camera);
         estimate.sensorDiagonalMm = camera.sensorDiagonalMm();
         estimate.telecentricPmagMin = camera.pixelSizeUm / qMax(0.001, requirement.targetObjectPixelUm);

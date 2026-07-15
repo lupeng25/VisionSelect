@@ -4,7 +4,6 @@
 #include <QByteArray>
 #include <QDate>
 #include <QString>
-#include <QStringList>
 
 struct LicenseIssueRequest {
     QString licensee;
@@ -12,7 +11,6 @@ struct LicenseIssueRequest {
     QString machineCode;
     QDate issuedAt;
     QDate expiresAt;
-    QStringList features;
 };
 
 struct LicenseIssueResult {

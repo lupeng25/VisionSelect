@@ -33,6 +33,7 @@ private:
     mutable QReadWriteLock m_languageLock;
     QString m_currentLanguage;
     QTranslator *m_translator = nullptr;
+    bool m_translatorInstalled = false;
 };
 
 #endif

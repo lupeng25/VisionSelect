@@ -108,6 +108,11 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     m_heightVariationSpin = makeSpin(0.0, 200.0, defaultRequest.heightVariationMm, QStringLiteral(" mm"));
     m_speedSpin = makeSpin(0.0, 10000.0, defaultRequest.motionSpeedMmS, QStringLiteral(" mm/s"));
     m_fpsSpin = makeSpin(1.0, 1000.0, defaultRequest.requiredFps, QStringLiteral(" fps"));
+    m_motionModeCombo = new QComboBox;
+    m_motionModeCombo->addItems({motionModeLabel(MotionMode::Static),
+                                 motionModeLabel(MotionMode::StopAndGo),
+                                 motionModeLabel(MotionMode::Continuous)});
+    m_motionModeCombo->setCurrentIndex(static_cast<int>(defaultRequest.motionMode));
     m_detectionCombo = new QComboBox;
     m_detectionCombo->addItems({detectionTypeLabel(DetectionType::Measurement),
                                 detectionTypeLabel(DetectionType::Positioning),
@@ -131,11 +136,12 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     requestGroup.grid->addWidget(field(localizedText("允许测量误差", "Allowed measurement error"), m_toleranceSpin), 2, 0);
     requestGroup.grid->addWidget(field(localizedText("工作距离", "Working distance"), m_wdSpin), 2, 1);
     requestGroup.grid->addWidget(field(localizedText("高度波动", "Height variation"), m_heightVariationSpin), 3, 0);
-    requestGroup.grid->addWidget(field(localizedText("运动速度", "Motion speed"), m_speedSpin), 3, 1);
-    requestGroup.grid->addWidget(field(localizedText("节拍/帧率", "Cycle / frame rate"), m_fpsSpin), 4, 0);
-    requestGroup.grid->addWidget(field(localizedText("检测类型", "Inspection type"), m_detectionCombo), 4, 1);
-    requestGroup.grid->addWidget(field(localizedText("表面材质", "Surface material"), m_surfaceCombo), 5, 0);
-    requestGroup.grid->addWidget(field(localizedText("表面条件", "Surface condition"), m_reflectiveCheck), 5, 1);
+    requestGroup.grid->addWidget(field(localizedText("运动模式", "Motion mode"), m_motionModeCombo), 3, 1);
+    requestGroup.grid->addWidget(field(localizedText("运动速度", "Motion speed"), m_speedSpin), 4, 0);
+    requestGroup.grid->addWidget(field(localizedText("节拍/帧率", "Cycle / frame rate"), m_fpsSpin), 4, 1);
+    requestGroup.grid->addWidget(field(localizedText("检测类型", "Inspection type"), m_detectionCombo), 5, 0);
+    requestGroup.grid->addWidget(field(localizedText("表面材质", "Surface material"), m_surfaceCombo), 5, 1);
+    requestGroup.grid->addWidget(field(localizedText("表面条件", "Surface condition"), m_reflectiveCheck), 6, 0, 1, 2);
 
     ParameterGroup cameraGroup = makeGroup(
         localizedText("手动相机参数", "Manual Camera Parameters"),
@@ -143,10 +149,12 @@ PureCalculationPage::PureCalculationPage(QWidget *parent)
     m_resolutionXSpin = dialogIntSpin(1, 200000, 2448);
     m_resolutionYSpin = dialogIntSpin(1, 200000, 2048);
     m_pixelSizeSpin = makeSpin(0.01, 1000.0, 3.45, QStringLiteral(" um"));
+    m_maxFpsSpin = makeSpin(0.0, 100000.0, 0.0, QStringLiteral(" fps"), 1);
     m_bitDepthSpin = makeSpin(1.0, 32.0, 12.0, QStringLiteral(" bit"), 1);
     m_interfaceBandwidthSpin = makeSpin(0.0, 100000.0, 380.0, QStringLiteral(" MB/s"), 1);
     m_shutterCombo = new QComboBox;
     m_shutterCombo->addItems({QStringLiteral("Global"), QStringLiteral("Rolling")});
+    cameraGroup.grid->addWidget(field(localizedText("最大帧率（0 表示未知）", "Maximum FPS (0 means unknown)"), m_maxFpsSpin), 3, 1);
     cameraGroup.grid->addWidget(field(localizedText("分辨率 X", "Resolution X"), m_resolutionXSpin), 0, 0);
     cameraGroup.grid->addWidget(field(localizedText("分辨率 Y", "Resolution Y"), m_resolutionYSpin), 0, 1);
     cameraGroup.grid->addWidget(field(localizedText("像元", "Pixel size"), m_pixelSizeSpin), 1, 0);
@@ -285,6 +293,7 @@ PureCalculationInput PureCalculationPage::input() const
     request.measurementToleranceUm = m_toleranceSpin->value();
     request.workingDistanceMm = m_wdSpin->value();
     request.heightVariationMm = m_heightVariationSpin->value();
+    request.motionMode = motionModeFromIndex(m_motionModeCombo->currentIndex());
     request.motionSpeedMmS = m_speedSpin->value();
     request.requiredFps = m_fpsSpin->value();
     request.detectionType = detectionTypeFromIndex(m_detectionCombo->currentIndex());
@@ -301,7 +310,7 @@ PureCalculationInput PureCalculationPage::input() const
     camera.pixelSizeUm = m_pixelSizeSpin->value();
     camera.colorMode = QStringLiteral("Mono");
     camera.shutterType = m_shutterCombo->currentText();
-    camera.maxFps = request.requiredFps;
+    camera.maxFps = m_maxFpsSpin->value();
     camera.interfaceType = QStringLiteral("Manual");
     camera.bandwidthMBps = m_interfaceBandwidthSpin->value();
     camera.bitDepth = m_bitDepthSpin->value();
@@ -460,6 +469,7 @@ void PureCalculationPage::resetDefaults()
     m_toleranceSpin->setValue(defaultRequest.measurementToleranceUm);
     m_wdSpin->setValue(defaultRequest.workingDistanceMm);
     m_heightVariationSpin->setValue(defaultRequest.heightVariationMm);
+    m_motionModeCombo->setCurrentIndex(static_cast<int>(defaultRequest.motionMode));
     m_speedSpin->setValue(defaultRequest.motionSpeedMmS);
     m_fpsSpin->setValue(defaultRequest.requiredFps);
     m_detectionCombo->setCurrentIndex(static_cast<int>(defaultRequest.detectionType));
@@ -468,6 +478,7 @@ void PureCalculationPage::resetDefaults()
     m_resolutionXSpin->setValue(2448);
     m_resolutionYSpin->setValue(2048);
     m_pixelSizeSpin->setValue(3.45);
+    m_maxFpsSpin->setValue(0.0);
     m_bitDepthSpin->setValue(12.0);
     m_interfaceBandwidthSpin->setValue(380.0);
     m_shutterCombo->setCurrentIndex(0);

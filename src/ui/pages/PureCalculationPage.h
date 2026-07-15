@@ -38,10 +38,12 @@ private:
     QDoubleSpinBox *m_fpsSpin = nullptr;
     QComboBox *m_detectionCombo = nullptr;
     QComboBox *m_surfaceCombo = nullptr;
+    QComboBox *m_motionModeCombo = nullptr;
     QCheckBox *m_reflectiveCheck = nullptr;
     QSpinBox *m_resolutionXSpin = nullptr;
     QSpinBox *m_resolutionYSpin = nullptr;
     QDoubleSpinBox *m_pixelSizeSpin = nullptr;
+    QDoubleSpinBox *m_maxFpsSpin = nullptr;
     QDoubleSpinBox *m_bitDepthSpin = nullptr;
     QDoubleSpinBox *m_interfaceBandwidthSpin = nullptr;
     QComboBox *m_shutterCombo = nullptr;

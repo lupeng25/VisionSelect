@@ -1,28 +1,33 @@
 # VisionSelect
 
-Qt Widgets industrial machine-vision selection assistant.
+VisionSelect 是一个基于 Qt Widgets 的工业机器视觉元器件选型工具。项目使用 C++20、Qt 6 和 CMake，包含相机、镜头、光源目录管理，二维选型、三维相机辅助评估、PDF 报告及许可证生成工具。
 
-## VS Code build and run
+## 本机构建
 
-Prerequisites on this Windows machine:
+本机已安装 Qt 6.10.1 MinGW，路径为 `D:\Qt6\6.10.1\mingw_64`；MinGW 工具链路径为 `D:\Qt6\Tools\mingw1310_64`。在 PowerShell 中执行：
 
-- Qt 5.12.9 MSVC2015 x64: `C:\Qt\Qt5.12.9\5.12.9\msvc2015_64`
-- Qt Creator jom: `C:\Qt\Qt5.12.9\Tools\QtCreator\bin\jom\jom.exe`
-- Visual Studio 2015 C++ tools: `C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat`
-- VS Code C/C++ extension: `ms-vscode.cpptools`
+```powershell
+$env:QT_ROOT = 'D:\Qt6\6.10.1\mingw_64'
+$env:MINGW_ROOT = 'D:\Qt6\Tools\mingw1310_64'
+.\build.ps1 -Toolchain MinGW -Configuration Debug -Test
+```
 
-Common actions:
+应用程序位于 `build\windows-mingw64\bin\VisionSelect.exe`，测试程序位于 `build\windows-mingw64\bin\VisionSelectTests.exe`。
 
-- Build: `Ctrl+Shift+B`, then choose `Build VisionSelect` if prompted.
-- Run app: open `Run and Debug`, choose `Run VisionSelect`, press `F5`.
-- Run tests: `Terminal > Run Task... > Test VisionSelect`.
-- Check text encoding: `Terminal > Run Task... > Check Text Encoding`.
+## MSVC 构建与发布
 
-The VS Code tasks call `build_msvc2015.bat`, which sets the Visual Studio, Windows SDK, and Qt environment before running `qmake` and `jom`.
+安装 Qt 6.10.1 的 MSVC 2022 x64 套件并设置 `QT_ROOT` 后，在已初始化的 Visual Studio 2022 x64 开发者终端中执行：
 
-## Encoding policy
+```powershell
+.\build.ps1 -Toolchain MSVC -Configuration Release -Test -Install
+```
 
-All tracked project text files must be valid UTF-8. The repository includes
-`.editorconfig` and `.vscode/settings.json` to keep editors from guessing ANSI
-or GBK encodings, and `tools/check_text_encoding.ps1` validates project text
-files before handoff.
+可部署目录会生成在 `dist\VisionSelect`。使用 Inno Setup 编译 `installer\VisionSelect.iss` 可生成安装包。
+
+## 编码约定
+
+所有项目文本文件必须是 UTF-8。修改中文界面、CSV 或文档后，执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_text_encoding.ps1
+```

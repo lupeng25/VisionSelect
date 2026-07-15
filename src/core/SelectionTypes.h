@@ -22,6 +22,12 @@ enum class SurfaceType {
     Mixed
 };
 
+enum class MotionMode {
+    Static,
+    StopAndGo,
+    Continuous
+};
+
 enum class LensType {
     FixedFocal,
     ObjectTelecentric,
@@ -47,6 +53,7 @@ struct SelectionRequest {
     double measurementToleranceUm = 25.0;
     double workingDistanceMm = 110.0;
     double heightVariationMm = 2.0;
+    MotionMode motionMode = MotionMode::Static;
     double motionSpeedMmS = 0.0;
     double requiredFps = 20.0;
     DetectionType detectionType = DetectionType::Measurement;
@@ -54,6 +61,11 @@ struct SelectionRequest {
     bool reflective = true;
     bool preferMono = true;
     bool allowTelecentric = true;
+
+    bool hasContinuousMotion() const
+    {
+        return motionMode == MotionMode::Continuous && motionSpeedMmS > 0.0;
+    }
 };
 
 struct CameraSpec {
@@ -161,12 +173,14 @@ struct SelectionResult {
 
 QString detectionTypeLabel(DetectionType type);
 QString surfaceTypeLabel(SurfaceType type);
+QString motionModeLabel(MotionMode mode);
 QString lensTypeLabel(LensType type);
 QString lightTypeLabel(LightType type);
 QString detectionTypeKey(DetectionType type);
 QString surfaceTypeKey(SurfaceType type);
 DetectionType detectionTypeFromIndex(int index);
 SurfaceType surfaceTypeFromIndex(int index);
+MotionMode motionModeFromIndex(int index);
 LensType lensTypeFromString(const QString &value);
 LightType lightTypeFromString(const QString &value);
 QString boolLabel(bool value);

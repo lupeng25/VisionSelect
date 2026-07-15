@@ -20,6 +20,7 @@ bool positive(double value)
 void markInvalid(ThreeDMotionSamplingResult *result, const QString &risk)
 {
     result->valid = false;
+    result->status = ThreeDCalculationStatus::InvalidInput;
     result->risks.append(risk);
 }
 }
@@ -252,6 +253,18 @@ ThreeDMotionSamplingResult ThreeDCalculation::estimateMotionSampling(const Three
     if (result.profileCount > 100000.0) {
         result.risks.append(text("采集轮廓数较高，需要确认控制器缓存、传输和处理能力。",
                                  "Profile count is high; confirm controller buffer, transfer, and processing capacity."));
+    }
+
+    if (result.valid
+        && (!result.samplingRateWithinCameraLimit
+            || !result.encoderRateWithinCameraLimit
+            || !result.exposureWithinProfilePeriod
+            || !result.exposureWithinCameraRange
+            || !result.effectiveRateMeetsTarget)) {
+        result.valid = false;
+        result.status = ThreeDCalculationStatus::Infeasible;
+    } else if (result.valid && !result.risks.isEmpty()) {
+        result.status = ThreeDCalculationStatus::Warning;
     }
 
     if (result.reasons.isEmpty() && result.risks.isEmpty())

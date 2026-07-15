@@ -18,8 +18,7 @@ LanguageManager &LanguageManager::instance()
 
 LanguageManager::LanguageManager(QObject *parent)
     : QObject(parent),
-      m_currentLanguage(QString::fromLatin1(kDefaultLanguage)),
-      m_translator(new QTranslator(this))
+      m_currentLanguage(QString::fromLatin1(kDefaultLanguage))
 {
 }
 
@@ -54,28 +53,36 @@ bool LanguageManager::setLanguage(const QString &languageCode)
         ? languageCode
         : QString::fromLatin1(kDefaultLanguage);
 
-    QCoreApplication *application = QCoreApplication::instance();
-    if (application)
-        application->removeTranslator(m_translator);
+    if (normalized == currentLanguage() && m_translatorInstalled)
+        return true;
 
-    bool loaded = true;
+    QTranslator *candidate = new QTranslator(this);
+    bool loaded = false;
     if (normalized == QLatin1String("zh_CN")) {
-        loaded = m_translator->load(QStringLiteral(":/i18n/visionselect_zh_CN.qm"));
-        if (loaded && application)
-            application->installTranslator(m_translator);
+        loaded = candidate->load(QStringLiteral(":/i18n/visionselect_zh_CN.qm"));
     } else if (normalized == QLatin1String("en_US")) {
-        loaded = m_translator->load(QStringLiteral(":/i18n/visionselect_en_US.qm"));
-        if (loaded && application)
-            application->installTranslator(m_translator);
+        loaded = candidate->load(QStringLiteral(":/i18n/visionselect_en_US.qm"));
     }
 
-    const QString activeLanguage = loaded ? normalized : QString::fromLatin1(kDefaultLanguage);
+    if (!loaded) {
+        delete candidate;
+        return false;
+    }
+
+    QCoreApplication *application = QCoreApplication::instance();
+    if (application && m_translatorInstalled && m_translator)
+        application->removeTranslator(m_translator);
+    if (application)
+        application->installTranslator(candidate);
+    delete m_translator;
+    m_translator = candidate;
+    m_translatorInstalled = application != nullptr;
     {
         QWriteLocker locker(&m_languageLock);
-        m_currentLanguage = activeLanguage;
+        m_currentLanguage = normalized;
     }
     QSettings settings;
-    settings.setValue(QString::fromLatin1(kSettingsKey), activeLanguage);
+    settings.setValue(QString::fromLatin1(kSettingsKey), normalized);
     emit languageChanged();
-    return loaded;
+    return true;
 }

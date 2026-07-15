@@ -37,7 +37,7 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
-    bool nativeEvent(const QByteArray &eventType, void *message, long *result) override;
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 
 private:
     CatalogRepository m_catalog;

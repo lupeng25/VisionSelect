@@ -242,7 +242,7 @@ SelectionJobResult runSelectionJob(const QString &storageDirectory, const Select
 
     CatalogRepository workerCatalog;
     workerCatalog.setStorageDirectory(storageDirectory);
-    if (!workerCatalog.initializeDatabase(&result.error))
+    if (!workerCatalog.openReadOnly(&result.error))
         return result;
 
     SelectionService service(&workerCatalog);
@@ -263,7 +263,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override
     {
         if (event->button() == Qt::LeftButton && window()) {
-            m_dragOffset = event->globalPos() - window()->frameGeometry().topLeft();
+            m_dragOffset = event->globalPosition().toPoint() - window()->frameGeometry().topLeft();
             m_dragging = !window()->isMaximized();
             event->accept();
             return;
@@ -274,7 +274,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override
     {
         if (m_dragging && window() && !window()->isMaximized() && (event->buttons() & Qt::LeftButton)) {
-            window()->move(event->globalPos() - m_dragOffset);
+            window()->move(event->globalPosition().toPoint() - m_dragOffset);
             event->accept();
             return;
         }
@@ -330,7 +330,7 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     updateWindowMask();
 }
 
-bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, long *result)
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
 {
 #ifdef Q_OS_WIN
     Q_UNUSED(eventType)
@@ -746,8 +746,6 @@ void MainWindow::rebuildPagesForLanguage()
     const bool hadThreeDPage = m_threeDCameraPage != nullptr;
     const bool hadResultsPage = m_resultsPage != nullptr;
     const bool hadCatalogPage = m_catalogPage != nullptr;
-    const bool hadResults = !m_results.isEmpty();
-    const bool selectionWasRunning = selectionCalculationRunning();
 
     m_inputPage = new InputPage;
     m_inputPage->setRequest(savedRequest);
@@ -790,8 +788,6 @@ void MainWindow::rebuildPagesForLanguage()
     restorePageUiState(m_resultsPage, resultsState);
     restorePageUiState(m_catalogPage, catalogState);
 
-    if (hadResults || selectionWasRunning)
-        startSelectionCalculation(m_request);
 }
 
 void MainWindow::showLicenseInfo()
@@ -1009,7 +1005,6 @@ void MainWindow::finishSelectionCalculation()
         refreshCalculationAssistant();
     if (m_resultsPage)
         m_resultsPage->setResults(m_results, m_request);
-    refreshCatalogTables();
     refreshSidebarSummary();
 
     if (m_hasPendingSelectionRequest) {
@@ -1501,7 +1496,7 @@ void MainWindow::exportBomCsv()
     }
 
     QTextStream out(&file);
-    out.setCodec("UTF-8");
+    out.setEncoding(QStringConverter::Utf8);
     out << "scheme,rank,category,manufacturer,model,key_specs,notes,project_notes\n";
     const int count = qMin(5, m_results.size());
     for (int i = 0; i < count; ++i) {

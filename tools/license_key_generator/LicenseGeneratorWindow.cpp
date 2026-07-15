@@ -19,6 +19,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSettings>
+#include <QSaveFile>
 #include <QTextStream>
 #include <QVBoxLayout>
 
@@ -84,11 +85,9 @@ LicenseGeneratorWindow::LicenseGeneratorWindow(QWidget *parent)
     m_licenseeLabel = new QLabel(payloadBox);
     m_serialLabel = new QLabel(payloadBox);
     m_expiresLabel = new QLabel(payloadBox);
-    m_featuresLabel = new QLabel(payloadBox);
     m_machineCodeEdit = new QLineEdit(payloadBox);
     m_licenseeEdit = new QLineEdit(payloadBox);
     m_serialEdit = new QLineEdit(LicenseIssuer::defaultSerial(), payloadBox);
-    m_featuresEdit = new QLineEdit(QStringLiteral("standard"), payloadBox);
     m_expiresEdit = new QDateEdit(QDate::currentDate().addYears(1), payloadBox);
     m_expiresEdit->setCalendarPopup(true);
     m_expiresEdit->setDisplayFormat(QStringLiteral("yyyy-MM-dd"));
@@ -102,7 +101,6 @@ LicenseGeneratorWindow::LicenseGeneratorWindow(QWidget *parent)
     form->addRow(m_licenseeLabel, m_licenseeEdit);
     form->addRow(m_serialLabel, serialRow);
     form->addRow(m_expiresLabel, m_expiresEdit);
-    form->addRow(m_featuresLabel, m_featuresEdit);
     outer->addWidget(payloadBox);
 
     m_outputLabel = new QLabel(this);
@@ -156,19 +154,6 @@ QString LicenseGeneratorWindow::text(const char *zhUtf8, const char *enUtf8) con
         : QString::fromUtf8(zhUtf8);
 }
 
-QStringList LicenseGeneratorWindow::featureList() const
-{
-    QStringList features;
-    for (const QString &feature : m_featuresEdit->text().split(QLatin1Char(','))) {
-        const QString trimmed = feature.trimmed();
-        if (!trimmed.isEmpty())
-            features << trimmed;
-    }
-    if (features.isEmpty())
-        features << QStringLiteral("standard");
-    return features;
-}
-
 void LicenseGeneratorWindow::browsePrivateKey()
 {
     const QString path = QFileDialog::getOpenFileName(this,
@@ -210,7 +195,6 @@ void LicenseGeneratorWindow::generateLicense()
     request.machineCode = m_machineCodeEdit->text();
     request.issuedAt = QDate::currentDate();
     request.expiresAt = m_expiresEdit->date();
-    request.features = featureList();
 
     QString error;
     LicenseIssueResult result;
@@ -255,26 +239,46 @@ void LicenseGeneratorWindow::saveRecord()
     if (path.isEmpty())
         return;
 
-    const bool writeHeader = !QFile::exists(path) || QFileInfo(path).size() == 0;
-    QFile file(path);
-    if (!file.open(QIODevice::Append | QIODevice::Text)) {
+    QByteArray existing;
+    if (QFile::exists(path)) {
+        QFile existingFile(path);
+        if (!existingFile.open(QIODevice::ReadOnly)) {
+            QMessageBox::warning(this, text("保存失败", "Save Failed"),
+                text("无法读取已有授权记录文件。", "Unable to read the existing license record file."));
+            return;
+        }
+        existing = existingFile.readAll();
+    }
+    const bool writeHeader = existing.isEmpty();
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QMessageBox::warning(this, text("保存失败", "Save Failed"),
             text("无法写入授权记录文件。", "Unable to write the license record file."));
         return;
     }
 
     QTextStream out(&file);
-    out.setCodec("UTF-8");
+    out.setEncoding(QStringConverter::Utf8);
+    if (!existing.isEmpty()) {
+        out << QString::fromUtf8(existing);
+        if (!existing.endsWith('\n'))
+            out << "\n";
+    }
     if (writeHeader)
-        out << "issued_at,expires_at,licensee,serial,machine_code,features,license_key\n";
+        out << "issued_at,expires_at,licensee,serial,machine_code,license_key\n";
     out << csvCell(m_lastRequest.issuedAt.toString(Qt::ISODate)) << ","
         << csvCell(m_lastRequest.expiresAt.toString(Qt::ISODate)) << ","
         << csvCell(m_lastRequest.licensee.trimmed()) << ","
         << csvCell(m_lastRequest.serial.trimmed()) << ","
         << csvCell(m_lastResult.normalizedMachineCode) << ","
-        << csvCell(featureList().join(QLatin1Char(';'))) << ","
         << csvCell(m_lastResult.licenseKey) << "\n";
-    file.close();
+    out.flush();
+    out.setDevice(nullptr);
+    if (out.status() != QTextStream::Ok || !file.commit()) {
+        QMessageBox::warning(this, text("保存失败", "Save Failed"),
+            text("授权记录未能原子保存。", "The license record could not be saved atomically."));
+        return;
+    }
     setStatus(text("授权记录已保存。", "License record saved."), true);
 }
 
@@ -299,7 +303,6 @@ void LicenseGeneratorWindow::retranslateUi()
     m_licenseeLabel->setText(text("客户名称", "Licensee"));
     m_serialLabel->setText(text("序列号", "Serial"));
     m_expiresLabel->setText(text("到期日", "Expires at"));
-    m_featuresLabel->setText(text("功能项", "Features"));
     m_outputLabel->setText(text("注册码", "License key"));
     m_generateButton->setText(text("生成注册码", "Generate"));
     m_copyButton->setText(text("复制注册码", "Copy"));
@@ -307,5 +310,4 @@ void LicenseGeneratorWindow::retranslateUi()
     m_newSerialButton->setText(text("新序列号", "New"));
     m_machineCodeEdit->setPlaceholderText(text("客户软件注册窗口显示的机器码", "Machine code shown in the customer registration dialog"));
     m_licenseeEdit->setPlaceholderText(text("客户或公司名称", "Customer or company name"));
-    m_featuresEdit->setPlaceholderText(QStringLiteral("standard"));
 }

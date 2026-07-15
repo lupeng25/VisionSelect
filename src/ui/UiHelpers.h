@@ -4,6 +4,7 @@
 #include "core/SelectionTypes.h"
 
 #include <QString>
+#include <QStringList>
 
 class QComboBox;
 class QDoubleSpinBox;
@@ -13,7 +14,6 @@ class QPushButton;
 class QSpinBox;
 class QTableWidget;
 class QTableWidgetItem;
-class QStringList;
 class QWidget;
 
 namespace UiHelpers {

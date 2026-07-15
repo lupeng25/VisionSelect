@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <QIODevice>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QSqlRecord>
@@ -68,7 +69,11 @@ QString nowUtcIso()
 
 QString likePattern(const QString &value)
 {
-    return QLatin1Char('%') + value.trimmed().toLower() + QLatin1Char('%');
+    QString escaped = value.trimmed().toLower();
+    escaped.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
+    escaped.replace(QLatin1Char('%'), QStringLiteral("\\%"));
+    escaped.replace(QLatin1Char('_'), QStringLiteral("\\_"));
+    return QLatin1Char('%') + escaped + QLatin1Char('%');
 }
 
 double nullableDouble(const QVariant &value, double fallback)
@@ -78,7 +83,7 @@ double nullableDouble(const QVariant &value, double fallback)
 
 QVariant nullableTelecentricity(double value)
 {
-    return value >= 0.0 ? QVariant(value) : QVariant(QVariant::Double);
+    return value >= 0.0 ? QVariant(value) : QVariant(QMetaType::fromType<double>());
 }
 
 QString normalizedQueryType(const QString &value)
@@ -436,17 +441,22 @@ CatalogRepository::CatalogRepository()
 
 CatalogRepository::~CatalogRepository()
 {
-    if (m_db.isValid()) {
-        const QString connectionName = m_db.connectionName();
-        m_db.close();
-        m_db = QSqlDatabase();
-        QSqlDatabase::removeDatabase(connectionName);
-    }
+    closeDatabase();
 }
 
 void CatalogRepository::setStorageDirectory(const QString &directory)
 {
+    closeDatabase();
     m_storageDirectory = directory;
+    m_readOnly = false;
+    m_snapshotsLoaded = false;
+    m_cameras.clear();
+    m_lenses.clear();
+    m_lights.clear();
+    m_cameraIds.clear();
+    m_lensIds.clear();
+    m_lightIds.clear();
+    m_lightCandidateCache.clear();
 }
 
 QString CatalogRepository::storageDirectory() const
@@ -464,8 +474,53 @@ bool CatalogRepository::loadDefaults(QString *errorMessage)
 bool CatalogRepository::initializeDatabase(QString *errorMessage)
 {
     ScopedErrorLocalizer localizeError(errorMessage);
-    return ensureDatabase(errorMessage)
-        && appendMissingBuiltInRows(errorMessage);
+    if (!ensureDatabase(errorMessage))
+        return false;
+    if (!m_db.transaction()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Unable to start catalog bootstrap transaction: %1").arg(sqlErrorText(m_db));
+        return false;
+    }
+    if (!appendMissingBuiltInRows(errorMessage)) {
+        m_db.rollback();
+        return false;
+    }
+    if (!m_db.commit()) {
+        m_db.rollback();
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Unable to commit catalog bootstrap transaction: %1").arg(sqlErrorText(m_db));
+        return false;
+    }
+    return true;
+}
+
+bool CatalogRepository::openReadOnly(QString *errorMessage) const
+{
+    ScopedErrorLocalizer localizeError(errorMessage);
+    if (m_db.isOpen())
+        return true;
+    if (!QFileInfo::exists(databasePath())) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Catalog database does not exist. Complete application startup before opening a read-only catalog.");
+        return false;
+    }
+    if (m_connectionName.isEmpty()) {
+        m_connectionName = QStringLiteral("visionselect_catalog_%1")
+            .arg(QString::fromLatin1(QUuid::createUuid().toRfc4122().toHex()));
+    }
+    if (!m_db.isValid()) {
+        m_db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), m_connectionName);
+        m_db.setDatabaseName(databasePath());
+        m_db.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY"));
+        m_readOnly = true;
+    }
+    if (!m_db.open()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Unable to open read-only SQLite catalog: %1").arg(sqlErrorText(m_db));
+        return false;
+    }
+    return execSql(m_db, QStringLiteral("PRAGMA foreign_keys = ON"), errorMessage)
+        && execSql(m_db, QStringLiteral("PRAGMA busy_timeout = 5000"), errorMessage);
 }
 
 QString CatalogRepository::effectiveStorageDirectory() const
@@ -515,9 +570,15 @@ bool CatalogRepository::openDatabase(QString *errorMessage) const
     if (!m_db.isValid()) {
         m_db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), m_connectionName);
         m_db.setDatabaseName(databasePath());
+        m_readOnly = false;
     }
     if (m_db.isOpen())
         return true;
+    if (m_readOnly) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Catalog is opened read-only in this thread.");
+        return false;
+    }
     if (!m_db.open()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("无法打开 SQLite 产品库：%1").arg(sqlErrorText(m_db));
@@ -525,7 +586,18 @@ bool CatalogRepository::openDatabase(QString *errorMessage) const
     }
     return execSql(m_db, QStringLiteral("PRAGMA foreign_keys = ON"), errorMessage)
         && execSql(m_db, QStringLiteral("PRAGMA journal_mode = WAL"), errorMessage)
-        && execSql(m_db, QStringLiteral("PRAGMA synchronous = NORMAL"), errorMessage);
+        && execSql(m_db, QStringLiteral("PRAGMA synchronous = NORMAL"), errorMessage)
+        && execSql(m_db, QStringLiteral("PRAGMA busy_timeout = 5000"), errorMessage);
+}
+
+void CatalogRepository::closeDatabase()
+{
+    if (!m_db.isValid())
+        return;
+    const QString connectionName = m_db.connectionName();
+    m_db.close();
+    m_db = QSqlDatabase();
+    QSqlDatabase::removeDatabase(connectionName);
 }
 
 bool CatalogRepository::ensureDatabase(QString *errorMessage)
@@ -909,7 +981,7 @@ bool CatalogRepository::appendMissingResourceRows(const QString &resourcePath, c
     }
 
     QTextStream in(&resourceFile);
-    in.setCodec("UTF-8");
+    in.setEncoding(QStringConverter::Utf8);
     QStringList headers;
     int keyIndex = -1;
     int lineNumber = 0;
@@ -972,7 +1044,7 @@ bool CatalogRepository::appendMissingResourceRows(const QString &resourcePath, c
     }
 
     QTextStream out(&outputFile);
-    out.setCodec("UTF-8");
+    out.setEncoding(QStringConverter::Utf8);
     if (!endsWithNewline)
         out << "\n";
     for (const QString &line : rowsToAppend)
@@ -1105,7 +1177,7 @@ bool CatalogRepository::insertLensIntoDatabase(const LensSpec &lens, const QStri
     query.addBindValue(lens.fNumber);
     query.addBindValue(lens.coaxialIllumination ? 1 : 0);
     query.addBindValue(lens.notes);
-    query.addBindValue(QStringList({lens.model, lens.manufacturer, lensTypeKey(lens.lensType), lens.typeLabel(), lens.lensMount, lens.notes}).join(QLatin1Char(' ')).toLower());
+    query.addBindValue(QStringList({lens.model, lens.manufacturer, lensTypeKey(lens.lensType), lens.lensMount, lens.notes}).join(QLatin1Char(' ')).toLower());
     query.addBindValue(sourceKind);
     query.addBindValue(QStringLiteral("1"));
     query.addBindValue(now);
@@ -1143,7 +1215,7 @@ bool CatalogRepository::insertLightIntoDatabase(const LightSpec &light, const QS
     query.addBindValue(light.activeWidthMm);
     query.addBindValue(light.activeHeightMm);
     query.addBindValue(light.bestFor);
-    query.addBindValue(QStringList({light.model, light.manufacturer, lightTypeKey(light.lightType), light.typeLabel(), light.color, light.mode, light.bestFor}).join(QLatin1Char(' ')).toLower());
+    query.addBindValue(QStringList({light.model, light.manufacturer, lightTypeKey(light.lightType), light.color, light.mode, light.bestFor}).join(QLatin1Char(' ')).toLower());
     query.addBindValue(sourceKind);
     query.addBindValue(QStringLiteral("1"));
     query.addBindValue(now);
@@ -1707,7 +1779,7 @@ QString buildWhere(CatalogDomain domain, const CatalogQuery &catalogQuery, QList
 {
     QStringList clauses;
     if (!catalogQuery.search.trimmed().isEmpty()) {
-        clauses.append(QStringLiteral("search_text LIKE ?"));
+        clauses.append(QStringLiteral("search_text LIKE ? ESCAPE '\\'"));
         values->append(likePattern(catalogQuery.search));
     }
     if (!catalogQuery.manufacturer.trimmed().isEmpty()) {
@@ -2162,6 +2234,11 @@ bool CatalogRepository::updateCameraById(qint64 id, const CameraSpec &camera, QS
             *errorMessage = QString::fromUtf8("无法更新相机产品：%1").arg(sqlErrorText(query));
         return false;
     }
+    if (query.numRowsAffected() != 1) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Camera product ID %1 does not exist.").arg(id);
+        return false;
+    }
     return refreshSnapshotsIfLoaded(errorMessage);
 }
 
@@ -2199,12 +2276,17 @@ bool CatalogRepository::updateLensById(qint64 id, const LensSpec &lens, QString 
     query.addBindValue(lens.fNumber);
     query.addBindValue(lens.coaxialIllumination ? 1 : 0);
     query.addBindValue(lens.notes);
-    query.addBindValue(QStringList({lens.model, lens.manufacturer, lensTypeKey(lens.lensType), lens.typeLabel(), lens.lensMount, lens.notes}).join(QLatin1Char(' ')).toLower());
+    query.addBindValue(QStringList({lens.model, lens.manufacturer, lensTypeKey(lens.lensType), lens.lensMount, lens.notes}).join(QLatin1Char(' ')).toLower());
     query.addBindValue(nowUtcIso());
     query.addBindValue(id);
     if (!query.exec()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("无法更新镜头产品：%1").arg(sqlErrorText(query));
+        return false;
+    }
+    if (query.numRowsAffected() != 1) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Lens product ID %1 does not exist.").arg(id);
         return false;
     }
     return refreshSnapshotsIfLoaded(errorMessage);
@@ -2231,12 +2313,17 @@ bool CatalogRepository::updateLightById(qint64 id, const LightSpec &light, QStri
     query.addBindValue(light.activeWidthMm);
     query.addBindValue(light.activeHeightMm);
     query.addBindValue(light.bestFor);
-    query.addBindValue(QStringList({light.model, light.manufacturer, lightTypeKey(light.lightType), light.typeLabel(), light.color, light.mode, light.bestFor}).join(QLatin1Char(' ')).toLower());
+    query.addBindValue(QStringList({light.model, light.manufacturer, lightTypeKey(light.lightType), light.color, light.mode, light.bestFor}).join(QLatin1Char(' ')).toLower());
     query.addBindValue(nowUtcIso());
     query.addBindValue(id);
     if (!query.exec()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("无法更新光源产品：%1").arg(sqlErrorText(query));
+        return false;
+    }
+    if (query.numRowsAffected() != 1) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Light product ID %1 does not exist.").arg(id);
         return false;
     }
     m_lightCandidateCache.clear();
@@ -2256,6 +2343,11 @@ bool CatalogRepository::removeCameraById(qint64 id, QString *errorMessage)
             *errorMessage = QString::fromUtf8("无法删除相机产品：%1").arg(sqlErrorText(query));
         return false;
     }
+    if (query.numRowsAffected() != 1) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Camera product ID %1 does not exist.").arg(id);
+        return false;
+    }
     return refreshSnapshotsIfLoaded(errorMessage);
 }
 
@@ -2272,6 +2364,11 @@ bool CatalogRepository::removeLensById(qint64 id, QString *errorMessage)
             *errorMessage = QString::fromUtf8("无法删除镜头产品：%1").arg(sqlErrorText(query));
         return false;
     }
+    if (query.numRowsAffected() != 1) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Lens product ID %1 does not exist.").arg(id);
+        return false;
+    }
     return refreshSnapshotsIfLoaded(errorMessage);
 }
 
@@ -2286,6 +2383,11 @@ bool CatalogRepository::removeLightById(qint64 id, QString *errorMessage)
     if (!query.exec()) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("无法删除光源产品：%1").arg(sqlErrorText(query));
+        return false;
+    }
+    if (query.numRowsAffected() != 1) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Light product ID %1 does not exist.").arg(id);
         return false;
     }
     m_lightCandidateCache.clear();
@@ -2568,14 +2670,14 @@ bool CatalogRepository::writeCameraCsv(const QString &filePath, const QVector<Ca
                                   | QFileDevice::ReadUser | QFileDevice::WriteUser
                                   | QFileDevice::ReadGroup | QFileDevice::ReadOther);
     }
-    QFile file(filePath);
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\206\231\345\205\245 CSV\357\274\232%1").arg(filePath);
         return false;
     }
     QTextStream out(&file);
-    out.setCodec("UTF-8");
+    out.setEncoding(QStringConverter::Utf8);
     const QStringList headers = {
         QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("resolution_x"), QStringLiteral("resolution_y"),
         QStringLiteral("pixel_size_um"), QStringLiteral("sensor_format"), QStringLiteral("color_mode"), QStringLiteral("shutter_type"),
@@ -2592,6 +2694,13 @@ bool CatalogRepository::writeCameraCsv(const QString &filePath, const QVector<Ca
         for (QString &value : row)
             value = csvField(value);
         out << row.join(QLatin1Char(',')) << "\n";
+    }
+    out.flush();
+    out.setDevice(nullptr);
+    if (out.status() != QTextStream::Ok || !file.commit()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Unable to atomically save camera CSV: %1").arg(file.errorString());
+        return false;
     }
     return true;
 }
@@ -2611,14 +2720,14 @@ bool CatalogRepository::writeLensCsv(const QString &filePath, const QVector<Lens
                                   | QFileDevice::ReadUser | QFileDevice::WriteUser
                                   | QFileDevice::ReadGroup | QFileDevice::ReadOther);
     }
-    QFile file(filePath);
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\206\231\345\205\245 CSV\357\274\232%1").arg(filePath);
         return false;
     }
     QTextStream out(&file);
-    out.setCodec("UTF-8");
+    out.setEncoding(QStringConverter::Utf8);
     const QStringList headers = {
         QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("lens_type"), QStringLiteral("lens_mount"),
         QStringLiteral("focal_length_mm"), QStringLiteral("min_wd_mm"), QStringLiteral("distortion_percent"),
@@ -2647,6 +2756,13 @@ bool CatalogRepository::writeLensCsv(const QString &filePath, const QVector<Lens
             value = csvField(value);
         out << row.join(QLatin1Char(',')) << "\n";
     }
+    out.flush();
+    out.setDevice(nullptr);
+    if (out.status() != QTextStream::Ok || !file.commit()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Unable to atomically save lens CSV: %1").arg(file.errorString());
+        return false;
+    }
     return true;
 }
 
@@ -2665,14 +2781,14 @@ bool CatalogRepository::writeLightCsv(const QString &filePath, const QVector<Lig
                                   | QFileDevice::ReadUser | QFileDevice::WriteUser
                                   | QFileDevice::ReadGroup | QFileDevice::ReadOther);
     }
-    QFile file(filePath);
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("\346\227\240\346\263\225\345\206\231\345\205\245 CSV\357\274\232%1").arg(filePath);
         return false;
     }
     QTextStream out(&file);
-    out.setCodec("UTF-8");
+    out.setEncoding(QStringConverter::Utf8);
     const QStringList headers = {
         QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("light_type"), QStringLiteral("color"),
         QStringLiteral("wavelength_nm"), QStringLiteral("mode"), QStringLiteral("active_width_mm"),
@@ -2694,6 +2810,13 @@ bool CatalogRepository::writeLightCsv(const QString &filePath, const QVector<Lig
         for (QString &value : row)
             value = csvField(value);
         out << row.join(QLatin1Char(',')) << "\n";
+    }
+    out.flush();
+    out.setDevice(nullptr);
+    if (out.status() != QTextStream::Ok || !file.commit()) {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Unable to atomically save light CSV: %1").arg(file.errorString());
+        return false;
     }
     return true;
 }
@@ -2876,7 +2999,7 @@ bool CatalogRepository::readCsvRowsFromDevice(QIODevice *device, const QString &
     }
 
     QTextStream in(device);
-    in.setCodec("UTF-8");
+    in.setEncoding(QStringConverter::Utf8);
 
     QStringList headers;
     int physicalLineNumber = 0;

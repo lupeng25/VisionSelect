@@ -38,6 +38,7 @@ private:
     QDoubleSpinBox *m_fpsSpin = nullptr;
     QComboBox *m_detectionCombo = nullptr;
     QComboBox *m_surfaceCombo = nullptr;
+    QComboBox *m_motionModeCombo = nullptr;
     QCheckBox *m_reflectiveCheck = nullptr;
     QCheckBox *m_monoCheck = nullptr;
     QCheckBox *m_allowTelecentricCheck = nullptr;

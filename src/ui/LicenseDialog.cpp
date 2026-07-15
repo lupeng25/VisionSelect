@@ -77,7 +77,7 @@ LicenseDialog::LicenseDialog(LicenseManager *licenseManager, QWidget *parent)
     layout->addWidget(m_keyTitleLabel);
     m_keyEdit = new QPlainTextEdit(this);
     m_keyEdit->setMinimumHeight(128);
-    m_keyEdit->setPlaceholderText(QStringLiteral("VS1-..."));
+    m_keyEdit->setPlaceholderText(QStringLiteral("VS2-..."));
     layout->addWidget(m_keyEdit);
 
     QDialogButtonBox *buttons = new QDialogButtonBox(this);

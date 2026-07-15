@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     QFile styleFile(QStringLiteral(":/style.qss"));
     if (styleFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QTextStream stream(&styleFile);
-        stream.setCodec("UTF-8");
+        stream.setEncoding(QStringConverter::Utf8);
         app.setStyleSheet(stream.readAll());
     }
 

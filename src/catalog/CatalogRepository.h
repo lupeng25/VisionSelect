@@ -52,6 +52,7 @@ public:
     QString storageDirectory() const;
 
     bool initializeDatabase(QString *errorMessage = nullptr);
+    bool openReadOnly(QString *errorMessage = nullptr) const;
     bool loadDefaults(QString *errorMessage = nullptr);
     bool loadCameraCsv(const QString &filePath, QString *errorMessage = nullptr);
     bool loadLensCsv(const QString &filePath, QString *errorMessage = nullptr);
@@ -121,6 +122,7 @@ private:
     QString m_storageDirectory;
     mutable QSqlDatabase m_db;
     mutable QString m_connectionName;
+    mutable bool m_readOnly = false;
     bool m_snapshotsLoaded = false;
     mutable QHash<QString, QVector<LightSpec>> m_lightCandidateCache;
 
@@ -130,6 +132,7 @@ private:
     QString lensStoragePath() const;
     QString lightStoragePath() const;
     bool openDatabase(QString *errorMessage = nullptr) const;
+    void closeDatabase();
     bool ensureDatabase(QString *errorMessage = nullptr);
     bool createSchema(QString *errorMessage = nullptr) const;
     bool migrateInitialDatabase(QString *errorMessage = nullptr);
