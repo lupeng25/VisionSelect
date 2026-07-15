@@ -8,7 +8,9 @@ SelectionService::SelectionService(const CatalogRepository *catalog)
 {
 }
 
-QVector<SelectionResult> SelectionService::select(const SelectionRequest &request, int limit, QString *errorMessage) const
+QVector<SelectionResult> SelectionService::select(const SelectionRequest &request, int limit,
+                                                  QString *errorMessage,
+                                                  const QString &languageCode) const
 {
     if (!m_catalog) {
         if (errorMessage)
@@ -33,5 +35,5 @@ QVector<SelectionResult> SelectionService::select(const SelectionRequest &reques
         return QVector<SelectionResult>();
 
     SelectionEngine engine;
-    return engine.select(request, cameras, lenses, lights, limit);
+    return engine.select(request, cameras, lenses, lights, limit, languageCode);
 }

@@ -14,11 +14,13 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <bcrypt.h>
+#include <wincrypt.h>
 #endif
 
 namespace {
 const char *kProductId = "VisionSelect";
 const char *kSettingsKey = "license/key";
+const char *kLastSeenDateKey = "license/lastSeenDate";
 
 QString compactKey(QString key)
 {
@@ -63,6 +65,91 @@ QDate jsonDate(const QJsonObject &object, const QString &key)
     return QDate::fromString(object.value(key).toString(), Qt::ISODate);
 }
 
+QByteArray protectClockValue(const QByteArray &plainText)
+{
+#ifdef Q_OS_WIN
+    DATA_BLOB input;
+    input.pbData = reinterpret_cast<BYTE *>(const_cast<char *>(plainText.constData()));
+    input.cbData = static_cast<DWORD>(plainText.size());
+    const QByteArray entropyBytes("VisionSelect-LicenseClock-v1");
+    DATA_BLOB entropy;
+    entropy.pbData = reinterpret_cast<BYTE *>(const_cast<char *>(entropyBytes.constData()));
+    entropy.cbData = static_cast<DWORD>(entropyBytes.size());
+    DATA_BLOB output = {0, nullptr};
+    if (!CryptProtectData(&input, L"VisionSelect license clock", &entropy, nullptr, nullptr,
+                          CRYPTPROTECT_UI_FORBIDDEN, &output))
+        return QByteArray();
+    const QByteArray protectedValue(reinterpret_cast<const char *>(output.pbData), static_cast<int>(output.cbData));
+    LocalFree(output.pbData);
+    return protectedValue;
+#else
+    const QByteArray proof = QCryptographicHash::hash(
+        plainText + QByteArray("|VisionSelect-LicenseClock-v1"), QCryptographicHash::Sha256).toHex();
+    return plainText.toBase64() + QByteArray(".") + proof;
+#endif
+}
+
+QByteArray unprotectClockValue(const QByteArray &protectedValue)
+{
+#ifdef Q_OS_WIN
+    DATA_BLOB input;
+    input.pbData = reinterpret_cast<BYTE *>(const_cast<char *>(protectedValue.constData()));
+    input.cbData = static_cast<DWORD>(protectedValue.size());
+    const QByteArray entropyBytes("VisionSelect-LicenseClock-v1");
+    DATA_BLOB entropy;
+    entropy.pbData = reinterpret_cast<BYTE *>(const_cast<char *>(entropyBytes.constData()));
+    entropy.cbData = static_cast<DWORD>(entropyBytes.size());
+    DATA_BLOB output = {0, nullptr};
+    if (!CryptUnprotectData(&input, nullptr, &entropy, nullptr, nullptr,
+                            CRYPTPROTECT_UI_FORBIDDEN, &output))
+        return QByteArray();
+    const QByteArray plainText(reinterpret_cast<const char *>(output.pbData), static_cast<int>(output.cbData));
+    LocalFree(output.pbData);
+    return plainText;
+#else
+    const int separator = protectedValue.indexOf('.');
+    if (separator <= 0)
+        return QByteArray();
+    const QByteArray plainText = QByteArray::fromBase64(protectedValue.left(separator));
+    const QByteArray expectedProof = QCryptographicHash::hash(
+        plainText + QByteArray("|VisionSelect-LicenseClock-v1"), QCryptographicHash::Sha256).toHex();
+    return expectedProof == protectedValue.mid(separator + 1) ? plainText : QByteArray();
+#endif
+}
+
+bool readLastSeenDate(QDate *date, bool *exists)
+{
+    QSettings settings;
+    const QString key = QString::fromLatin1(kLastSeenDateKey);
+    const bool hasValue = settings.contains(key);
+    if (exists)
+        *exists = hasValue;
+    if (!hasValue) {
+        if (date)
+            *date = QDate();
+        return true;
+    }
+
+    const QByteArray protectedValue = QByteArray::fromBase64(settings.value(key).toByteArray());
+    const QDate parsed = QDate::fromString(QString::fromLatin1(unprotectClockValue(protectedValue)), Qt::ISODate);
+    if (!parsed.isValid())
+        return false;
+    if (date)
+        *date = parsed;
+    return true;
+}
+
+bool writeLastSeenDate(const QDate &date)
+{
+    const QByteArray protectedValue = protectClockValue(date.toString(Qt::ISODate).toLatin1());
+    if (protectedValue.isEmpty())
+        return false;
+    QSettings settings;
+    settings.setValue(QString::fromLatin1(kLastSeenDateKey), protectedValue.toBase64());
+    settings.sync();
+    return settings.status() == QSettings::NoError;
+}
+
 #ifdef Q_OS_WIN
 QByteArray rsaPublicBlob(const QByteArray &modulus, const QByteArray &exponent)
 {
@@ -103,12 +190,34 @@ LicenseStatus LicenseManager::currentStatus() const
 
 LicenseStatus LicenseManager::validateKey(const QString &licenseKey) const
 {
-    return validateKeyForMachine(licenseKey, machineCode(), QDate::currentDate());
+    const QDate today = QDate::currentDate();
+    QDate lastSeenDate;
+    bool markerExists = false;
+    if (!readLastSeenDate(&lastSeenDate, &markerExists))
+        return status(LicenseStatusCode::StorageError,
+                      QCoreApplication::translate("LicenseManager", "The protected license clock is unreadable."));
+
+    const LicenseStatus checked = validateKeyForMachine(licenseKey, machineCode(), today, lastSeenDate);
+    if (!checked.isValid())
+        return checked;
+    if ((!markerExists || today > lastSeenDate) && !writeLastSeenDate(today))
+        return status(LicenseStatusCode::StorageError,
+                      QCoreApplication::translate("LicenseManager", "Unable to update the protected license clock."),
+                      checked.info);
+    return checked;
 }
 
 LicenseStatus LicenseManager::validateKeyForMachine(const QString &licenseKey,
                                                     const QString &expectedMachineCode,
                                                     const QDate &today) const
+{
+    return validateKeyForMachine(licenseKey, expectedMachineCode, today, QDate());
+}
+
+LicenseStatus LicenseManager::validateKeyForMachine(const QString &licenseKey,
+                                                    const QString &expectedMachineCode,
+                                                    const QDate &today,
+                                                    const QDate &lastSeenDate) const
 {
     QByteArray signedPayload;
     QByteArray payload;
@@ -126,6 +235,11 @@ LicenseStatus LicenseManager::validateKeyForMachine(const QString &licenseKey,
         return status(LicenseStatusCode::MachineMismatch, QCoreApplication::translate("LicenseManager", "This license is not bound to this machine."), info);
     if (info.expiresAt.isValid() && info.expiresAt < today)
         return status(LicenseStatusCode::Expired, QCoreApplication::translate("LicenseManager", "This license has expired."), info);
+    if ((info.issuedAt.isValid() && today < info.issuedAt)
+        || (lastSeenDate.isValid() && today < lastSeenDate)) {
+        return status(LicenseStatusCode::ClockRollback,
+                      QCoreApplication::translate("LicenseManager", "The system date is earlier than the protected license clock."), info);
+    }
     return status(LicenseStatusCode::Valid, QCoreApplication::translate("LicenseManager", "License is valid."), info);
 }
 

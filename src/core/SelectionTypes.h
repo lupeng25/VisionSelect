@@ -39,6 +39,7 @@ enum class LightType {
 };
 
 struct SelectionRequest {
+    QString projectNotes;
     double objectWidthMm = 20.0;
     double objectHeightMm = 20.0;
     double placementMarginMm = 2.0;

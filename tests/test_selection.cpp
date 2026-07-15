@@ -91,6 +91,7 @@ private slots:
     void machineCodeGenerationIsStable();
     void languageManagerSwitchesAvailableLanguages();
     void generatedDiagnosticsFollowLanguage();
+    void selectionUsesExplicitLanguageSnapshot();
     void licenseIssuerErrorsFollowLanguage();
     void invalidTelecentricCsvFails();
     void invalidLightCsvFails();
@@ -1245,6 +1246,31 @@ void SelectionEngineTest::sqliteLightCandidatesUseLensFeatureCache()
     QVERIFY2(error.isEmpty(), qPrintable(error));
     QCOMPARE(cached.size(), coaxialCandidates.size());
     QCOMPARE(cached.first().model, coaxialCandidates.first().model);
+
+    QTemporaryFile lightCsv;
+    QVERIFY(lightCsv.open());
+    {
+        QTextStream out(&lightCsv);
+        out.setCodec("UTF-8");
+        out << "model,manufacturer,light_type,color,wavelength_nm,mode,active_width_mm,active_height_mm,best_for\n";
+        out << "SMALL-RING,CacheFixture,Ring,White,0,Continuous,30,30,general\n";
+        out << "LARGE-COAXIAL,CacheFixture,Coaxial,White,0,Continuous,60,60,reflective\n";
+    }
+    lightCsv.close();
+    QVERIFY2(repo.loadLightCsv(lightCsv.fileName(), &error), qPrintable(error));
+
+    request.surfaceType = SurfaceType::Matte;
+    request.reflective = false;
+    const QVector<LightSpec> matteCandidates = repo.selectionCandidateLights(request, false, false, 1, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(matteCandidates.size(), 1);
+    QCOMPARE(matteCandidates.first().model, QStringLiteral("SMALL-RING"));
+
+    request.reflective = true;
+    const QVector<LightSpec> reflectiveCandidates = repo.selectionCandidateLights(request, false, false, 1, &error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(reflectiveCandidates.size(), 1);
+    QCOMPARE(reflectiveCandidates.first().model, QStringLiteral("LARGE-COAXIAL"));
 }
 
 void SelectionEngineTest::catalogPerformanceGate()
@@ -2605,6 +2631,13 @@ void SelectionEngineTest::licenseValidationCoversSignatureMachineAndExpiry()
     status = manager.validateKeyForMachine(key, QStringLiteral("ABCD-EFGH-IJKL-MNOP"), QDate(2100, 1, 1));
     QCOMPARE(status.code, LicenseStatusCode::Expired);
 
+    status = manager.validateKeyForMachine(key, QStringLiteral("ABCD-EFGH-IJKL-MNOP"),
+                                           QDate(2026, 5, 31), QDate(2026, 6, 1));
+    QCOMPARE(status.code, LicenseStatusCode::ClockRollback);
+
+    status = manager.validateKeyForMachine(key, QStringLiteral("ABCD-EFGH-IJKL-MNOP"), QDate(2025, 12, 31));
+    QCOMPARE(status.code, LicenseStatusCode::ClockRollback);
+
     QString tampered = key;
     tampered.replace(QStringLiteral("VGVzdC"), QStringLiteral("VGVzdA"));
     status = manager.validateKeyForMachine(tampered, QStringLiteral("ABCD-EFGH-IJKL-MNOP"), QDate(2026, 5, 31));
@@ -2761,6 +2794,24 @@ void SelectionEngineTest::generatedDiagnosticsFollowLanguage()
     QVERIFY2(dynamicValueError.contains(QString::fromUtf8("中文品牌")), qPrintable(dynamicValueError));
 }
 
+void SelectionEngineTest::selectionUsesExplicitLanguageSnapshot()
+{
+    LanguageGuard language;
+    QVERIFY(language.setLanguage(QStringLiteral("zh_CN")));
+
+    SelectionEngine engine;
+    const QVector<SelectionResult> results = engine.select(
+        SelectionRequest(), m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 3,
+        QStringLiteral("en_US"));
+    QVERIFY(!results.isEmpty());
+    const SelectionResult &top = results.first();
+    QStringList parts;
+    parts << top.schemeTitle << top.formulaSummary << top.hardFailures
+          << top.score.reasons << top.score.risks;
+    const QString text = parts.join(QStringLiteral("; "));
+    QVERIFY2(!containsCjk(text), qPrintable(text));
+}
+
 void SelectionEngineTest::licenseIssuerErrorsFollowLanguage()
 {
     LanguageGuard language;
@@ -2828,6 +2879,8 @@ void SelectionEngineTest::invalidLightCsvFails()
 void SelectionEngineTest::pdfReportWrites()
 {
     SelectionRequest request;
+    request.projectNotes = QString::fromUtf8("这是一个需要自动换行的长项目备注，用于验证 PDF 段落会按实际字体测量高度，")
+        + QString::fromUtf8("并完整保留项目上下文。").repeated(40);
     SelectionEngine engine;
     const QVector<SelectionResult> results = engine.select(request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 5);
     QVERIFY(!results.isEmpty());

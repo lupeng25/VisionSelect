@@ -10,7 +10,8 @@ public:
                                     const QVector<CameraSpec> &cameras,
                                     const QVector<LensSpec> &lenses,
                                     const QVector<LightSpec> &lights,
-                                    int limit = 12) const;
+                                    int limit = 12,
+                                    const QString &languageCode = QString()) const;
 
     static double requiredFovWidth(const SelectionRequest &request);
     static double requiredFovHeight(const SelectionRequest &request);
@@ -34,7 +35,8 @@ private:
                                  const CameraSpec &camera,
                                  const LensSpec &lens,
                                  const LightSpec &light,
-                                 bool includeDetails = true) const;
+                                 bool includeDetails = true,
+                                 const QString &languageCode = QString()) const;
 
     LightSpec chooseLight(const SelectionRequest &request,
                           const LensSpec &lens,

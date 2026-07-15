@@ -143,19 +143,13 @@ InputPage::InputPage(QWidget *parent)
         localizedText("检测类型 · 表面材质 · 光学偏好",
                       "Inspection · surface · optical preferences"), QStringLiteral("warn")));
     outlineLayout->addStretch();
-    QLabel *templateTitle = new QLabel(localizedText("需求模板", "Requirement Template"));
-    templateTitle->setObjectName(QStringLiteral("OutlineFieldTitle"));
-    outlineLayout->addWidget(templateTitle);
-    QComboBox *templateCombo = new QComboBox;
-    templateCombo->addItem(localizedText("当前需求（未保存）", "Current requirement (unsaved)"));
-    outlineLayout->addWidget(templateCombo);
     QLabel *notesTitle = new QLabel(localizedText("备注", "Notes"));
     notesTitle->setObjectName(QStringLiteral("OutlineFieldTitle"));
     outlineLayout->addWidget(notesTitle);
-    QTextEdit *notes = new QTextEdit;
-    notes->setPlaceholderText(localizedText("输入项目或工位备注…", "Add project or station notes…"));
-    notes->setFixedHeight(68);
-    outlineLayout->addWidget(notes);
+    m_notesEdit = new QTextEdit;
+    m_notesEdit->setPlaceholderText(localizedText("输入项目或工位备注…", "Add project or station notes…"));
+    m_notesEdit->setFixedHeight(68);
+    outlineLayout->addWidget(m_notesEdit);
     body->addWidget(outline);
 
     QFrame *editor = new QFrame;
@@ -384,6 +378,7 @@ void InputPage::refreshSummary()
 SelectionRequest InputPage::request() const
 {
     SelectionRequest request;
+    request.projectNotes = m_notesEdit ? m_notesEdit->toPlainText().trimmed() : QString();
     request.objectWidthMm = m_widthSpin->value();
     request.objectHeightMm = m_heightSpin->value();
     request.placementMarginMm = m_marginSpin->value();
@@ -403,6 +398,8 @@ SelectionRequest InputPage::request() const
 
 void InputPage::setRequest(const SelectionRequest &request)
 {
+    if (m_notesEdit)
+        m_notesEdit->setPlainText(request.projectNotes);
     m_widthSpin->setValue(request.objectWidthMm);
     m_heightSpin->setValue(request.objectHeightMm);
     m_marginSpin->setValue(request.placementMarginMm);

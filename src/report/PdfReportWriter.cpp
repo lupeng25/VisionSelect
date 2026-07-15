@@ -4,6 +4,7 @@
 
 #include <QDateTime>
 #include <QFont>
+#include <QFontMetrics>
 #include <QPainter>
 #include <QPdfWriter>
 #include <QTextOption>
@@ -42,15 +43,19 @@ public:
 
     void paragraph(const QString &text)
     {
-        ensure(54);
         QFont font(QStringLiteral("Microsoft YaHei"), 9);
         m_painter->setFont(font);
         m_painter->setPen(QColor(31, 41, 55));
-        QRect rect(m_margin, m_y, m_width, 70);
-        QTextOption option;
-        option.setWrapMode(QTextOption::WordWrap);
-        m_painter->drawText(rect, text, option);
-        m_y += qMax(28, text.size() / 35 * 16 + 22);
+        const QFontMetrics metrics(font);
+        const QRect measured = metrics.boundingRect(
+            QRect(0, 0, m_width, m_writer->height()),
+            Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
+            text);
+        const int textHeight = qMax(28, measured.height() + 8);
+        ensure(textHeight);
+        const QRect rect(m_margin, m_y, m_width, textHeight);
+        m_painter->drawText(rect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, text);
+        m_y += textHeight;
     }
 
     void keyValue(const QString &key, const QString &value)
@@ -215,6 +220,10 @@ bool PdfReportWriter::write(const QString &filePath,
                   .arg(request.motionSpeedMmS, 0, 'f', 1)
                   .arg(request.requiredFps, 0, 'f', 1));
     page.keyValue(lt("表面特性", "Surface"), surfaceTypeLabel(request.surfaceType));
+    if (!request.projectNotes.trimmed().isEmpty()) {
+        page.section(lt("项目备注", "Project Notes"));
+        page.paragraph(request.projectNotes.trimmed());
+    }
 
     page.section(lt("关键公式和判断", "Key Formulas and Checks"));
     page.paragraph(lt("普通工业镜头按 M = SensorSize / FOV 和 f ~= WD x SensorSize / (FOV + SensorSize) 初筛，并校验像圈、接口、工作距离、畸变和镜头 MP/像元能力。",

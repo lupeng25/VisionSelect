@@ -90,6 +90,18 @@
         <source>Unable to save the license key.</source>
         <translation>无法保存注册码。</translation>
     </message>
+    <message>
+        <source>The protected license clock is unreadable.</source>
+        <translation>受保护的授权时间记录无法读取。</translation>
+    </message>
+    <message>
+        <source>Unable to update the protected license clock.</source>
+        <translation>无法更新受保护的授权时间记录。</translation>
+    </message>
+    <message>
+        <source>The system date is earlier than the protected license clock.</source>
+        <translation>系统日期早于受保护的授权时间记录，请校准系统时间。</translation>
+    </message>
 </context>
 <context>
     <name>MainWindow</name>

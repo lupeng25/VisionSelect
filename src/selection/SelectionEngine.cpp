@@ -1,6 +1,7 @@
 #include "selection/SelectionEngine.h"
 
 #include "core/Localization.h"
+#include "i18n/LanguageManager.h"
 
 #include <algorithm>
 #include <QtMath>
@@ -118,15 +119,15 @@ void addHardFailure(SelectionResult *result, const QString &reason)
         result->hardFailures.append(reason);
 }
 
-void localizeSelectionResult(SelectionResult *result)
+void localizeSelectionResult(SelectionResult *result, const QString &languageCode)
 {
     if (!result)
         return;
-    result->schemeTitle = CoreI18n::localizedDiagnostic(result->schemeTitle);
-    result->formulaSummary = CoreI18n::localizedDiagnostic(result->formulaSummary);
-    result->hardFailures = CoreI18n::localizedDiagnostics(result->hardFailures);
-    result->score.reasons = CoreI18n::localizedDiagnostics(result->score.reasons);
-    result->score.risks = CoreI18n::localizedDiagnostics(result->score.risks);
+    result->schemeTitle = CoreI18n::localizedDiagnosticForLanguage(result->schemeTitle, languageCode);
+    result->formulaSummary = CoreI18n::localizedDiagnosticForLanguage(result->formulaSummary, languageCode);
+    result->hardFailures = CoreI18n::localizedDiagnosticsForLanguage(result->hardFailures, languageCode);
+    result->score.reasons = CoreI18n::localizedDiagnosticsForLanguage(result->score.reasons, languageCode);
+    result->score.risks = CoreI18n::localizedDiagnosticsForLanguage(result->score.risks, languageCode);
 }
 
 struct PairCandidate
@@ -198,11 +199,15 @@ double estimatedFixedFocalLengthMm(const SelectionRequest &request, const Camera
 #define ADD_DETAIL_HARD_FAILURE(reasonExpr) do { if (result) { result->hardConstraintsPassed = false; if (includeDetails) addHardFailure(result, reasonExpr); } } while (false)
 
 QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request,
-                                                const QVector<CameraSpec> &cameras,
-                                                const QVector<LensSpec> &lenses,
-                                                const QVector<LightSpec> &lights,
-                                                int limit) const
+                                                 const QVector<CameraSpec> &cameras,
+                                                 const QVector<LensSpec> &lenses,
+                                                 const QVector<LightSpec> &lights,
+                                                 int limit,
+                                                 const QString &languageCode) const
 {
+    const QString resultLanguage = languageCode.isEmpty()
+        ? LanguageManager::instance().currentLanguage()
+        : languageCode;
     QVector<LightSpec> bestLights;
     bestLights.reserve(lenses.size());
     for (const LensSpec &lens : lenses) {
@@ -329,7 +334,7 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
         const CameraSpec &camera = cameras.at(candidate.cameraIndex);
         const LensSpec &lens = lenses.at(candidate.lensIndex);
         const LightSpec &light = bestLights.at(candidate.lensIndex);
-        results.append(evaluatePair(request, camera, lens, light, true));
+        results.append(evaluatePair(request, camera, lens, light, true, resultLanguage));
     }
 
     std::sort(results.begin(), results.end(), betterCandidate);
@@ -467,10 +472,11 @@ double SelectionEngine::lightCoverageMarginPercent(const SelectionRequest &reque
 }
 
 SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
-                                             const CameraSpec &camera,
-                                             const LensSpec &lens,
-                                             const LightSpec &light,
-                                             bool includeDetails) const
+                                              const CameraSpec &camera,
+                                              const LensSpec &lens,
+                                              const LightSpec &light,
+                                              bool includeDetails,
+                                              const QString &languageCode) const
 {
     SelectionResult result;
     if (includeDetails) {
@@ -505,7 +511,7 @@ SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
     if (!result.hardConstraintsPassed)
         result.score.score = qMin(result.score.score, 20.0);
     if (includeDetails)
-        localizeSelectionResult(&result);
+        localizeSelectionResult(&result, languageCode);
     return result;
 }
 

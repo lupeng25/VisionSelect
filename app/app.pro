@@ -8,7 +8,7 @@ DESTDIR = ../bin
 INCLUDEPATH += ../src
 
 win32-msvc*: QMAKE_CXXFLAGS += /utf-8 /wd4819
-win32: LIBS += -lbcrypt
+win32: LIBS += -lbcrypt -lcrypt32 -luser32
 win32: RC_FILE = ../resources/windows/VisionSelect.rc
 TRANSLATIONS += \
     ../resources/i18n/visionselect_zh_CN.ts \

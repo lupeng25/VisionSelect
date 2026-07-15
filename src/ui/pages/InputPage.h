@@ -9,6 +9,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QTextEdit;
 
 class InputPage : public QWidget
 {
@@ -40,6 +41,7 @@ private:
     QCheckBox *m_reflectiveCheck = nullptr;
     QCheckBox *m_monoCheck = nullptr;
     QCheckBox *m_allowTelecentricCheck = nullptr;
+    QTextEdit *m_notesEdit = nullptr;
     QLabel *m_fovSummaryLabel = nullptr;
     QLabel *m_pixelSummaryLabel = nullptr;
     QLabel *m_resolutionSummaryLabel = nullptr;

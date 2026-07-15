@@ -12,7 +12,9 @@ class SelectionService
 public:
     explicit SelectionService(const CatalogRepository *catalog);
 
-    QVector<SelectionResult> select(const SelectionRequest &request, int limit, QString *errorMessage = nullptr) const;
+    QVector<SelectionResult> select(const SelectionRequest &request, int limit,
+                                    QString *errorMessage = nullptr,
+                                    const QString &languageCode = QString()) const;
 
 private:
     const CatalogRepository *m_catalog = nullptr;

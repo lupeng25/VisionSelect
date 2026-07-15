@@ -393,10 +393,15 @@ QString localizedDiagnostic(const QString &value)
 
 QStringList localizedDiagnostics(const QStringList &values)
 {
+    return localizedDiagnosticsForLanguage(values, LanguageManager::instance().currentLanguage());
+}
+
+QStringList localizedDiagnosticsForLanguage(const QStringList &values, const QString &languageCode)
+{
     QStringList localized;
     localized.reserve(values.size());
     for (const QString &value : values)
-        localized.append(localizedDiagnostic(value));
+        localized.append(localizedDiagnosticForLanguage(value, languageCode));
     return localized;
 }
 

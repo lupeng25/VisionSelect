@@ -25,6 +25,7 @@ LanguageManager::LanguageManager(QObject *parent)
 
 QString LanguageManager::currentLanguage() const
 {
+    QReadLocker locker(&m_languageLock);
     return m_currentLanguage;
 }
 
@@ -68,9 +69,13 @@ bool LanguageManager::setLanguage(const QString &languageCode)
             application->installTranslator(m_translator);
     }
 
-    m_currentLanguage = loaded ? normalized : QString::fromLatin1(kDefaultLanguage);
+    const QString activeLanguage = loaded ? normalized : QString::fromLatin1(kDefaultLanguage);
+    {
+        QWriteLocker locker(&m_languageLock);
+        m_currentLanguage = activeLanguage;
+    }
     QSettings settings;
-    settings.setValue(QString::fromLatin1(kSettingsKey), m_currentLanguage);
+    settings.setValue(QString::fromLatin1(kSettingsKey), activeLanguage);
     emit languageChanged();
     return loaded;
 }

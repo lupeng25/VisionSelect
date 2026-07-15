@@ -15,6 +15,9 @@
 #include "ui/pages/ThreeDCameraPage.h"
 
 #include <QDateTime>
+#include <QAbstractItemView>
+#include <QAbstractSpinBox>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -25,6 +28,7 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainterPath>
@@ -34,12 +38,20 @@
 #include <QSize>
 #include <QSizePolicy>
 #include <QStackedWidget>
+#include <QSpinBox>
 #include <QStyle>
+#include <QTabWidget>
+#include <QTextEdit>
 #include <QTextStream>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QtConcurrent/QtConcurrent>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <windowsx.h>
+#endif
 
 using namespace UiHelpers;
 
@@ -49,6 +61,120 @@ const int kCalculationPageIndex = 2;
 const int kThreeDCameraPageIndex = 3;
 const int kResultsPageIndex = 4;
 const int kCatalogPageIndex = 5;
+
+struct ComboState
+{
+    int index = -1;
+    QString text;
+};
+
+struct ViewState
+{
+    int row = -1;
+    int column = -1;
+};
+
+struct PageUiState
+{
+    QVector<double> doubleSpinValues;
+    QVector<int> spinValues;
+    QVector<ComboState> comboValues;
+    QVector<bool> checkValues;
+    QVector<QString> lineEditValues;
+    QVector<QString> textEditValues;
+    QVector<int> tabIndexes;
+    QVector<ViewState> viewIndexes;
+};
+
+PageUiState capturePageUiState(QWidget *page)
+{
+    PageUiState state;
+    if (!page)
+        return state;
+
+    for (QDoubleSpinBox *spin : page->findChildren<QDoubleSpinBox *>())
+        state.doubleSpinValues.append(spin->value());
+    for (QSpinBox *spin : page->findChildren<QSpinBox *>())
+        state.spinValues.append(spin->value());
+    for (QComboBox *combo : page->findChildren<QComboBox *>())
+        state.comboValues.append({combo->currentIndex(), combo->currentText()});
+    for (QCheckBox *check : page->findChildren<QCheckBox *>())
+        state.checkValues.append(check->isChecked());
+    for (QLineEdit *edit : page->findChildren<QLineEdit *>()) {
+        if (edit->isReadOnly()
+            || qobject_cast<QAbstractSpinBox *>(edit->parentWidget())
+            || qobject_cast<QComboBox *>(edit->parentWidget()))
+            continue;
+        state.lineEditValues.append(edit->text());
+    }
+    for (QTextEdit *edit : page->findChildren<QTextEdit *>()) {
+        if (!edit->isReadOnly())
+            state.textEditValues.append(edit->toPlainText());
+    }
+    for (QTabWidget *tabs : page->findChildren<QTabWidget *>())
+        state.tabIndexes.append(tabs->currentIndex());
+    for (QAbstractItemView *view : page->findChildren<QAbstractItemView *>()) {
+        const QModelIndex index = view->currentIndex();
+        state.viewIndexes.append({index.row(), index.column()});
+    }
+    return state;
+}
+
+void restorePageUiState(QWidget *page, const PageUiState &state)
+{
+    if (!page)
+        return;
+
+    const QList<QDoubleSpinBox *> doubleSpins = page->findChildren<QDoubleSpinBox *>();
+    for (int i = 0; i < doubleSpins.size() && i < state.doubleSpinValues.size(); ++i)
+        doubleSpins.at(i)->setValue(state.doubleSpinValues.at(i));
+    const QList<QSpinBox *> spins = page->findChildren<QSpinBox *>();
+    for (int i = 0; i < spins.size() && i < state.spinValues.size(); ++i)
+        spins.at(i)->setValue(state.spinValues.at(i));
+    const QList<QComboBox *> combos = page->findChildren<QComboBox *>();
+    for (int i = 0; i < combos.size() && i < state.comboValues.size(); ++i) {
+        QComboBox *combo = combos.at(i);
+        const ComboState &value = state.comboValues.at(i);
+        if (value.index >= 0 && value.index < combo->count())
+            combo->setCurrentIndex(value.index);
+        if (combo->isEditable())
+            combo->setEditText(value.text);
+    }
+    const QList<QCheckBox *> checks = page->findChildren<QCheckBox *>();
+    for (int i = 0; i < checks.size() && i < state.checkValues.size(); ++i)
+        checks.at(i)->setChecked(state.checkValues.at(i));
+
+    int lineEditIndex = 0;
+    for (QLineEdit *edit : page->findChildren<QLineEdit *>()) {
+        if (edit->isReadOnly()
+            || qobject_cast<QAbstractSpinBox *>(edit->parentWidget())
+            || qobject_cast<QComboBox *>(edit->parentWidget()))
+            continue;
+        if (lineEditIndex < state.lineEditValues.size())
+            edit->setText(state.lineEditValues.at(lineEditIndex));
+        ++lineEditIndex;
+    }
+    int textEditIndex = 0;
+    for (QTextEdit *edit : page->findChildren<QTextEdit *>()) {
+        if (edit->isReadOnly())
+            continue;
+        if (textEditIndex < state.textEditValues.size())
+            edit->setPlainText(state.textEditValues.at(textEditIndex));
+        ++textEditIndex;
+    }
+    const QList<QTabWidget *> tabs = page->findChildren<QTabWidget *>();
+    for (int i = 0; i < tabs.size() && i < state.tabIndexes.size(); ++i)
+        tabs.at(i)->setCurrentIndex(state.tabIndexes.at(i));
+    const QList<QAbstractItemView *> views = page->findChildren<QAbstractItemView *>();
+    for (int i = 0; i < views.size() && i < state.viewIndexes.size(); ++i) {
+        const ViewState &value = state.viewIndexes.at(i);
+        if (value.row < 0 || !views.at(i)->model())
+            continue;
+        const QModelIndex index = views.at(i)->model()->index(value.row, qMax(0, value.column));
+        if (index.isValid())
+            views.at(i)->setCurrentIndex(index);
+    }
+}
 
 QString bomSpecForCamera(const CameraSpec &camera, const SelectionResult &result)
 {
@@ -108,7 +234,8 @@ void replaceStackPage(QStackedWidget *pages, int index, QWidget *page)
     pages->insertWidget(index, page);
 }
 
-SelectionJobResult runSelectionJob(const QString &storageDirectory, const SelectionRequest &request, int limit)
+SelectionJobResult runSelectionJob(const QString &storageDirectory, const SelectionRequest &request,
+                                  int limit, const QString &languageCode)
 {
     SelectionJobResult result;
     result.request = request;
@@ -119,7 +246,7 @@ SelectionJobResult runSelectionJob(const QString &storageDirectory, const Select
         return result;
 
     SelectionService service(&workerCatalog);
-    result.results = service.select(request, limit, &result.error);
+    result.results = service.select(request, limit, &result.error, languageCode);
     return result;
 }
 
@@ -201,6 +328,48 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
     updateWindowMask();
+}
+
+bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, long *result)
+{
+#ifdef Q_OS_WIN
+    Q_UNUSED(eventType)
+    MSG *nativeMessage = static_cast<MSG *>(message);
+    if (nativeMessage && nativeMessage->message == WM_NCHITTEST
+        && !isMaximized() && !isFullScreen()) {
+        RECT windowRect;
+        if (GetWindowRect(reinterpret_cast<HWND>(winId()), &windowRect)) {
+            const LONG x = GET_X_LPARAM(nativeMessage->lParam);
+            const LONG y = GET_Y_LPARAM(nativeMessage->lParam);
+            const int border = qMax(6, qRound(8.0 * devicePixelRatioF()));
+            const bool left = x >= windowRect.left && x < windowRect.left + border;
+            const bool right = x <= windowRect.right && x > windowRect.right - border;
+            const bool top = y >= windowRect.top && y < windowRect.top + border;
+            const bool bottom = y <= windowRect.bottom && y > windowRect.bottom - border;
+
+            if (top && left)
+                *result = HTTOPLEFT;
+            else if (top && right)
+                *result = HTTOPRIGHT;
+            else if (bottom && left)
+                *result = HTBOTTOMLEFT;
+            else if (bottom && right)
+                *result = HTBOTTOMRIGHT;
+            else if (left)
+                *result = HTLEFT;
+            else if (right)
+                *result = HTRIGHT;
+            else if (top)
+                *result = HTTOP;
+            else if (bottom)
+                *result = HTBOTTOM;
+            else
+                return QMainWindow::nativeEvent(eventType, message, result);
+            return true;
+        }
+    }
+#endif
+    return QMainWindow::nativeEvent(eventType, message, result);
 }
 
 void MainWindow::updateWindowMask()
@@ -567,12 +736,18 @@ void MainWindow::rebuildPagesForLanguage()
 
     const int currentIndex = m_pages->currentIndex();
     const SelectionRequest savedRequest = m_inputPage ? m_inputPage->request() : m_request;
+    const PageUiState pureCalculationState = capturePageUiState(m_pureCalculationPage);
+    const PageUiState calculationState = capturePageUiState(m_calculationPage);
+    const PageUiState threeDState = capturePageUiState(m_threeDCameraPage);
+    const PageUiState resultsState = capturePageUiState(m_resultsPage);
+    const PageUiState catalogState = capturePageUiState(m_catalogPage);
     const bool hadPureCalculationPage = m_pureCalculationPage != nullptr;
     const bool hadCalculationPage = m_calculationPage != nullptr;
     const bool hadThreeDPage = m_threeDCameraPage != nullptr;
     const bool hadResultsPage = m_resultsPage != nullptr;
     const bool hadCatalogPage = m_catalogPage != nullptr;
     const bool hadResults = !m_results.isEmpty();
+    const bool selectionWasRunning = selectionCalculationRunning();
 
     m_inputPage = new InputPage;
     m_inputPage->setRequest(savedRequest);
@@ -607,11 +782,16 @@ void MainWindow::rebuildPagesForLanguage()
     if (hadCatalogPage)
         ensureCatalogPageInitialized();
 
-    if (hadResults)
-        startSelectionCalculation(m_request);
-
     retranslateUi();
     setActivePage(currentIndex);
+    restorePageUiState(m_pureCalculationPage, pureCalculationState);
+    restorePageUiState(m_calculationPage, calculationState);
+    restorePageUiState(m_threeDCameraPage, threeDState);
+    restorePageUiState(m_resultsPage, resultsState);
+    restorePageUiState(m_catalogPage, catalogState);
+
+    if (hadResults || selectionWasRunning)
+        startSelectionCalculation(m_request);
 }
 
 void MainWindow::showLicenseInfo()
@@ -809,7 +989,8 @@ void MainWindow::startSelectionCalculation(const SelectionRequest &request)
         refreshCalculationAssistant();
 
     const QString storageDirectory = m_catalog.storageDirectory();
-    m_selectionWatcher->setFuture(QtConcurrent::run(runSelectionJob, storageDirectory, request, 20));
+    const QString languageCode = LanguageManager::instance().currentLanguage();
+    m_selectionWatcher->setFuture(QtConcurrent::run(runSelectionJob, storageDirectory, request, 20, languageCode));
     refreshSidebarSummary();
 }
 
@@ -1321,7 +1502,7 @@ void MainWindow::exportBomCsv()
 
     QTextStream out(&file);
     out.setCodec("UTF-8");
-    out << "scheme,rank,category,manufacturer,model,key_specs,notes\n";
+    out << "scheme,rank,category,manufacturer,model,key_specs,notes,project_notes\n";
     const int count = qMin(5, m_results.size());
     for (int i = 0; i < count; ++i) {
         const SelectionResult &r = m_results.at(i);
@@ -1335,7 +1516,7 @@ void MainWindow::exportBomCsv()
                 .arg(r.effectiveFovWidthMm, 0, 'f', 2)
                 .arg(r.effectiveFovHeightMm, 0, 'f', 2)
                 .arg(r.objectPixelSizeUm, 0, 'f', 2))
-            << "\n";
+            << "," << csvCell(m_request.projectNotes) << "\n";
         out << csvCell(scheme) << "," << (i + 1) << ","
             << csvCell(tr("Lens")) << ","
             << csvCell(r.lens.manufacturer) << ","
@@ -1344,14 +1525,14 @@ void MainWindow::exportBomCsv()
             << csvCell(QStringLiteral("distortion %1 um; lens MP utilization %2%")
                 .arg(r.distortionErrorUm, 0, 'f', 2)
                 .arg(r.lensMegapixelUtilizationPercent, 0, 'f', 0))
-            << "\n";
+            << "," << csvCell(m_request.projectNotes) << "\n";
         out << csvCell(scheme) << "," << (i + 1) << ","
             << csvCell(tr("Light")) << ","
             << csvCell(r.light.manufacturer) << ","
             << csvCell(r.light.model) << ","
             << csvCell(bomSpecForLight(r.light, r)) << ","
-            << csvCell(riskSummary(r))
-            << "\n";
+            << csvCell(riskSummary(r)) << ","
+            << csvCell(m_request.projectNotes) << "\n";
     }
     file.close();
     QMessageBox::information(this, tr("Export Complete"), path);

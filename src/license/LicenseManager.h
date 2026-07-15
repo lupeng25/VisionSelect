@@ -14,6 +14,7 @@ enum class LicenseStatusCode {
     ProductMismatch,
     MachineMismatch,
     Expired,
+    ClockRollback,
     StorageError
 };
 
@@ -46,6 +47,10 @@ public:
     LicenseStatus validateKeyForMachine(const QString &licenseKey,
                                         const QString &expectedMachineCode,
                                         const QDate &today) const;
+    LicenseStatus validateKeyForMachine(const QString &licenseKey,
+                                        const QString &expectedMachineCode,
+                                        const QDate &today,
+                                        const QDate &lastSeenDate) const;
 
     bool saveLicenseKey(const QString &licenseKey, QString *errorMessage = nullptr) const;
     QString storedLicenseKey() const;

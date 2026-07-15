@@ -119,11 +119,12 @@ QString lightCandidateCacheKey(const SelectionRequest &request, bool hasTelecent
 {
     const double fovW = request.objectWidthMm + request.placementMarginMm * 2.0;
     const double fovH = request.objectHeightMm + request.placementMarginMm * 2.0;
-    return QStringLiteral("%1|%2|%3|%4|%5|%6|%7|%8")
+    return QStringLiteral("%1|%2|%3|%4|%5|%6|%7|%8|%9")
         .arg(hasTelecentricLens ? 1 : 0)
         .arg(hasCoaxialLens ? 1 : 0)
         .arg(detectionTypeKey(request.detectionType))
         .arg(surfaceTypeKey(request.surfaceType))
+        .arg(request.reflective ? 1 : 0)
         .arg(qRound64(fovW * 10.0))
         .arg(qRound64(fovH * 10.0))
         .arg(qRound64(request.motionSpeedMmS * 10.0))
@@ -2506,7 +2507,7 @@ QVector<LightSpec> CatalogRepository::selectionCandidateLights(const SelectionRe
     if (!openDatabase(errorMessage))
         return QVector<LightSpec>();
 
-    QString prioritySql = QStringLiteral("CASE");
+    QString prioritySql = QStringLiteral("CASE WHEN 1=0 THEN 0");
     if (hasCoaxialLens)
         prioritySql += QStringLiteral(" WHEN light_type='Coaxial' THEN 0");
     if (hasTelecentricLens)

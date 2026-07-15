@@ -2,6 +2,7 @@
 #define LANGUAGEMANAGER_H
 
 #include <QObject>
+#include <QReadWriteLock>
 #include <QString>
 #include <QStringList>
 
@@ -29,6 +30,7 @@ private:
     LanguageManager(const LanguageManager &) = delete;
     LanguageManager &operator=(const LanguageManager &) = delete;
 
+    mutable QReadWriteLock m_languageLock;
     QString m_currentLanguage;
     QTranslator *m_translator = nullptr;
 };

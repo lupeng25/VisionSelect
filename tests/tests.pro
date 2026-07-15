@@ -8,7 +8,7 @@ DESTDIR = ../bin
 INCLUDEPATH += ../src
 
 win32-msvc*: QMAKE_CXXFLAGS += /utf-8 /wd4819
-win32: LIBS += -lbcrypt
+win32: LIBS += -lbcrypt -lcrypt32
 
 SOURCES += \
     test_selection.cpp \

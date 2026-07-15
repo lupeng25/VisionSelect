@@ -90,6 +90,18 @@
         <source>Unable to save the license key.</source>
         <translation>Unable to save the license key.</translation>
     </message>
+    <message>
+        <source>The protected license clock is unreadable.</source>
+        <translation>The protected license clock is unreadable.</translation>
+    </message>
+    <message>
+        <source>Unable to update the protected license clock.</source>
+        <translation>Unable to update the protected license clock.</translation>
+    </message>
+    <message>
+        <source>The system date is earlier than the protected license clock.</source>
+        <translation>The system date is earlier than the protected license clock.</translation>
+    </message>
 </context>
 <context>
     <name>MainWindow</name>
