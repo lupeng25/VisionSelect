@@ -41,6 +41,13 @@ QString replaceAll(QString value, const Replacement *items, int count)
 QString englishDiagnostic(QString value)
 {
     static const Replacement exact[] = {
+        {"需求参数缺失或超出计算范围，无法完成采样校核", "Requirements are missing or out of range; sampling cannot be checked"},
+        {"传输像素格式未确认，带宽和存储仅按位深估算", "Pixel format is unconfirmed; bandwidth and storage are estimated from bit depth"},
+        {"相机标称最大帧率低于需求帧率", "Nominal camera frame rate is below the required frame rate"},
+        {"相机最大帧率未填写，无法确认节拍", "Maximum camera frame rate is missing; cycle capability is unknown"},
+        {"相机标称帧率满足需求，实际节拍仍取决于曝光和读出", "Nominal frame rate meets the requirement; exposure and readout still limit the actual cycle"},
+        {"普通镜头实际物方像素粗于目标，当前方案采样不满足", "Actual fixed-lens sampling is coarser than the target; sampling fails"},
+        {"普通镜头实际采样满足目标物方像素", "Actual fixed-lens sampling meets the target"},
         {"远心镜头方案", "Telecentric lens solution"},
         {"普通镜头方案", "Fixed-focal lens solution"},
         {"普通镜头：焦距无效，无法估算 FOV", "Fixed-focal lens: focal length is invalid, FOV cannot be estimated"},

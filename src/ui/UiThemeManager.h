@@ -2,6 +2,7 @@
 #define UITHEMEMANAGER_H
 
 #include <QObject>
+#include <QPalette>
 
 class QApplication;
 class QWidget;
@@ -25,6 +26,7 @@ private:
     QString loadStyle(const QString &path) const;
 
     QApplication *m_application = nullptr;
+    QPalette m_systemPalette;
 };
 
 #endif

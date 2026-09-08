@@ -283,14 +283,22 @@ void ResultsPage::refreshCards(const SelectionRequest &request)
         const QString matchText = !presentation.compatible
             ? localizedText("不兼容", "Incompatible")
             : (presentation.matchAvailable
-                ? localizedText("相对匹配度 %1%", "Relative match %1%").arg(presentation.relativeMatchPercent)
-                : localizedText("暂无有效匹配度", "No valid match score"));
+                ? QStringLiteral("%1%").arg(presentation.relativeMatchPercent)
+                : QStringLiteral("—"));
         QLabel *score = new QLabel(matchText);
         score->setObjectName(QStringLiteral("MetricValue"));
+        score->setWordWrap(true);
+        score->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         score->setToolTip(localizedText("算法原始分：%1；相对匹配度仅用于本批候选比较。",
                                         "Raw algorithm score: %1. Relative match is only comparable within this batch.")
                               .arg(r.score.score, 0, 'f', 1));
         cardLayout->addWidget(score);
+        QLabel *scoreLabel = new QLabel(presentation.matchAvailable
+            ? localizedText("相对匹配度 · 本批候选", "Relative match · current candidates")
+            : localizedText("暂无有效匹配度", "No valid match score"));
+        scoreLabel->setObjectName(QStringLiteral("MetricLabel"));
+        scoreLabel->setWordWrap(true);
+        cardLayout->addWidget(scoreLabel);
 
         QLabel *bom = new QLabel(QStringLiteral("%1\n%2\n%3")
             .arg(shortProduct(r.camera.manufacturer, r.camera.model),

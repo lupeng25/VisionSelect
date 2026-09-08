@@ -70,6 +70,7 @@ void fillComboPreservingText(QComboBox *combo, const QString &allText, QStringLi
 
 void setupTableView(QTableView *view)
 {
+    view->setShowGrid(false);
     view->setAlternatingRowColors(true);
     view->setSelectionBehavior(QAbstractItemView::SelectRows);
     view->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -348,7 +349,7 @@ CatalogPage::CatalogPage(QWidget *parent)
     layout->setContentsMargins(28, 24, 28, 24);
     layout->setSpacing(14);
     layout->addWidget(pageHeader(localizedText("参数库", "Catalog"),
-        localizedText("维护相机、镜头和光源目录；筛选、导入、导出均保持原有数据格式。", "Maintain camera, lens, and light catalogs while preserving existing import and export formats.")));
+        localizedText("集中管理视觉元器件，快速查找、维护与导出产品参数。", "Find, manage, and export your machine vision component specifications.")));
 
     m_filterTimer = new QTimer(this);
     m_filterTimer->setSingleShot(true);
@@ -411,6 +412,9 @@ CatalogPage::CatalogPage(QWidget *parent)
     m_cameraTable->setAccessibleName(localizedText("相机产品目录", "Camera product catalog"));
     setupTableView(m_cameraTable);
     m_cameraTable->setModel(m_cameraModel);
+    const int cameraWidths[] = {184, 108, 140, 92, 156, 90, 90, 76, 86, 88};
+    for (int column = 0; column < 10; ++column)
+        m_cameraTable->setColumnWidth(column, cameraWidths[column]);
     configureColumnMenu(cameraColumnsButton, m_cameraTable);
     UiSettings::instance().restoreHeader(QStringLiteral("catalog/cameras"), m_cameraTable->horizontalHeader());
     connect(m_cameraTable->selectionModel(), &QItemSelectionModel::selectionChanged,
@@ -490,6 +494,8 @@ CatalogPage::CatalogPage(QWidget *parent)
     m_lensTable->setAccessibleName(localizedText("镜头产品目录", "Lens product catalog"));
     setupTableView(m_lensTable);
     m_lensTable->setModel(m_lensModel);
+    m_lensTable->horizontalHeader()->setDefaultSectionSize(120);
+    m_lensTable->setColumnWidth(0, 210);
     configureColumnMenu(lensColumnsButton, m_lensTable);
     UiSettings::instance().restoreHeader(QStringLiteral("catalog/lenses"), m_lensTable->horizontalHeader());
     connect(m_lensTable->selectionModel(), &QItemSelectionModel::selectionChanged,
@@ -569,6 +575,8 @@ CatalogPage::CatalogPage(QWidget *parent)
     m_lightTable->setAccessibleName(localizedText("光源产品目录", "Light product catalog"));
     setupTableView(m_lightTable);
     m_lightTable->setModel(m_lightModel);
+    m_lightTable->horizontalHeader()->setDefaultSectionSize(120);
+    m_lightTable->setColumnWidth(0, 210);
     configureColumnMenu(lightColumnsButton, m_lightTable);
     UiSettings::instance().restoreHeader(QStringLiteral("catalog/lights"), m_lightTable->horizontalHeader());
     connect(m_lightTable->selectionModel(), &QItemSelectionModel::selectionChanged,

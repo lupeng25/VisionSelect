@@ -1,4 +1,5 @@
 #include "catalog/CatalogRepository.h"
+#include "core/SamplingPolicy.h"
 
 #include "core/Localization.h"
 
@@ -403,33 +404,7 @@ double requiredFovHeightForRequest(const SelectionRequest &request)
 
 double targetObjectPixelUmForRequest(const SelectionRequest &request)
 {
-    double featurePixels = 3.0;
-    double toleranceFactor = 1.0;
-    switch (request.detectionType) {
-    case DetectionType::Measurement:
-        featurePixels = 5.0;
-        toleranceFactor = 1.0 / 5.0;
-        break;
-    case DetectionType::Positioning:
-        featurePixels = 4.0;
-        toleranceFactor = 1.5;
-        break;
-    case DetectionType::DefectInspection:
-        featurePixels = 3.0;
-        toleranceFactor = 2.0;
-        break;
-    case DetectionType::OcrCode:
-        featurePixels = 4.0;
-        toleranceFactor = 2.0;
-        break;
-    }
-
-    double target = 999999.0;
-    if (request.minFeatureUm > 0.0)
-        target = qMin(target, request.minFeatureUm / featurePixels);
-    if (request.detectionType == DetectionType::Measurement && request.measurementToleranceUm > 0.0)
-        target = qMin(target, request.measurementToleranceUm * toleranceFactor);
-    return qMax(0.5, target);
+    return SamplingPolicy::targetObjectPixelUm(request);
 }
 }
 
@@ -2479,6 +2454,8 @@ QVector<CameraSpec> CatalogRepository::selectionCandidateCameras(const Selection
     };
 
     const double targetPixelUm = targetObjectPixelUmForRequest(request);
+    if (targetPixelUm <= 0.0)
+        return {};
     const int requiredResolutionX = ceilPositiveToInt(requiredFovWidthForRequest(request) * 1000.0 / targetPixelUm);
     const int requiredResolutionY = ceilPositiveToInt(requiredFovHeightForRequest(request) * 1000.0 / targetPixelUm);
 

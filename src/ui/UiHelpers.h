@@ -5,6 +5,8 @@
 
 #include <QString>
 #include <QStringList>
+#include <QColor>
+#include <QIcon>
 
 class QComboBox;
 class QDoubleSpinBox;
@@ -17,6 +19,8 @@ class QTableWidgetItem;
 class QWidget;
 
 namespace UiHelpers {
+
+QIcon uiIcon(const QString &name, const QColor &color);
 
 QLabel *pageTitle(const QString &text, const QString &subtitle = QString());
 QWidget *pageHeader(const QString &title, const QString &subtitle = QString(), QWidget *actions = nullptr);

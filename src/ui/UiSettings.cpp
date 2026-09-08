@@ -185,12 +185,12 @@ void UiSettings::setValue(const QString &key, const QVariant &value) const
 
 int UiSettings::controlHeight()
 {
-    return instance().density() == UiDensity::Compact ? 30 : 36;
+    return instance().density() == UiDensity::Compact ? 30 : 40;
 }
 
 int UiSettings::tableRowHeight()
 {
-    return instance().density() == UiDensity::Compact ? 30 : 36;
+    return instance().density() == UiDensity::Compact ? 32 : 42;
 }
 
 int UiSettings::spacing()

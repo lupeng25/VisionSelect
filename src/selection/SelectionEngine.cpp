@@ -1,6 +1,8 @@
 #include "selection/SelectionEngine.h"
 
 #include "core/Localization.h"
+#include "core/PixelFormat.h"
+#include "core/SamplingPolicy.h"
 #include "i18n/LanguageManager.h"
 
 #include <algorithm>
@@ -206,6 +208,8 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
                                                  int limit,
                                                  const QString &languageCode) const
 {
+    if (targetObjectPixelUm(request) <= 0.0)
+        return {};
     const QString resultLanguage = languageCode.isEmpty()
         ? LanguageManager::instance().currentLanguage()
         : languageCode;
@@ -451,33 +455,7 @@ double SelectionEngine::requiredFovHeight(const SelectionRequest &request)
 
 double SelectionEngine::targetObjectPixelUm(const SelectionRequest &request)
 {
-    double featurePixels = 3.0;
-    double toleranceFactor = 1.0;
-    switch (request.detectionType) {
-    case DetectionType::Measurement:
-        featurePixels = 5.0;
-        toleranceFactor = 1.0 / 5.0;
-        break;
-    case DetectionType::Positioning:
-        featurePixels = 4.0;
-        toleranceFactor = 1.5;
-        break;
-    case DetectionType::DefectInspection:
-        featurePixels = 3.0;
-        toleranceFactor = 2.0;
-        break;
-    case DetectionType::OcrCode:
-        featurePixels = 4.0;
-        toleranceFactor = 2.0;
-        break;
-    }
-
-    double target = 999999.0;
-    if (request.minFeatureUm > 0.0)
-        target = qMin(target, request.minFeatureUm / featurePixels);
-    if (request.detectionType == DetectionType::Measurement && request.measurementToleranceUm > 0.0)
-        target = qMin(target, request.measurementToleranceUm * toleranceFactor);
-    return qMax(0.5, target);
+    return SamplingPolicy::targetObjectPixelUm(request);
 }
 
 double SelectionEngine::bandwidthRequiredMBps(const CameraSpec &camera, double fps)
@@ -487,6 +465,11 @@ double SelectionEngine::bandwidthRequiredMBps(const CameraSpec &camera, double f
 
 double SelectionEngine::framePayloadMB(const CameraSpec &camera)
 {
+    if (camera.resolutionX <= 0 || camera.resolutionY <= 0)
+        return 0.0;
+    if (const auto bytes = PixelFormat::frameBytes(camera.resolutionX, camera.resolutionY, camera.colorMode))
+        return *bytes / 1000000.0;
+    // 旧目录仅提供色彩类型和位深时保留载荷估算；调用方需标明格式待确认。
     const double bitsPerFrame = static_cast<double>(camera.resolutionX)
         * static_cast<double>(camera.resolutionY)
         * effectiveBitsPerPixel(camera);
@@ -495,7 +478,7 @@ double SelectionEngine::framePayloadMB(const CameraSpec &camera)
 
 double SelectionEngine::storagePerHourGB(const CameraSpec &camera, double fps)
 {
-    return framePayloadMB(camera) * fps * 3600.0 / 1024.0;
+    return framePayloadMB(camera) * fps * 3600.0 / 1000.0;
 }
 
 double SelectionEngine::interfaceCapacityMBps(const CameraSpec &camera)
@@ -721,6 +704,8 @@ void SelectionEngine::scoreCamera(const SelectionRequest &request,
                                   SelectionResult *result,
                                   bool includeDetails) const
 {
+    if (!PixelFormat::layout(camera.colorMode))
+        ADD_DETAIL_RISK(QStringLiteral("传输像素格式未确认，带宽和存储仅按位深估算"));
     const double fps = qMax(1.0, request.requiredFps);
     result->bandwidthRequiredMBps = bandwidthRequiredMBps(camera, fps);
     result->framePayloadMB = framePayloadMB(camera);

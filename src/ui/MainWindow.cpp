@@ -13,6 +13,8 @@
 #include "ui/pages/CatalogPage.h"
 #include "ui/pages/InputPage.h"
 #include "ui/pages/PureCalculationPage.h"
+#include <QJsonDocument>
+#include <QSettings>
 #include "ui/pages/ResultsPage.h"
 #include "ui/pages/ThreeDCameraPage.h"
 
@@ -70,6 +72,16 @@
 using namespace UiHelpers;
 
 namespace {
+// 隐藏页面的最小宽度不应阻止当前工作台在窄窗口中重新排版。
+class WorkspaceStack : public QStackedWidget
+{
+public:
+    explicit WorkspaceStack(QWidget *parent) : QStackedWidget(parent) {
+        connect(this, &QStackedWidget::currentChanged, this, [this]() { updateGeometry(); });
+    }
+    QSize sizeHint() const override { return currentWidget() ? currentWidget()->sizeHint() : QSize(); }
+    QSize minimumSizeHint() const override { return currentWidget() ? currentWidget()->minimumSizeHint() : QSize(); }
+};
 const int kPureCalculationPageIndex = 1;
 const int kCalculationPageIndex = 2;
 const int kThreeDCameraPageIndex = 3;
@@ -337,7 +349,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&UiSettings::instance(), &UiSettings::densityChanged, this, [this](UiDensity) { applyDensity(); });
     connect(&UiSettings::instance(), &UiSettings::preferredSidebarExpandedChanged,
             this, [this](bool) { updateSidebarLayout(); });
-    connect(&UiThemeManager::instance(), &UiThemeManager::themeChanged, this, [this]() { applyDensity(); });
+    connect(&UiThemeManager::instance(), &UiThemeManager::themeChanged, this, [this]() {
+        applyDensity();
+        updateSidebarLayout();
+    });
     applyDensity();
     updateSidebarLayout();
     connect(&LanguageManager::instance(), &LanguageManager::languageChanged, this, &MainWindow::rebuildPagesForLanguage);
@@ -484,7 +499,8 @@ void MainWindow::buildUi()
     m_sidebar = qobject_cast<QFrame *>(createSidebar());
     rootLayout->addWidget(m_sidebar);
 
-    m_pages = new QStackedWidget(root);
+    m_pages = new WorkspaceStack(root);
+    m_pages->setObjectName(QStringLiteral("WorkspacePages"));
     m_inputPage = new InputPage;
     connect(m_inputPage, &InputPage::runSelectionRequested, this, &MainWindow::runSelectionAndShowResults);
     m_pages->addWidget(m_inputPage);
@@ -504,7 +520,7 @@ QWidget *MainWindow::createTopBar()
 {
     WindowChromeBar *bar = new WindowChromeBar;
     bar->setObjectName(QStringLiteral("ShellTopBar"));
-    bar->setFixedHeight(54);
+    bar->setFixedHeight(62);
 
     QHBoxLayout *layout = new QHBoxLayout(bar);
     layout->setContentsMargins(16, 0, 16, 0);
@@ -581,11 +597,11 @@ QWidget *MainWindow::createSidebar()
 {
     QFrame *sidebar = new QFrame;
     sidebar->setObjectName(QStringLiteral("Sidebar"));
-    sidebar->setFixedWidth(176);
+    sidebar->setFixedWidth(192);
 
     QVBoxLayout *layout = new QVBoxLayout(sidebar);
-    layout->setContentsMargins(8, 12, 8, 10);
-    layout->setSpacing(6);
+    layout->setContentsMargins(12, 12, 12, 16);
+    layout->setSpacing(5);
 
     m_sidebarToggleButton = new QToolButton(sidebar);
     m_sidebarToggleButton->setObjectName(QStringLiteral("SidebarToggleButton"));
@@ -599,9 +615,9 @@ QWidget *MainWindow::createSidebar()
 
     QLabel *railMark = new QLabel(sidebar);
     railMark->setObjectName(QStringLiteral("RailMark"));
-    railMark->setPixmap(QIcon(QStringLiteral(":/icons/visionselect_icon_64.png")).pixmap(34, 34));
+    railMark->setText(localizedText("视觉工程工作台", "VISION ENGINEERING"));
     railMark->setAlignment(Qt::AlignCenter);
-    railMark->setFixedHeight(44);
+    railMark->setFixedHeight(42);
     layout->addWidget(railMark);
 
     m_languageCombo = new QComboBox(sidebar);
@@ -626,9 +642,11 @@ QWidget *MainWindow::createSidebar()
     const auto addNav = [this, layout](int pageIndex, const QString &text, const QString &iconPath) {
         QPushButton *button = new QPushButton(text);
         button->setObjectName(QStringLiteral("NavButton"));
+        button->setProperty("pageIndex", pageIndex);
+        button->setProperty("navigationIcon", iconPath);
         button->setCursor(Qt::PointingHandCursor);
-        button->setFixedHeight(44);
-        button->setIcon(QIcon(iconPath));
+        button->setFixedHeight(46);
+        button->setIcon(uiIcon(iconPath, QColor("#b9c2da")));
         button->setIconSize(QSize(20, 20));
         button->setFocusPolicy(Qt::StrongFocus);
         button->setAccessibleName(navigationLabels().at(pageIndex));
@@ -654,7 +672,7 @@ QWidget *MainWindow::createSidebar()
     layout->addStretch();
     m_licenseButton = new QPushButton(sidebar);
     m_licenseButton->setObjectName(QStringLiteral("SidebarLicenseButton"));
-    m_licenseButton->setIcon(QIcon(QStringLiteral(":/icons/ui/info.png")));
+    m_licenseButton->setIcon(uiIcon(QStringLiteral("info"), QColor("#b9c2da")));
     m_licenseButton->setIconSize(QSize(18, 18));
     m_licenseButton->setCursor(Qt::PointingHandCursor);
     m_licenseButton->setFocusPolicy(Qt::StrongFocus);
@@ -744,7 +762,9 @@ void MainWindow::updateSidebarLayout()
     if (!m_sidebar)
         return;
     const bool expanded = UiSettings::instance().preferredSidebarExpanded() && !m_sidebarForcedCollapsed;
-    m_sidebar->setFixedWidth(expanded ? 176 : 64);
+    m_sidebar->setFixedWidth(expanded ? 192 : 72);
+    if (QLabel *mark = m_sidebar->findChild<QLabel *>(QStringLiteral("RailMark")))
+        mark->setText(expanded ? localizedText("视觉工程工作台", "VISION ENGINEERING") : QStringLiteral("VS"));
     m_sidebar->setProperty("expanded", expanded);
     const QStringList labels = railNavigationLabels();
     const QStringList fullLabels = navigationLabels();
@@ -753,6 +773,7 @@ void MainWindow::updateSidebarLayout()
         if (!button)
             continue;
         button->setText(expanded ? labels.at(i) : QString());
+        button->setIcon(uiIcon(button->property("navigationIcon").toString(), QColor("#b9c2da")));
         button->setToolTip(fullLabels.at(i));
         button->setAccessibleName(fullLabels.at(i));
         button->setProperty("collapsed", !expanded);
@@ -777,7 +798,10 @@ void MainWindow::applyDensity()
 {
     UiThemeManager::instance().applyDensityProperty(centralWidget() ? centralWidget() : this);
     for (QTableView *table : findChildren<QTableView *>())
+    {
         table->verticalHeader()->setDefaultSectionSize(UiSettings::tableRowHeight());
+        table->setShowGrid(false);
+    }
 }
 
 void MainWindow::restorePersistentState(QWidget *root)
@@ -798,6 +822,9 @@ void MainWindow::savePersistentState(QWidget *root) const
 {
     if (!root)
         return;
+    if (m_pureCalculationPage)
+        QSettings().setValue(QStringLiteral("parameterWorkbench/state"),
+            QJsonDocument(m_pureCalculationPage->workspaceState().toJson()).toJson(QJsonDocument::Compact));
     for (QSplitter *splitter : root->findChildren<QSplitter *>()) {
         if (!splitter->objectName().isEmpty())
             UiSettings::instance().saveSplitter(splitter->objectName(), splitter);
@@ -824,7 +851,7 @@ QStringList MainWindow::navigationLabels() const
 {
     return {
         localizedText("需求输入", "Requirement Input"),
-        localizedText("视觉参数校算", "Vision Parameter Check"),
+        localizedText("视觉参数工作台", "Parameter Workbench"),
         localizedText("产品计算", "Calculation Assistant"),
         localizedText("3D 相机", "3D Camera"),
         localizedText("推荐结果", "Recommended Results"),
@@ -948,7 +975,8 @@ void MainWindow::rebuildPagesForLanguage()
 
     const int currentIndex = m_pages->currentIndex();
     const SelectionRequest savedRequest = m_inputPage ? m_inputPage->request() : m_request;
-    const PageUiState pureCalculationState = capturePageUiState(m_pureCalculationPage);
+    const ParameterWorkspaceState pureCalculationState = m_pureCalculationPage
+        ? m_pureCalculationPage->workspaceState() : ParameterWorkspaceState();
     const PageUiState calculationState = capturePageUiState(m_calculationPage);
     const PageUiState threeDState = capturePageUiState(m_threeDCameraPage);
     const PageUiState resultsState = capturePageUiState(m_resultsPage);
@@ -990,7 +1018,8 @@ void MainWindow::rebuildPagesForLanguage()
 
     retranslateUi();
     setActivePage(currentIndex);
-    restorePageUiState(m_pureCalculationPage, pureCalculationState);
+    if (m_pureCalculationPage)
+        m_pureCalculationPage->restoreWorkspaceState(pureCalculationState);
     restorePageUiState(m_calculationPage, calculationState);
     restorePageUiState(m_threeDCameraPage, threeDState);
     restorePageUiState(m_resultsPage, resultsState);
@@ -1080,6 +1109,11 @@ void MainWindow::ensurePureCalculationPage()
         return;
 
     m_pureCalculationPage = new PureCalculationPage;
+    m_pureCalculationPage->setCatalog(&m_catalog);
+    const auto state = ParameterWorkspaceState::fromJson(QJsonDocument::fromJson(
+        QSettings().value(QStringLiteral("parameterWorkbench/state")).toByteArray()).object());
+    if (state)
+        m_pureCalculationPage->restoreWorkspaceState(*state);
     replaceStackPage(m_pages, kPureCalculationPageIndex, m_pureCalculationPage);
 }
 

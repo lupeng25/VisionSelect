@@ -3,6 +3,7 @@
 #include "core/Localization.h"
 #include "i18n/LanguageManager.h"
 #include "ui/UiSettings.h"
+#include "ui/UiThemeManager.h"
 
 #include <QAbstractItemView>
 #include <QApplication>
@@ -18,6 +19,8 @@
 #include <QLabel>
 #include <QList>
 #include <QPushButton>
+#include <QPainter>
+#include <QPainterPath>
 #include <QSize>
 #include <QSizePolicy>
 #include <QShortcut>
@@ -29,6 +32,62 @@
 #include <QWidget>
 
 namespace UiHelpers {
+
+QIcon uiIcon(const QString &name, const QColor &color)
+{
+    // 统一使用矢量线形图标，并提供高分屏像素密度。
+    QPixmap pixmap(48, 48);
+    pixmap.setDevicePixelRatio(2);
+    pixmap.fill(Qt::transparent);
+    QPainter p(&pixmap);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QColor ink = UiThemeManager::instance().highContrast()
+        ? QApplication::palette().color(QPalette::ButtonText) : color;
+    p.setPen(QPen(ink, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(Qt::NoBrush);
+    if (name.contains(QLatin1String("requirement"))) {
+        p.drawRoundedRect(QRectF(5, 3, 14, 18), 2, 2);
+        p.drawLine(9, 8, 15, 8);
+        p.drawLine(9, 12, 15, 12);
+        p.drawLine(9, 16, 13, 16);
+    } else if (name.contains(QLatin1String("camera3d"))) {
+        QPainterPath path;
+        path.moveTo(12, 2); path.lineTo(21, 7); path.lineTo(21, 17);
+        path.lineTo(12, 22); path.lineTo(3, 17); path.lineTo(3, 7); path.closeSubpath();
+        path.moveTo(3, 7); path.lineTo(12, 12); path.lineTo(21, 7);
+        path.moveTo(12, 12); path.lineTo(12, 22);
+        p.drawPath(path);
+    } else if (name.contains(QLatin1String("catalog"))) {
+        p.drawEllipse(QRectF(4, 3, 16, 6));
+        p.drawLine(4, 6, 4, 18); p.drawLine(20, 6, 20, 18);
+        p.drawArc(QRectF(4, 9, 16, 6), 180 * 16, 180 * 16);
+        p.drawArc(QRectF(4, 15, 16, 6), 180 * 16, 180 * 16);
+    } else if (name.contains(QLatin1String("results"))) {
+        p.drawRoundedRect(QRectF(3, 3, 18, 18), 3, 3);
+        p.drawLine(7, 16, 7, 12); p.drawLine(12, 16, 12, 8); p.drawLine(17, 16, 17, 10);
+    } else if (name.contains(QLatin1String("assistant"))) {
+        p.drawEllipse(QRectF(4, 3, 13, 13));
+        p.drawLine(15, 15, 21, 21);
+        p.drawLine(8, 9, 13, 9); p.drawLine(10, 7, 10, 12);
+    } else if (name.contains(QLatin1String("reset"))) {
+        p.drawArc(QRectF(4, 4, 16, 16), 45 * 16, -285 * 16);
+        p.drawLine(3, 4, 3, 10); p.drawLine(3, 10, 9, 10);
+    } else if (name.contains(QLatin1String("calculate"))) {
+        p.drawRoundedRect(QRectF(4, 2, 16, 20), 2, 2);
+        p.drawLine(8, 7, 16, 7);
+        for (int y : {12, 17}) for (int x : {8, 12, 16}) p.drawPoint(x, y);
+    } else if (name.contains(QLatin1String("export"))) {
+        p.drawLine(12, 3, 12, 15); p.drawLine(8, 11, 12, 15); p.drawLine(16, 11, 12, 15);
+        QPainterPath path;
+        path.moveTo(4, 15); path.lineTo(4, 21); path.lineTo(20, 21); path.lineTo(20, 15);
+        p.drawPath(path);
+    } else {
+        p.drawEllipse(QRectF(3, 3, 18, 18));
+        p.drawLine(12, 11, 12, 17); p.drawPoint(12, 7);
+    }
+    p.end();
+    return QIcon(pixmap);
+}
 
 QLabel *pageTitle(const QString &text, const QString &subtitle)
 {
@@ -50,6 +109,7 @@ QWidget *pageHeader(const QString &title, const QString &subtitle, QWidget *acti
     layout->setSpacing(12);
 
     QWidget *copy = new QWidget(header);
+    copy->setProperty("headerSurface", true);
     QVBoxLayout *copyLayout = new QVBoxLayout(copy);
     copyLayout->setContentsMargins(0, 0, 0, 0);
     copyLayout->setSpacing(4);
@@ -63,8 +123,10 @@ QWidget *pageHeader(const QString &title, const QString &subtitle, QWidget *acti
         copyLayout->addWidget(subtitleLabel);
     }
     layout->addWidget(copy, 1);
-    if (actions)
+    if (actions) {
+        actions->setProperty("headerSurface", true);
         layout->addWidget(actions, 0, Qt::AlignRight | Qt::AlignVCenter);
+    }
     return header;
 }
 
@@ -113,8 +175,12 @@ QPushButton *actionButton(const QString &text, const QString &iconPath, bool sec
     button->setObjectName(secondary ? QStringLiteral("SecondaryButton") : QStringLiteral("PrimaryButton"));
     button->setCursor(Qt::PointingHandCursor);
     if (!iconPath.isEmpty()) {
-        button->setIcon(QIcon(iconPath));
+        button->setIcon(uiIcon(iconPath, secondary ? QColor("#707d9a") : QColor("#ffffff")));
         button->setIconSize(QSize(16, 16));
+        QObject::connect(&UiThemeManager::instance(), &UiThemeManager::themeChanged, button,
+            [button, iconPath, secondary]() {
+                button->setIcon(uiIcon(iconPath, secondary ? QColor("#707d9a") : QColor("#ffffff")));
+            });
     }
     return button;
 }
@@ -181,6 +247,7 @@ void installTableCopyShortcut(QTableWidget *table)
 
 void setupTable(QTableWidget *table)
 {
+    table->setShowGrid(false);
     table->setAlternatingRowColors(true);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSelectionMode(QAbstractItemView::SingleSelection);

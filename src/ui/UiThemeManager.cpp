@@ -6,6 +6,7 @@
 #include <QApplication>
 #include <QFile>
 #include <QStyle>
+#include <QStyleFactory>
 #include <QStyleHints>
 #include <QWidget>
 
@@ -25,6 +26,9 @@ void UiThemeManager::initialize(QApplication *application)
     m_application = application;
     if (!m_application)
         return;
+
+    m_systemPalette = m_application->palette();
+    m_application->setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
 
     const QAccessibilityHints *hints = m_application->styleHints()->accessibility();
     connect(hints, &QAccessibilityHints::contrastPreferenceChanged,
@@ -53,6 +57,17 @@ void UiThemeManager::applyStyleSheet()
     const QString themePath = highContrast()
         ? QStringLiteral(":/styles/high-contrast.qss")
         : QStringLiteral(":/styles/light.qss");
+    QPalette palette = m_systemPalette;
+    if (!highContrast()) {
+        palette.setColor(QPalette::Window, QColor("#f4f5f8"));
+        palette.setColor(QPalette::Base, QColor("#ffffff"));
+        palette.setColor(QPalette::Text, QColor("#303442"));
+        palette.setColor(QPalette::WindowText, QColor("#303442"));
+        palette.setColor(QPalette::Highlight, QColor("#5362c9"));
+        palette.setColor(QPalette::HighlightedText, Qt::white);
+        palette.setColor(QPalette::Link, QColor("#5362c9"));
+    }
+    m_application->setPalette(palette);
     m_application->setStyleSheet(loadStyle(QStringLiteral(":/styles/base.qss")) + QLatin1Char('\n') + loadStyle(themePath));
     for (QWidget *widget : m_application->topLevelWidgets())
         applyDensityProperty(widget);

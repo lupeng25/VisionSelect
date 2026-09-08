@@ -42,6 +42,17 @@ using namespace UiHelpers;
 namespace {
 QString localizedSpecText(QString value);
 
+class FilterScrollArea : public QScrollArea
+{
+public:
+    using QScrollArea::QScrollArea;
+    QSize sizeHint() const override
+    {
+        return widget() ? widget()->sizeHint() + QSize(4, 4) : QScrollArea::sizeHint();
+    }
+    QSize minimumSizeHint() const override { return QSize(320, 160); }
+};
+
 QString allText()
 {
     return localizedText("全部", "All");
@@ -504,7 +515,7 @@ ThreeDCameraPage::ThreeDCameraPage(QWidget *parent)
     m_details = new QTextBrowser;
     m_details->setAccessibleName(localizedText("3D 相机型号详情", "3D camera model details"));
     m_details->setOpenExternalLinks(true);
-    m_details->setMinimumHeight(170);
+    m_details->setMinimumHeight(110);
     m_productSplitter->addWidget(m_details);
     m_productSplitter->setStretchFactor(0, 3);
     m_productSplitter->setStretchFactor(1, 1);
@@ -731,7 +742,14 @@ void ThreeDCameraPage::buildFilters(QLayout *parentLayout)
     connect(removeButton, &QPushButton::clicked, this, &ThreeDCameraPage::removeCamera);
     connect(applyButton, &QPushButton::clicked, this, &ThreeDCameraPage::refresh);
     connect(clearButton, &QPushButton::clicked, this, &ThreeDCameraPage::clearFilters);
-    parentLayout->addWidget(panel);
+    // 小窗口和高级筛选通过局部滚动保持可达，不再撑大整个工作台。
+    FilterScrollArea *filterScroll = new FilterScrollArea;
+    filterScroll->setObjectName(QStringLiteral("ThreeDFilterScroll"));
+    filterScroll->setWidgetResizable(true);
+    filterScroll->setFrameShape(QFrame::NoFrame);
+    filterScroll->setMaximumHeight(360);
+    filterScroll->setWidget(panel);
+    parentLayout->addWidget(filterScroll);
 }
 
 void ThreeDCameraPage::buildSamplingPanel(QLayout *parentLayout)
@@ -1208,8 +1226,8 @@ void ThreeDCameraPage::fillTable()
             ++rejected;
     }
     m_summaryLabel->setText(localizedText(
-        "3D 型号库 %1 个；满足 %2，待确认 %3，不满足 %4。该页面只做 3D 查询过滤，不参与 2D 评分、推荐、BOM 或 PDF 导出。",
-        "3D library: %1 models; meets %2, needs confirmation %3, does not meet %4. This page only queries and filters 3D products; it does not affect 2D scoring, recommendations, BOM, or PDF export.")
+        "共 %1 个型号    /    满足 %2    /    待确认 %3    /    不满足 %4",
+        "%1 models    /    %2 matched    /    %3 to confirm    /    %4 unmatched")
         .arg(m_matches.size()).arg(matched).arg(missing).arg(rejected));
 
     {

@@ -15,6 +15,8 @@
 #include <QLabel>
 #include <QList>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPainterPath>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
@@ -26,6 +28,57 @@
 using namespace UiHelpers;
 
 namespace {
+// 视场示意与输入保持同步，帮助理解工件、余量和有效成像范围。
+class FieldOfViewPreview : public QWidget
+{
+public:
+    explicit FieldOfViewPreview(QWidget *parent = nullptr) : QWidget(parent)
+    {
+        setMinimumHeight(148);
+        setAccessibleName(localizedText("工件与视场示意", "Part and field of view preview"));
+    }
+
+    void setRequirement(const SelectionRequest &request)
+    {
+        m_request = request;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const QColor accent = palette().highlight().color();
+        const QRectF area = QRectF(rect()).adjusted(18, 16, -18, -30);
+        const double width = m_request.objectWidthMm + 2 * m_request.placementMarginMm;
+        const double height = m_request.objectHeightMm + 2 * m_request.placementMarginMm;
+        const double scale = qMin(area.width() / qMax(1.0, width), area.height() / qMax(1.0, height));
+        const QSizeF size(width * scale, height * scale);
+        const QRectF fov(area.center() - QPointF(size.width() / 2, size.height() / 2), size);
+        painter.setPen(QPen(accent, 1.2, Qt::DashLine));
+        QColor wash(accent);
+        wash.setAlpha(12);
+        painter.setBrush(wash);
+        painter.drawRoundedRect(fov, 5, 5);
+        const double inset = m_request.placementMarginMm * scale;
+        const QRectF part = fov.adjusted(inset, inset, -inset, -inset);
+        wash.setAlpha(40);
+        painter.setBrush(wash);
+        painter.setPen(QPen(accent, 1.5));
+        painter.drawRoundedRect(part, 3, 3);
+        const QPointF center = part.center();
+        painter.drawLine(center - QPointF(6, 0), center + QPointF(6, 0));
+        painter.drawLine(center - QPointF(0, 6), center + QPointF(0, 6));
+        painter.setPen(palette().color(QPalette::Text));
+        painter.drawText(QRectF(0, rect().height() - 25, rect().width(), 20), Qt::AlignCenter,
+            localizedText("实线 工件  /  虚线 视场", "Solid: part  /  Dashed: FOV"));
+    }
+
+private:
+    SelectionRequest m_request;
+};
+
 QLabel *fieldLabel(const QString &text, QWidget *buddy = nullptr)
 {
     QLabel *label = new QLabel(text);
@@ -38,42 +91,23 @@ QLabel *fieldLabel(const QString &text, QWidget *buddy = nullptr)
     return label;
 }
 
-QFrame *outlineSection(const QString &title, const QString &detail, const QString &state)
-{
-    QFrame *section = new QFrame;
-    section->setObjectName(QStringLiteral("OutlineSection"));
-    section->setProperty("state", state);
-    QVBoxLayout *layout = new QVBoxLayout(section);
-    layout->setContentsMargins(12, 10, 12, 10);
-    layout->setSpacing(5);
-
-    QHBoxLayout *header = new QHBoxLayout;
-    QLabel *titleLabel = new QLabel(title);
-    titleLabel->setObjectName(QStringLiteral("OutlineSectionTitle"));
-    QLabel *status = new QLabel(state == QLatin1String("warn")
-        ? localizedText("△ 需关注", "△ Review") : localizedText("✓ 已完整", "✓ Complete"));
-    status->setObjectName(QStringLiteral("OutlineSectionStatus"));
-    header->addWidget(titleLabel, 1);
-    header->addWidget(status);
-    layout->addLayout(header);
-
-    QLabel *detailLabel = new QLabel(detail);
-    detailLabel->setObjectName(QStringLiteral("OutlineSectionDetail"));
-    detailLabel->setWordWrap(true);
-    layout->addWidget(detailLabel);
-    return section;
-}
-
 QFrame *editorGroup(const QString &number, const QString &title, QGridLayout **grid)
 {
     QFrame *group = new QFrame;
     group->setObjectName(QStringLiteral("EditorGroup"));
     QVBoxLayout *layout = new QVBoxLayout(group);
-    layout->setContentsMargins(14, 12, 14, 14);
-    layout->setSpacing(10);
-    QLabel *heading = new QLabel(QStringLiteral("%1  %2").arg(number, title));
+    layout->setContentsMargins(20, 18, 20, 20);
+    layout->setSpacing(16);
+    QHBoxLayout *headingLayout = new QHBoxLayout;
+    QLabel *badge = new QLabel(number);
+    badge->setObjectName(QStringLiteral("SectionNumber"));
+    badge->setAlignment(Qt::AlignCenter);
+    badge->setFixedSize(28, 28);
+    headingLayout->addWidget(badge);
+    QLabel *heading = new QLabel(title);
     heading->setObjectName(QStringLiteral("EditorGroupTitle"));
-    layout->addWidget(heading);
+    headingLayout->addWidget(heading, 1);
+    layout->addLayout(headingLayout);
     *grid = new QGridLayout;
     (*grid)->setContentsMargins(0, 0, 0, 0);
     (*grid)->setHorizontalSpacing(12);
@@ -87,7 +121,12 @@ QFrame *editorGroup(const QString &number, const QString &title, QGridLayout **g
 void addGridField(QGridLayout *grid, int row, int pair, const QString &label, QWidget *control)
 {
     const int column = pair * 2;
-    grid->addWidget(fieldLabel(label, control), row, column);
+    QWidget *field = new QWidget;
+    field->setObjectName(QStringLiteral("ParameterField"));
+    QVBoxLayout *fieldLayout = new QVBoxLayout(field);
+    fieldLayout->setContentsMargins(0, 0, 0, 0);
+    fieldLayout->setSpacing(7);
+    fieldLayout->addWidget(fieldLabel(label, control));
     control->setAccessibleName(label);
     control->setMinimumWidth(0);
     if (QComboBox *combo = qobject_cast<QComboBox *>(control)) {
@@ -95,7 +134,8 @@ void addGridField(QGridLayout *grid, int row, int pair, const QString &label, QW
         combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     }
     control->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    grid->addWidget(control, row, column + 1);
+    fieldLayout->addWidget(control);
+    grid->addWidget(field, row, column, 1, 2);
 }
 
 bool requestsEqual(const SelectionRequest &left, const SelectionRequest &right)
@@ -122,19 +162,16 @@ QFrame *inspectorRow(const QString &label, QLabel **valueLabel)
 {
     QFrame *row = new QFrame;
     row->setObjectName(QStringLiteral("InspectorRow"));
-    QHBoxLayout *layout = new QHBoxLayout(row);
-    layout->setContentsMargins(10, 7, 8, 7);
-    layout->setSpacing(8);
+    QVBoxLayout *layout = new QVBoxLayout(row);
+    layout->setContentsMargins(12, 9, 12, 9);
+    layout->setSpacing(4);
     QLabel *name = new QLabel(label);
     name->setObjectName(QStringLiteral("InspectorLabel"));
     *valueLabel = new QLabel;
     (*valueLabel)->setObjectName(QStringLiteral("InspectorValue"));
-    (*valueLabel)->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    QLabel *state = new QLabel(QString::fromUtf8("●"));
-    state->setObjectName(QStringLiteral("InspectorPass"));
-    layout->addWidget(name, 1);
+    (*valueLabel)->setWordWrap(true);
+    layout->addWidget(name);
     layout->addWidget(*valueLabel);
-    layout->addWidget(state);
     return row;
 }
 }
@@ -143,70 +180,41 @@ InputPage::InputPage(QWidget *parent)
     : QWidget(parent)
 {
     QVBoxLayout *outer = new QVBoxLayout(this);
-    outer->setContentsMargins(0, 0, 0, 0);
-    outer->setSpacing(0);
+    outer->setContentsMargins(24, 24, 24, 0);
+    outer->setSpacing(18);
 
     m_splitter = new QSplitter(Qt::Horizontal, this);
-    m_splitter->setObjectName(QStringLiteral("InputMainSplitter"));
+    m_splitter->setObjectName(QStringLiteral("InputWorkspaceSplitter"));
     m_splitter->setChildrenCollapsible(true);
 
-    QFrame *outline = new QFrame;
-    outline->setObjectName(QStringLiteral("RequirementOutline"));
-    outline->setMinimumWidth(210);
-    QVBoxLayout *outlineLayout = new QVBoxLayout(outline);
-    outlineLayout->setContentsMargins(12, 14, 12, 12);
-    outlineLayout->setSpacing(8);
-    QLabel *outlineTitle = new QLabel(localizedText("需求结构", "Requirement Structure"));
-    outlineTitle->setObjectName(QStringLiteral("PaneTitle"));
-    QLabel *outlineSubtitle = new QLabel(localizedText("按工程约束组织输入，右侧实时校验。",
-                                                        "Inputs organized by engineering constraints."));
-    outlineSubtitle->setObjectName(QStringLiteral("PaneSubtitle"));
-    outlineSubtitle->setWordWrap(true);
-    outlineLayout->addWidget(outlineTitle);
-    outlineLayout->addWidget(outlineSubtitle);
-    outlineLayout->addWidget(outlineSection(localizedText("工件几何", "Part Geometry"),
-        localizedText("工件尺寸 · 定位与装夹余量",
-                      "Part size · positioning and fixture margin"), QStringLiteral("active")));
-    outlineLayout->addWidget(outlineSection(localizedText("精度指标", "Accuracy Targets"),
-        localizedText("最小特征 · 允许测量误差",
-                      "Minimum feature · allowed measurement error"), QStringLiteral("good")));
-    outlineLayout->addWidget(outlineSection(localizedText("成像节拍", "Imaging Cycle"),
-        localizedText("工作距离 · 高度波动 · 速度与帧率",
-                      "Working distance · variation · speed and frame rate"), QStringLiteral("good")));
-    outlineLayout->addWidget(outlineSection(localizedText("工艺环境", "Process Environment"),
-        localizedText("检测类型 · 表面材质 · 光学偏好",
-                      "Inspection · surface · optical preferences"), QStringLiteral("warn")));
-    outlineLayout->addStretch();
-    QLabel *notesTitle = new QLabel(localizedText("备注", "Notes"));
-    notesTitle->setObjectName(QStringLiteral("OutlineFieldTitle"));
-    outlineLayout->addWidget(notesTitle);
     m_notesEdit = new QTextEdit;
-    notesTitle->setBuddy(m_notesEdit);
     m_notesEdit->setAccessibleName(localizedText("项目备注", "Project notes"));
-    m_notesEdit->setPlaceholderText(localizedText("输入项目或工位备注…", "Add project or station notes…"));
-    m_notesEdit->setFixedHeight(68);
-    outlineLayout->addWidget(m_notesEdit);
-    m_splitter->addWidget(outline);
+    m_notesEdit->setPlaceholderText(localizedText("记录项目背景、工位要求或特殊限制…", "Project context, station requirements, or special constraints…"));
+    m_notesEdit->setFixedHeight(76);
 
     QFrame *editor = new QFrame;
     editor->setObjectName(QStringLiteral("RequirementEditor"));
     QVBoxLayout *editorLayout = new QVBoxLayout(editor);
-    editorLayout->setContentsMargins(16, 14, 16, 10);
-    editorLayout->setSpacing(10);
+    editorLayout->setContentsMargins(0, 0, 16, 0);
+    editorLayout->setSpacing(18);
 
     QHBoxLayout *editorHeader = new QHBoxLayout;
     QVBoxLayout *editorCopy = new QVBoxLayout;
     editorCopy->setSpacing(3);
-    QLabel *editorTitle = new QLabel(localizedText("工件与工程约束", "Part and Engineering Constraints"));
-    editorTitle->setObjectName(QStringLiteral("PaneTitle"));
-    QLabel *editorSubtitle = new QLabel(localizedText("定义计算视场、分辨率、节拍与镜头形式所需的核心输入。",
-                                                       "Define the inputs used to derive FOV, sampling, cycle, and lens form."));
+    QLabel *editorTitle = new QLabel(localizedText("定义你的成像任务", "Define your imaging task"));
+    editorTitle->setObjectName(QStringLiteral("PageTitle"));
+    QLabel *editorSubtitle = new QLabel(localizedText("从工件出发，找到合适的相机、镜头与光源。",
+                                                       "Start with the part. Find the right camera, lens, and light."));
     editorSubtitle->setObjectName(QStringLiteral("PaneSubtitle"));
     editorSubtitle->setWordWrap(true);
+    QLabel *eyebrow = new QLabel(localizedText("二维选型  /  需求建模", "2D SELECTION  /  REQUIREMENTS"));
+    eyebrow->setObjectName(QStringLiteral("PageEyebrow"));
+    editorCopy->addWidget(eyebrow);
+    editorCopy->addSpacing(5);
     editorCopy->addWidget(editorTitle);
     editorCopy->addWidget(editorSubtitle);
     editorHeader->addLayout(editorCopy, 1);
-    QPushButton *resetButton = actionButton(localizedText("重置参数", "Reset"), QStringLiteral(":/icons/ui/calculate.png"), true);
+    QPushButton *resetButton = actionButton(localizedText("重置参数", "Reset"), QStringLiteral("reset"), true);
     resetButton->setAccessibleDescription(localizedText("恢复默认需求参数", "Restore the default requirement values"));
     connect(resetButton, &QPushButton::clicked, this, [this]() {
         const SelectionRequest defaults;
@@ -220,25 +228,15 @@ InputPage::InputPage(QWidget *parent)
             setRequest(defaults);
         }
     });
-    QPushButton *outlineButton = actionButton(QStringLiteral("◀"), QString(), true);
-    outlineButton->setAccessibleDescription(localizedText("显示或隐藏需求大纲", "Show or hide the requirement outline"));
-    connect(outlineButton, &QPushButton::clicked, this, [this]() {
-        QList<int> sizes = m_splitter->sizes();
-        if (sizes.size() == 3) {
-            sizes[0] = sizes[0] > 0 ? 0 : 230;
-            m_splitter->setSizes(sizes);
-        }
+    QPushButton *summaryButton = actionButton(localizedText("约束摘要", "Summary"), QString(), true);
+    summaryButton->setObjectName(QStringLiteral("SummaryToggleButton"));
+    summaryButton->setCheckable(true);
+    summaryButton->setChecked(true);
+    summaryButton->setAccessibleName(localizedText("显示或隐藏实时约束摘要", "Show or hide live constraints"));
+    connect(summaryButton, &QPushButton::clicked, this, [this](bool checked) {
+        if (m_splitter->count() == 2)
+            m_splitter->widget(1)->setVisible(checked);
     });
-    QPushButton *summaryButton = actionButton(QStringLiteral("▶"), QString(), true);
-    summaryButton->setAccessibleDescription(localizedText("显示或隐藏实时约束摘要", "Show or hide the live constraint summary"));
-    connect(summaryButton, &QPushButton::clicked, this, [this]() {
-        QList<int> sizes = m_splitter->sizes();
-        if (sizes.size() == 3) {
-            sizes[2] = sizes[2] > 0 ? 0 : 300;
-            m_splitter->setSizes(sizes);
-        }
-    });
-    editorHeader->addWidget(outlineButton, 0, Qt::AlignTop);
     editorHeader->addWidget(summaryButton, 0, Qt::AlignTop);
     editorHeader->addWidget(resetButton, 0, Qt::AlignTop);
     editorLayout->addLayout(editorHeader);
@@ -251,7 +249,7 @@ InputPage::InputPage(QWidget *parent)
     content->setObjectName(QStringLiteral("RequirementContent"));
     QVBoxLayout *layout = new QVBoxLayout(content);
     layout->setContentsMargins(0, 0, 4, 0);
-    layout->setSpacing(10);
+    layout->setSpacing(14);
 
     const SelectionRequest defaultRequest;
     m_widthSpin = makeSpin(0.1, 2000.0, defaultRequest.objectWidthMm, QStringLiteral(" mm"));
@@ -260,12 +258,13 @@ InputPage::InputPage(QWidget *parent)
     m_minFeatureSpin = makeSpin(0.1, 10000.0, defaultRequest.minFeatureUm, QStringLiteral(" um"));
     m_toleranceSpin = makeSpin(0.1, 10000.0, defaultRequest.measurementToleranceUm, QStringLiteral(" um"));
     QGridLayout *geometryGrid = nullptr;
-    QFrame *geometryGroup = editorGroup(QStringLiteral("1."), localizedText("工件尺寸", "Part Size"), &geometryGrid);
+    QFrame *geometryGroup = editorGroup(QStringLiteral("01"), localizedText("工件尺寸", "Part Size"), &geometryGrid);
     addGridField(geometryGrid, 0, 0, localizedText("工件宽度 (X)", "Part width (X)"), m_widthSpin);
     addGridField(geometryGrid, 0, 1, localizedText("工件高度 (Y)", "Part height (Y)"), m_heightSpin);
-    addGridField(geometryGrid, 1, 0, localizedText("定位/装夹余量", "Fixture margin"), m_marginSpin);
+    addGridField(geometryGrid, 0, 2, localizedText("定位/装夹余量", "Fixture margin"), m_marginSpin);
+    geometryGrid->setColumnStretch(5, 1);
     QGridLayout *accuracyGrid = nullptr;
-    QFrame *accuracyGroup = editorGroup(QStringLiteral("2."), localizedText("精度指标", "Accuracy Targets"), &accuracyGrid);
+    QFrame *accuracyGroup = editorGroup(QStringLiteral("02"), localizedText("精度指标", "Accuracy Targets"), &accuracyGrid);
     addGridField(accuracyGrid, 0, 0, localizedText("最小特征尺寸", "Minimum feature"), m_minFeatureSpin);
     addGridField(accuracyGrid, 0, 1, localizedText("允许测量误差", "Allowed error"), m_toleranceSpin);
 
@@ -294,7 +293,7 @@ InputPage::InputPage(QWidget *parent)
     m_motionModeCombo->setCurrentIndex(static_cast<int>(defaultRequest.motionMode));
 
     QGridLayout *cycleGrid = nullptr;
-    QFrame *cycleGroup = editorGroup(QStringLiteral("3."), localizedText("成像节拍与安装", "Imaging Cycle and Installation"), &cycleGrid);
+    QFrame *cycleGroup = editorGroup(QStringLiteral("03"), localizedText("成像节拍与安装", "Imaging Cycle and Installation"), &cycleGrid);
     addGridField(cycleGrid, 0, 0, localizedText("检测类型", "Inspection type"), m_detectionCombo);
     addGridField(cycleGrid, 0, 1, localizedText("表面材质", "Surface material"), m_surfaceCombo);
     addGridField(cycleGrid, 1, 0, localizedText("工作距离 (WD)", "Working distance (WD)"), m_wdSpin);
@@ -310,7 +309,7 @@ InputPage::InputPage(QWidget *parent)
     m_allowTelecentricCheck = new QCheckBox(localizedText("允许远心镜头", "Allow telecentric lens"));
     m_allowTelecentricCheck->setChecked(defaultRequest.allowTelecentric);
     QGridLayout *environmentGrid = nullptr;
-    QFrame *environmentGroup = editorGroup(QStringLiteral("4."), localizedText("工艺环境与光学偏好", "Process Environment and Optical Preference"), &environmentGrid);
+    QFrame *environmentGroup = editorGroup(QStringLiteral("04"), localizedText("工艺环境与光学偏好", "Process Environment and Optical Preference"), &environmentGrid);
     environmentGrid->addWidget(m_reflectiveCheck, 0, 0, 1, 2);
     environmentGrid->addWidget(m_monoCheck, 0, 2, 1, 2);
     environmentGrid->addWidget(m_allowTelecentricCheck, 1, 0, 1, 2);
@@ -319,46 +318,57 @@ InputPage::InputPage(QWidget *parent)
     layout->addWidget(accuracyGroup);
     layout->addWidget(cycleGroup);
     layout->addWidget(environmentGroup);
+    QGridLayout *notesGrid = nullptr;
+    QFrame *notesGroup = editorGroup(QStringLiteral("05"), localizedText("项目备注", "Project notes"), &notesGrid);
+    notesGrid->addWidget(m_notesEdit, 0, 0, 1, 4);
+    layout->addWidget(notesGroup);
     layout->addStretch();
     scroll->setWidget(content);
     editorLayout->addWidget(scroll, 1);
-    editor->setMinimumWidth(480);
+    editor->setMinimumWidth(510);
     m_splitter->addWidget(editor);
-    m_splitter->setCollapsible(1, false);
+    m_splitter->setCollapsible(0, false);
 
     QFrame *summaryPanel = new QFrame;
     summaryPanel->setObjectName(QStringLiteral("ConstraintInspector"));
-    summaryPanel->setMinimumWidth(270);
+    summaryPanel->setMinimumWidth(276);
     QVBoxLayout *summaryLayout = new QVBoxLayout(summaryPanel);
-    summaryLayout->setContentsMargins(14, 14, 14, 12);
+    summaryLayout->setContentsMargins(18, 20, 18, 18);
     summaryLayout->setSpacing(8);
     QHBoxLayout *inspectorHeader = new QHBoxLayout;
-    QLabel *summaryTitle = new QLabel(localizedText("实时约束", "Live Constraints"));
+    QLabel *summaryTitle = new QLabel(localizedText("成像目标", "Imaging targets"));
     summaryTitle->setObjectName(QStringLiteral("PaneTitle"));
-    QLabel *passBadge = statusBadge(localizedText("通过", "Pass"), QStringLiteral("success"));
+    QLabel *passBadge = statusBadge(localizedText("实时估算", "Live estimate"), QStringLiteral("success"));
     inspectorHeader->addWidget(summaryTitle, 1);
     inspectorHeader->addWidget(passBadge);
     summaryLayout->addLayout(inspectorHeader);
-    QLabel *keyTitle = new QLabel(localizedText("A. 关键目标", "A. Key Targets"));
+    FieldOfViewPreview *preview = new FieldOfViewPreview;
+    preview->setObjectName(QStringLiteral("FieldOfViewPreview"));
+    summaryLayout->addWidget(preview);
+    const auto updatePreview = [this, preview]() { preview->setRequirement(request()); };
+    for (QDoubleSpinBox *spin : {m_widthSpin, m_heightSpin, m_marginSpin})
+        connect(spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), preview, updatePreview);
+    updatePreview();
+    QLabel *keyTitle = new QLabel(localizedText("核心指标", "Key targets"));
     keyTitle->setObjectName(QStringLiteral("InspectorSectionTitle"));
     summaryLayout->addWidget(keyTitle);
     summaryLayout->addWidget(inspectorRow(localizedText("目标 FOV", "Target FOV"), &m_fovSummaryLabel));
     summaryLayout->addWidget(inspectorRow(localizedText("目标物方像素", "Object pixel"), &m_pixelSummaryLabel));
     summaryLayout->addWidget(inspectorRow(localizedText("最低相机", "Minimum camera"), &m_resolutionSummaryLabel));
-    QLabel *configTitle = new QLabel(localizedText("B. 带宽与节拍", "B. Bandwidth and Cycle"));
+    QLabel *configTitle = new QLabel(localizedText("带宽与节拍", "Bandwidth and cycle"));
     configTitle->setObjectName(QStringLiteral("InspectorSectionTitle"));
     summaryLayout->addWidget(configTitle);
     summaryLayout->addWidget(inspectorRow(localizedText("12 bit 带宽", "12-bit bandwidth"), &m_bandwidthSummaryLabel));
     summaryLayout->addWidget(inspectorRow(localizedText("工作距离", "Working distance"), &m_workDistanceSummaryLabel));
     summaryLayout->addWidget(inspectorRow(localizedText("目标帧率", "Target frame rate"), &m_fpsSummaryLabel));
-    QLabel *processTitle = new QLabel(localizedText("C. 工艺输入", "C. Process Inputs"));
+    QLabel *processTitle = new QLabel(localizedText("工艺输入", "Process inputs"));
     processTitle->setObjectName(QStringLiteral("InspectorSectionTitle"));
     summaryLayout->addWidget(processTitle);
     summaryLayout->addWidget(inspectorRow(localizedText("检测类型", "Inspection type"), &m_detectionSummaryLabel));
     summaryLayout->addWidget(inspectorRow(localizedText("表面材质", "Surface material"), &m_surfaceSummaryLabel));
     summaryLayout->addWidget(inspectorRow(localizedText("曝光上限", "Exposure limit"), &m_exposureSummaryLabel));
 
-    QLabel *verdictTitle = new QLabel(localizedText("D. 工艺判断", "D. Process Verdict"));
+    QLabel *verdictTitle = new QLabel(localizedText("工程提示", "Engineering notes"));
     verdictTitle->setObjectName(QStringLiteral("InspectorSectionTitle"));
     summaryLayout->addWidget(verdictTitle);
     QFrame *risk = new QFrame;
@@ -375,26 +385,33 @@ InputPage::InputPage(QWidget *parent)
     riskLayout->addWidget(m_processSummaryLabel);
     summaryLayout->addWidget(risk);
     summaryLayout->addStretch();
-    m_splitter->addWidget(summaryPanel);
-    m_splitter->setStretchFactor(0, 22);
-    m_splitter->setStretchFactor(1, 50);
-    m_splitter->setStretchFactor(2, 28);
-    m_splitter->setSizes({250, 600, 330});
-    UiSettings::instance().restoreSplitter(QStringLiteral("input/main"), m_splitter);
+    QScrollArea *summaryScroll = new QScrollArea;
+    summaryScroll->setObjectName(QStringLiteral("ConstraintScroll"));
+    summaryScroll->setWidgetResizable(true);
+    summaryScroll->setFrameShape(QFrame::NoFrame);
+    summaryScroll->setMinimumWidth(298);
+    summaryScroll->setWidget(summaryPanel);
+    m_splitter->addWidget(summaryScroll);
+    m_splitter->setCollapsible(1, false);
+    m_splitter->setStretchFactor(0, 1);
+    m_splitter->setStretchFactor(1, 0);
+    m_splitter->setSizes({760, 304});
+    UiSettings::instance().restoreSplitter(QStringLiteral("input/workspace-v2"), m_splitter);
     outer->addWidget(m_splitter, 1);
 
     QFrame *commandBar = new QFrame;
     commandBar->setObjectName(QStringLiteral("PageCommandBar"));
     QHBoxLayout *buttonLayout = new QHBoxLayout(commandBar);
-    buttonLayout->setContentsMargins(14, 8, 14, 8);
+    buttonLayout->setContentsMargins(0, 14, 0, 14);
     buttonLayout->setSpacing(10);
     QLabel *commandHint = new QLabel(localizedText("修改输入后，实时约束会立即刷新。",
                                                     "Live constraints refresh immediately when inputs change."));
     commandHint->setObjectName(QStringLiteral("CommandHint"));
     buttonLayout->addWidget(commandHint, 1);
-    m_runButton = actionButton(localizedText("运行选型并查看结果  F9", "Run Selection and Review  F9"),
+    m_runButton = actionButton(localizedText("生成选型方案    F9", "Generate solutions    F9"),
                                QStringLiteral(":/icons/ui/results.png"));
     m_runButton->setObjectName(QStringLiteral("RunSelectionButton"));
+    m_runButton->setMinimumWidth(218);
     m_runButton->setAccessibleDescription(localizedText("执行选型并跳转到结果页",
                                                         "Run selection and open the results page"));
     connect(m_runButton, &QPushButton::clicked, this, &InputPage::runSelectionRequested);
@@ -433,7 +450,7 @@ InputPage::InputPage(QWidget *parent)
 
 InputPage::~InputPage()
 {
-    UiSettings::instance().saveSplitter(QStringLiteral("input/main"), m_splitter);
+    UiSettings::instance().saveSplitter(QStringLiteral("input/workspace-v2"), m_splitter);
 }
 
 void InputPage::setBusy(bool busy)

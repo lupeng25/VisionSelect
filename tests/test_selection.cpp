@@ -5,6 +5,8 @@
 #include "license/LicenseManager.h"
 #include "report/PdfReportWriter.h"
 #include "selection/CalculationAssistant.h"
+#include "selection/ParameterCalculator.h"
+#include "core/PixelFormat.h"
 #include "selection/SelectionEngine.h"
 #include "selection/SelectionService.h"
 #include "three_d/ThreeDCalculation.h"
@@ -37,6 +39,12 @@ private slots:
     void lensAssistantEstimatesLenses();
     void pureCalculationFixedLens();
     void pureCalculationTelecentric();
+    void calculationAuditRegressions();
+    void parameterOpticsSolvesBothModelsAndAxes();
+    void parameterSamplingAndCalibration();
+    void parameterTelecentricRangeAndMotion();
+    void parameterTransferUsesRoiPackingAndStorageFormat();
+    void parameterSystemCheckPreservesUnknowns();
     void telecentricMissingCatalogDataIsRisk();
     void missingTelecentricityIsRisk();
     void lensTypeParsingRecognizesTelecentricAliases();
@@ -231,6 +239,262 @@ void SelectionEngineTest::measurementToleranceUsesPixelBudget()
     QCOMPARE(requirement.requiredResolutionX, 12000);
     QCOMPARE(requirement.requiredResolutionY, 7000);
     QVERIFY(requirement.telecentricPreferred);
+
+    request.measurementToleranceUm = 1.0;
+    const auto strict = CalculationAssistant::estimateRequirement(request);
+    QCOMPARE(strict.targetObjectPixelUm, 0.2);
+    QCOMPARE(strict.requiredResolutionX, 120000);
+    QCOMPARE(strict.requiredResolutionY, 70000);
+    QCOMPARE(strict.requiredMegapixels, 8400.0);
+}
+
+void SelectionEngineTest::calculationAuditRegressions()
+{
+    PureCalculationInput input;
+    input.request.objectWidthMm = input.request.objectHeightMm = 10.0;
+    input.request.placementMarginMm = input.request.heightVariationMm = 0.0;
+    input.request.requiredFps = 60.0;
+    input.camera.resolutionX = 2448;
+    input.camera.resolutionY = 2048;
+    input.camera.pixelSizeUm = 3.45;
+    input.camera.colorMode = QStringLiteral("Mono12p");
+    input.camera.bandwidthMBps = 1000.0;
+    input.camera.maxFps = 10.0;
+    input.lens.focalLengthMm = 16.0;
+    auto result = CalculationAssistant::estimatePure(input);
+    QCOMPARE(result.geometryStatus, CalculationStatus::Passed);
+    QCOMPARE(result.samplingStatus, CalculationStatus::Failed);
+    QCOMPARE(result.fpsStatus, CalculationStatus::Failed);
+    QVERIFY(result.cameraObjectPixelSizeUm < result.requirement.targetObjectPixelUm);
+    QVERIFY(result.lensObjectPixelSizeUm > 20.0);
+    QVERIFY(result.risks.join(QLatin1Char(';')).contains(QStringLiteral("实际物方像素")));
+    input.camera.maxFps = 100.0;
+    QCOMPARE(CalculationAssistant::estimatePure(input).fpsStatus, CalculationStatus::Passed);
+    input.camera.maxFps = 0.0;
+    QCOMPARE(CalculationAssistant::estimatePure(input).fpsStatus, CalculationStatus::Unknown);
+    input.request.workingDistanceMm = input.lens.focalLengthMm;
+    QCOMPARE(CalculationAssistant::estimatePure(input).geometryStatus, CalculationStatus::Invalid);
+    input.telecentricMode = true;
+    input.lens.pmag = 0.2;
+    result = CalculationAssistant::estimatePure(input);
+    QCOMPARE(result.telecentricErrorStatus, CalculationStatus::Unknown);
+
+    CameraSpec camera;
+    camera.resolutionX = 2000;
+    camera.resolutionY = 1000;
+    camera.colorMode = QStringLiteral("Mono12");
+    QCOMPARE(SelectionEngine::framePayloadMB(camera), 4.0);
+    camera.colorMode = QStringLiteral("Mono12p");
+    QCOMPARE(SelectionEngine::framePayloadMB(camera), 3.0);
+    QCOMPARE(SelectionEngine::storagePerHourGB(camera, 10.0), 108.0);
+    camera.colorMode = QStringLiteral("BayerRG12");
+    QCOMPARE(SelectionEngine::framePayloadMB(camera), 4.0);
+    camera.colorMode = QStringLiteral("BayerRG12p");
+    QCOMPARE(SelectionEngine::framePayloadMB(camera), 3.0);
+    camera.resolutionX = 3;
+    camera.resolutionY = 2;
+    QCOMPARE(SelectionEngine::framePayloadMB(camera), 10.0 / 1000000.0);
+}
+
+void SelectionEngineTest::parameterOpticsSolvesBothModelsAndAxes()
+{
+    using namespace Parameters;
+    OpticsInput input;
+    QCOMPARE(optics(input).status, CalculationStatus::Unknown);
+    QVERIFY(!optics(input).fovWidthMm);
+    input.sensor = {2448.0, 2048.0, 3.45};
+    input.distanceMm = 300.0;
+    input.targetFovWidthMm = 120.0;
+    input.targetFovHeightMm = 80.0;
+    auto result = optics(input);
+    QCOMPARE(result.status, CalculationStatus::Passed);
+    QVERIFY(qAbs(*result.focalLengthMm - 21.114) < 1e-8);
+    QVERIFY(qAbs(*result.fovWidthMm - 120.0) < 1e-8);
+    QVERIFY(*result.fovHeightMm > 80.0);
+    input.solve = OpticsSolve::FieldOfView;
+    input.focalLengthMm = 20.0;
+    result = optics(input);
+    QVERIFY(qAbs(*result.fovWidthMm - 126.684) < 1e-8);
+    QVERIFY(qAbs(*result.fovHeightMm - 105.984) < 1e-8);
+    QVERIFY(qAbs(*result.objectPixelUm - 51.75) < 1e-8);
+    QCOMPARE(checkUpperBound(result.objectPixelUm, 50.0), CalculationStatus::Failed);
+    input.solve = OpticsSolve::Distance;
+    result = optics(input);
+    QVERIFY(qAbs(*result.distanceMm - 284.171639670361) < 1e-6);
+    for (OpticsModel model : {OpticsModel::Paraxial, OpticsModel::ThinLens}) {
+        input.model = model;
+        input.targetFovWidthMm = 80.0; input.targetFovHeightMm = 120.0;
+        input.solve = OpticsSolve::FocalLength;
+        const auto focal = optics(input);
+        QCOMPARE(focal.status, CalculationStatus::Passed);
+        QCOMPARE(focal.coverage, CalculationStatus::Passed);
+        QVERIFY(qAbs(*focal.fovHeightMm - 120.0) < 1e-7);
+        input.focalLengthMm = focal.focalLengthMm;
+        input.solve = OpticsSolve::Distance;
+        QVERIFY(qAbs(*optics(input).distanceMm - 300.0) < 1e-7);
+    }
+    input.solve = OpticsSolve::FieldOfView;
+    input.model = OpticsModel::ThinLens;
+    input.distanceMm = input.focalLengthMm;
+    result = optics(input);
+    QCOMPARE(result.status, CalculationStatus::Invalid);
+    QVERIFY(!result.objectPixelUm && !result.fovWidthMm);
+    input.distanceMm.reset();
+    QCOMPARE(optics(input).status, CalculationStatus::Unknown);
+}
+
+void SelectionEngineTest::parameterSamplingAndCalibration()
+{
+    using namespace Parameters;
+    SamplingInput input;
+    input.fovWidthMm = 120.0; input.fovHeightMm = 80.0;
+    input.featureUm = 200.0; input.pixelsPerFeature = 4.0;
+    auto result = sampling(input);
+    QCOMPARE(result.status, CalculationStatus::Passed);
+    QCOMPARE(*result.targetObjectPixelUm, 50.0);
+    QCOMPARE(*result.requiredResolutionX, 2400.0);
+    QCOMPARE(*result.requiredResolutionY, 1600.0);
+    input.measurementBudget = true;
+    QCOMPARE(sampling(input).status, CalculationStatus::Unknown);
+    input.toleranceUm = 1.0; input.pixelsPerTolerance = 5.0;
+    result = sampling(input);
+    QCOMPARE(*result.targetObjectPixelUm, 0.2);
+    QCOMPARE(*result.requiredResolutionX, 600000.0);
+    input.featureUm.reset(); input.pixelsPerFeature.reset();
+    QCOMPARE(sampling(input).status, CalculationStatus::Passed);
+    input.solve = SamplingSolve::Actual;
+    input.sensor = {2448.0, 2048.0, {}};
+    result = sampling(input);
+    QCOMPARE(result.status, CalculationStatus::Passed);
+    QVERIFY(qAbs(*result.objectPixelXUm - 49.0196078431) < 1e-8);
+    QCOMPARE(*result.objectPixelYUm, 39.0625);
+    input.solve = SamplingSolve::Calibration;
+    input.calibrationLengthMm = 10.0; input.calibrationPixels = 200.0;
+    QCOMPARE(*sampling(input).calibratedPixelUm, 50.0);
+    input.calibrationPixels = 0.0;
+    QCOMPARE(sampling(input).status, CalculationStatus::Invalid);
+    QVERIFY(!sampling(input).calibratedPixelUm);
+    input.calibrationPixels.reset();
+    QCOMPARE(sampling(input).status, CalculationStatus::Unknown);
+}
+
+void SelectionEngineTest::parameterTelecentricRangeAndMotion()
+{
+    using namespace Parameters;
+    TelecentricInput input;
+    input.sensor = {2448.0, 2048.0, 3.45};
+    input.targetFovWidthMm = 120.0; input.targetFovHeightMm = 80.0; input.targetObjectPixelUm = 50.0;
+    auto result = telecentric(input);
+    QCOMPARE(result.status, CalculationStatus::Passed);
+    QVERIFY(qAbs(*result.minMagnification - 0.069) < 1e-9);
+    QVERIFY(qAbs(*result.maxMagnification - 0.07038) < 1e-9);
+    input.targetObjectPixelUm = 40.0;
+    result = telecentric(input);
+    QCOMPARE(result.status, CalculationStatus::Failed);
+    QVERIFY(result.minMagnification && result.maxMagnification);
+    QVERIFY(!result.magnification && !result.fovWidthMm);
+    input.solve = TelecentricSolve::FieldOfView; input.magnification = 0.2;
+    result = telecentric(input);
+    QVERIFY(qAbs(*result.fovWidthMm - 42.228) < 1e-8);
+    QVERIFY(qAbs(*result.objectPixelUm - 17.25) < 1e-8);
+
+    ExposureInput motion;
+    motion.objectPixelUm = 50.0; motion.speedMmS = 500.0; motion.blurPixels = 0.5;
+    QCOMPARE(*exposure(motion).exposureUs, 50.0);
+    motion.solve = ExposureSolve::Blur; motion.exposureUs = 50.0;
+    QCOMPARE(*exposure(motion).blurPixels, 0.5);
+    motion.solve = ExposureSolve::Speed;
+    QCOMPARE(*exposure(motion).speedMmS, 500.0);
+    motion.solve = ExposureSolve::Exposure; motion.speedMmS = 0.0;
+    QCOMPARE(exposure(motion).status, CalculationStatus::NotApplicable);
+    QVERIFY(!exposure(motion).exposureUs);
+    motion.speedMmS = -1.0;
+    QCOMPARE(exposure(motion).status, CalculationStatus::Invalid);
+    motion.speedMmS.reset();
+    QCOMPARE(exposure(motion).status, CalculationStatus::Unknown);
+}
+
+void SelectionEngineTest::parameterTransferUsesRoiPackingAndStorageFormat()
+{
+    using namespace Parameters;
+    TransferInput input;
+    input.width = 2448; input.height = 2048; input.fps = 30; input.pixelFormat = "Mono8";
+    auto result = transfer(input);
+    QCOMPARE(result.status, CalculationStatus::Passed);
+    QCOMPARE(*result.frameBytes, 5013504.0);
+    QVERIFY(qAbs(*result.transportMBps - 150.40512) < 1e-8);
+    QCOMPARE(result.capacityStatus, CalculationStatus::Unknown);
+    input.width = 2000; input.height = 1000; input.pixelFormat = "Mono12";
+    input.cameraCount = 2; input.hours = 2; input.overheadPercent = 10; input.capacityMBps = 250;
+    result = transfer(input);
+    QCOMPARE(*result.frameBytes, 4000000.0);
+    QCOMPARE(*result.payloadMBps, 240.0);
+    QVERIFY(qAbs(*result.transportMBps - 264.0) < 1e-8);
+    QCOMPARE(*result.storageGB, 1728.0);
+    QCOMPARE(result.capacityStatus, CalculationStatus::Failed);
+    input.pixelFormat = "Mono12p";
+    QCOMPARE(*transfer(input).frameBytes, 3000000.0);
+    input.storageFormat = "RGB8";
+    result = transfer(input);
+    QCOMPARE(*result.storageGB, 2592.0);
+    QCOMPARE(*result.frameBytes, 3000000.0);
+    input.roiWidth = 1000; input.roiHeight = 500;
+    QCOMPARE(*transfer(input).frameBytes, 750000.0);
+    input.roiHeight = 1001;
+    QCOMPARE(transfer(input).status, CalculationStatus::Invalid);
+    QVERIFY(!transfer(input).frameBytes);
+    input.roiHeight = 500; input.pixelFormat.clear();
+    QCOMPARE(transfer(input).status, CalculationStatus::Unknown);
+    input.pixelFormat = "UnknownFormat";
+    QCOMPARE(transfer(input).status, CalculationStatus::Invalid);
+    input.pixelFormat = "Mono8"; input.cameraCount = 1.5;
+    QCOMPARE(transfer(input).status, CalculationStatus::Invalid);
+}
+
+void SelectionEngineTest::parameterSystemCheckPreservesUnknowns()
+{
+    using namespace Parameters;
+    SystemInput input;
+    input.sensor = {2448.0, 2048.0, 3.45};
+    input.model = OpticsModel::ThinLens;
+    input.distanceMm = 110.0; input.focalLengthMm = 16.0;
+    input.targetFovWidthMm = input.targetFovHeightMm = 10.0;
+    input.targetObjectPixelUm = 5.0; input.fps = 60.0; input.maxFps = 10.0;
+    auto result = checkSystem(input);
+    const auto find = [](const SystemResult &result, const QString &key) {
+        for (const auto &check : result.checks) if (check.key == key) return check;
+        return CheckItem();
+    };
+    QCOMPARE(result.status, CalculationStatus::Failed);
+    QCOMPARE(find(result, "samplingX").status, CalculationStatus::Failed);
+    QCOMPARE(find(result, "samplingY").status, CalculationStatus::Failed);
+    QCOMPARE(find(result, "fps").status, CalculationStatus::Failed);
+    QCOMPARE(find(result, "imageCircle").status, CalculationStatus::Unknown);
+    QCOMPARE(find(result, "bandwidth").status, CalculationStatus::Unknown);
+    input.maxFps = 0.0;
+    QCOMPARE(find(checkSystem(input), "fps").status, CalculationStatus::Unknown);
+    input.distanceMm = 16.0;
+    result = checkSystem(input);
+    QCOMPARE(find(result, "samplingX").status, CalculationStatus::Invalid);
+    QVERIFY(!result.actualFovWidthMm && !result.objectPixelXUm);
+    input.measuredFov = true; input.measuredFovWidthMm = 10.0; input.measuredFovHeightMm = 10.0;
+    result = checkSystem(input);
+    QCOMPARE(find(result, "samplingX").status, CalculationStatus::Passed);
+    QCOMPARE(find(result, "samplingY").status, CalculationStatus::Passed);
+    input.telecentric = true; input.heightVariationMm = 2.0; input.measurementToleranceUm = 25.0;
+    result = checkSystem(input);
+    QCOMPARE(find(result, "telecentricity").status, CalculationStatus::Unknown);
+    QVERIFY(!find(result, "telecentricity").actual);
+    input.telecentricityDeg = 0.0;
+    result = checkSystem(input);
+    QCOMPARE(find(result, "telecentricity").status, CalculationStatus::Passed);
+    QCOMPARE(*find(result, "telecentricity").actual, 0.0);
+    input.dofMm = 3.0;
+    QCOMPARE(find(checkSystem(input), "dof").status, CalculationStatus::Unknown);
+    input.dofConditionsConfirmed = true;
+    QCOMPARE(find(checkSystem(input), "dof").status, CalculationStatus::Passed);
+    input.dofMm = 1.0;
+    QCOMPARE(find(checkSystem(input), "dof").status, CalculationStatus::Failed);
 }
 
 void SelectionEngineTest::nonMeasurementToleranceDoesNotTightenSampling()

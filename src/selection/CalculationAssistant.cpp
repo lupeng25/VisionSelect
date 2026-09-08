@@ -1,15 +1,20 @@
 #include "selection/CalculationAssistant.h"
 
 #include "core/Localization.h"
+#include "core/PixelFormat.h"
 #include "selection/SelectionEngine.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <QtMath>
 
 namespace {
 int ceilToInt(double value)
 {
-    return qMax(1, static_cast<int>(qCeil(value)));
+    if (!std::isfinite(value) || value <= 0.0 || value > std::numeric_limits<int>::max())
+        return 0;
+    return static_cast<int>(std::ceil(value));
 }
 
 double objectPixelUm(const SelectionRequest &request, const CameraSpec &camera)
@@ -168,10 +173,13 @@ RequirementEstimate CalculationAssistant::estimateRequirement(const SelectionReq
     estimate.requiredFovWidthMm = SelectionEngine::requiredFovWidth(request);
     estimate.requiredFovHeightMm = SelectionEngine::requiredFovHeight(request);
     estimate.targetObjectPixelUm = SelectionEngine::targetObjectPixelUm(request);
+    if (estimate.targetObjectPixelUm <= 0.0 || estimate.requiredFovWidthMm <= 0.0 || estimate.requiredFovHeightMm <= 0.0)
+        return estimate;
     estimate.requiredResolutionX = ceilToInt(estimate.requiredFovWidthMm * 1000.0 / estimate.targetObjectPixelUm);
     estimate.requiredResolutionY = ceilToInt(estimate.requiredFovHeightMm * 1000.0 / estimate.targetObjectPixelUm);
-    estimate.requiredMegapixels = estimate.requiredResolutionX * estimate.requiredResolutionY / 1000000.0;
-    estimate.requiredBandwidthMBps12Bit = estimate.requiredResolutionX * estimate.requiredResolutionY
+    estimate.valid = estimate.requiredResolutionX > 0 && estimate.requiredResolutionY > 0;
+    estimate.requiredMegapixels = static_cast<double>(estimate.requiredResolutionX) * estimate.requiredResolutionY / 1000000.0;
+    estimate.requiredBandwidthMBps12Bit = static_cast<double>(estimate.requiredResolutionX) * estimate.requiredResolutionY
         * 12.0 * qMax(1.0, request.requiredFps) / 8.0 / 1000000.0;
     estimate.hasMotionConstraint = request.hasContinuousMotion();
     if (estimate.hasMotionConstraint)
@@ -192,17 +200,33 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
         lens.lensType = LensType::ObjectTelecentric;
     else
         lens.lensType = LensType::FixedFocal;
+    result.telecentricErrorStatus = input.telecentricMode ? CalculationStatus::Unknown : CalculationStatus::NotApplicable;
 
     result.sensorWidthMm = camera.sensorWidthMm();
     result.sensorHeightMm = camera.sensorHeightMm();
     result.sensorDiagonalMm = camera.sensorDiagonalMm();
     result.framePayloadMB = SelectionEngine::framePayloadMB(camera);
+    result.payloadEstimated = !PixelFormat::layout(camera.colorMode).has_value();
     result.bandwidthRequiredMBps = SelectionEngine::bandwidthRequiredMBps(camera, qMax(1.0, input.request.requiredFps));
     result.interfaceCapacityMBps = SelectionEngine::interfaceCapacityMBps(camera);
     result.bandwidthUtilizationPercent = result.interfaceCapacityMBps > 0.0
         ? result.bandwidthRequiredMBps / result.interfaceCapacityMBps * 100.0
         : 0.0;
     result.storagePerHourGB = SelectionEngine::storagePerHourGB(camera, qMax(1.0, input.request.requiredFps));
+    if (!result.requirement.valid)
+        result.risks.append(QStringLiteral("需求参数缺失或超出计算范围，无法完成采样校核"));
+    if (result.payloadEstimated)
+        result.risks.append(QStringLiteral("传输像素格式未确认，带宽和存储仅按位深估算"));
+    result.fpsStatus = camera.maxFps > 0.0
+        ? checkUpperBound(input.request.requiredFps, camera.maxFps) : CalculationStatus::Unknown;
+    if (result.fpsStatus == CalculationStatus::Failed)
+        result.risks.append(QStringLiteral("相机标称最大帧率低于需求帧率"));
+    else if (result.fpsStatus == CalculationStatus::Unknown)
+        result.risks.append(QStringLiteral("相机最大帧率未填写，无法确认节拍"));
+    else if (result.fpsStatus == CalculationStatus::Passed)
+        result.reasons.append(QStringLiteral("相机标称帧率满足需求，实际节拍仍取决于曝光和读出"));
+    result.bandwidthStatus = result.interfaceCapacityMBps > 0.0 && !result.payloadEstimated
+        ? checkUpperBound(result.bandwidthRequiredMBps, result.interfaceCapacityMBps) : CalculationStatus::Unknown;
 
     if (camera.resolutionX > 0 && camera.resolutionY > 0) {
         result.cameraObjectPixelSizeUm = qMax(result.requirement.requiredFovWidthMm * 1000.0 / camera.resolutionX,
@@ -213,7 +237,7 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
         result.risks.append(QString::fromUtf8("相机分辨率或像元无效，无法计算传感器尺寸和镜头参数"));
     } else if (camera.resolutionX <= 0 || camera.resolutionY <= 0) {
         result.risks.append(QString::fromUtf8("相机分辨率无效，无法计算物方像素"));
-    } else if (result.cameraObjectPixelSizeUm <= result.requirement.targetObjectPixelUm) {
+    } else if (result.requirement.valid && result.cameraObjectPixelSizeUm <= result.requirement.targetObjectPixelUm) {
         result.reasons.append(QString::fromUtf8("按需求 FOV 估算，相机采样满足目标物方像素"));
     } else {
         result.risks.append(QString::fromUtf8("按需求 FOV 估算，物方像素 %1 um 粗于目标 %2 um")
@@ -241,10 +265,13 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
     }
 
     result.targetFixedFocalLengthMm = estimatedFixedFocalLengthMm(input.request, camera);
-    if (input.telecentricMode) {
+    if (result.sensorWidthMm <= 0.0 || result.sensorHeightMm <= 0.0) {
+        result.geometryStatus = CalculationStatus::Invalid;
+    } else if (input.telecentricMode) {
         if (lens.pmag <= 0.0) {
             result.risks.append(QString::fromUtf8("远心倍率 PMAG 必须大于 0"));
         } else {
+            result.geometryStatus = CalculationStatus::Passed;
             result.effectiveFovWidthMm = result.sensorWidthMm / lens.pmag;
             result.effectiveFovHeightMm = result.sensorHeightMm / lens.pmag;
             result.lensObjectPixelSizeUm = camera.pixelSizeUm / lens.pmag;
@@ -254,7 +281,11 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
             if (lens.hasTelecentricity()) {
                 result.residualTelecentricErrorUm = input.request.heightVariationMm
                     * qTan(qDegreesToRadians(lens.telecentricityDeg)) * 1000.0;
+                result.telecentricErrorStatus = input.request.measurementToleranceUm > 0.0
+                    ? checkUpperBound(result.residualTelecentricErrorUm, input.request.measurementToleranceUm)
+                    : CalculationStatus::Unknown;
             } else {
+                result.telecentricErrorStatus = CalculationStatus::Unknown;
                 result.residualTelecentricErrorUm = 0.0;
                 result.risks.append(QString::fromUtf8("远心镜头缺少远心度数据，无法估算高度波动带来的残余视差"));
             }
@@ -310,6 +341,7 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
             result.risks.append(QString::fromUtf8("普通镜头当前 WD 必须大于焦距，薄透镜近似才有有效正倍率"));
             result.lensFormulaSummary = QString::fromUtf8("普通镜头：当前 WD 必须大于焦距，薄透镜近似才有有效正倍率");
         } else {
+            result.geometryStatus = CalculationStatus::Passed;
             result.effectiveFovWidthMm = result.sensorWidthMm
                 * (input.request.workingDistanceMm - lens.focalLengthMm)
                 / lens.focalLengthMm;
@@ -346,6 +378,23 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
             }
         }
     }
+
+    if (result.geometryStatus != CalculationStatus::Passed) {
+        result.geometryStatus = CalculationStatus::Invalid;
+        result.samplingStatus = CalculationStatus::Invalid;
+    } else {
+        result.samplingStatus = result.requirement.valid
+            ? checkUpperBound(result.lensObjectPixelSizeUm, result.requirement.targetObjectPixelUm)
+            : CalculationStatus::Unknown;
+        if (!input.telecentricMode && result.samplingStatus == CalculationStatus::Failed)
+            result.risks.append(QStringLiteral("普通镜头实际物方像素粗于目标，当前方案采样不满足"));
+        else if (!input.telecentricMode && result.samplingStatus == CalculationStatus::Passed)
+            result.reasons.append(QStringLiteral("普通镜头实际采样满足目标物方像素"));
+    }
+    result.dofStatus = input.request.heightVariationMm <= 0.0 ? CalculationStatus::NotApplicable
+        : (result.estimatedDofMm > 0.0
+            ? checkUpperBound(input.request.heightVariationMm * 1.5, result.estimatedDofMm)
+            : CalculationStatus::Unknown);
 
     if (lens.imageCircleMm > 0.0 && result.sensorDiagonalMm > lens.imageCircleMm) {
         result.risks.append(QString::fromUtf8("镜头像面小于传感器对角线，存在暗角风险"));
@@ -410,6 +459,8 @@ QVector<CameraCalculationEstimate> CalculationAssistant::estimateCameras(const S
 {
     const RequirementEstimate requirement = estimateRequirement(request);
     QVector<CameraCalculationEstimate> estimates;
+    if (!requirement.valid)
+        return estimates;
     estimates.reserve(cameras.size());
 
     const double fovW = requirement.requiredFovWidthMm;
@@ -457,6 +508,8 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
 {
     const RequirementEstimate requirement = estimateRequirement(request);
     QVector<LensCalculationEstimate> estimates;
+    if (!requirement.valid)
+        return estimates;
     estimates.reserve(lenses.size());
 
     const double sensorW = camera.sensorWidthMm();

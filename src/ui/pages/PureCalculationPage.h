@@ -1,75 +1,120 @@
 #ifndef PURECALCULATIONPAGE_H
 #define PURECALCULATIONPAGE_H
 
-#include "selection/CalculationAssistant.h"
+#include "core/SelectionTypes.h"
+#include "selection/ParameterCalculator.h"
+#include "ui/ParameterWorkspaceState.h"
 
+#include <QMap>
 #include <QWidget>
 
+class CatalogRepository;
+class FovDiagram;
+class ParameterNumberField;
+class QBoxLayout;
 class QCheckBox;
 class QComboBox;
-class QDoubleSpinBox;
 class QFrame;
-class QSpinBox;
-class QTextEdit;
+class QGridLayout;
+class QLabel;
+class QLineEdit;
+class QPushButton;
+class QScrollArea;
+class QStackedWidget;
+class QTabBar;
+class QTableWidget;
+class QTextBrowser;
 
 class PureCalculationPage : public QWidget
 {
     Q_OBJECT
-
 public:
     explicit PureCalculationPage(QWidget *parent = nullptr);
-    PureCalculationInput input() const;
+    ParameterWorkspaceState workspaceState() const;
+    void restoreWorkspaceState(const ParameterWorkspaceState &state);
+    void setCatalog(const CatalogRepository *catalog);
+    void importCamera(const CameraSpec &camera);
+    void importLens(const LensSpec &lens);
+    void setTask(const QString &task);
+    QString task() const;
+    void saveSnapshot(int slot);
 
 public slots:
     void refresh();
     void resetDefaults();
 
-private:
-    void updateLensParameterVisibility();
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 
-    QDoubleSpinBox *m_widthSpin = nullptr;
-    QDoubleSpinBox *m_heightSpin = nullptr;
-    QDoubleSpinBox *m_marginSpin = nullptr;
-    QDoubleSpinBox *m_minFeatureSpin = nullptr;
-    QDoubleSpinBox *m_toleranceSpin = nullptr;
-    QDoubleSpinBox *m_wdSpin = nullptr;
-    QDoubleSpinBox *m_heightVariationSpin = nullptr;
-    QDoubleSpinBox *m_speedSpin = nullptr;
-    QDoubleSpinBox *m_fpsSpin = nullptr;
-    QComboBox *m_detectionCombo = nullptr;
-    QComboBox *m_surfaceCombo = nullptr;
-    QComboBox *m_motionModeCombo = nullptr;
-    QCheckBox *m_reflectiveCheck = nullptr;
-    QSpinBox *m_resolutionXSpin = nullptr;
-    QSpinBox *m_resolutionYSpin = nullptr;
-    QDoubleSpinBox *m_pixelSizeSpin = nullptr;
-    QDoubleSpinBox *m_maxFpsSpin = nullptr;
-    QDoubleSpinBox *m_bitDepthSpin = nullptr;
-    QDoubleSpinBox *m_interfaceBandwidthSpin = nullptr;
-    QComboBox *m_shutterCombo = nullptr;
-    QComboBox *m_lensModeCombo = nullptr;
-    QFrame *m_fixedLensGroup = nullptr;
-    QFrame *m_telecentricLensGroup = nullptr;
-    QDoubleSpinBox *m_focalSpin = nullptr;
-    QDoubleSpinBox *m_fNumberSpin = nullptr;
-    QDoubleSpinBox *m_minWdSpin = nullptr;
-    QDoubleSpinBox *m_distortionSpin = nullptr;
-    QDoubleSpinBox *m_imageCircleSpin = nullptr;
-    QDoubleSpinBox *m_lensMpSpin = nullptr;
-    QDoubleSpinBox *m_teleFNumberSpin = nullptr;
-    QDoubleSpinBox *m_teleDistortionSpin = nullptr;
-    QDoubleSpinBox *m_teleImageCircleSpin = nullptr;
-    QDoubleSpinBox *m_teleLensMpSpin = nullptr;
-    QDoubleSpinBox *m_pmagSpin = nullptr;
-    QDoubleSpinBox *m_nominalWdSpin = nullptr;
-    QDoubleSpinBox *m_wdToleranceSpin = nullptr;
-    QDoubleSpinBox *m_dofSpin = nullptr;
-    QDoubleSpinBox *m_telecentricitySpin = nullptr;
-    QComboBox *m_lightTypeCombo = nullptr;
-    QComboBox *m_lightModeCombo = nullptr;
-    QDoubleSpinBox *m_lightWidthSpin = nullptr;
-    QDoubleSpinBox *m_lightHeightSpin = nullptr;
-    QTextEdit *m_output = nullptr;
+private:
+    ParameterNumberField *addNumber(QGridLayout *grid, const QString &key, const QString &label,
+                                   const QString &unit, int row, int column, bool integer = false);
+    QComboBox *addChoice(QGridLayout *grid, const QString &key, const QString &label,
+                        const QStringList &labels, const QStringList &values, int row, int column, int span = 1);
+    QCheckBox *addFlag(QGridLayout *grid, const QString &key, const QString &label, int row);
+    QLineEdit *addText(QGridLayout *grid, const QString &key, const QString &label, int row, int column, int span = 1);
+    QGridLayout *makePanel(const QString &description);
+    void buildPanels();
+    void updateVisibility();
+    void fieldChanged(const QString &key);
+    QString cameraSignature() const;
+    void invalidateMeasuredFov();
+    void clearLensSpecifications();
+    void clearCurrentTask();
+    void copyReport();
+    void updateSnapshots();
+    void chooseCamera();
+    void chooseLens(bool matched);
+    void applyToCheck();
+    void showRows(const QStringList &headers, const QVector<QStringList> &rows);
+    void metric(int index, const QString &label, Parameters::Number value, const QString &unit);
+    void metricText(int index, const QString &label, const QString &text);
+    void setSource(const QString &scope, const QString &type, const QString &label = QString());
+    QString sourceText(const QString &scope) const;
+    Parameters::Number number(const QString &key) const;
+    QString choice(const QString &key) const;
+    void setNumber(const QString &key, Parameters::Number value);
+    void setChoice(const QString &key, const QString &value);
+    QPair<Parameters::Number, Parameters::Number> targetFov(const QString &prefix) const;
+    Parameters::Sensor sensor() const;
+    Parameters::OpticsInput opticsInput() const;
+    Parameters::SystemInput systemInput() const;
+    Parameters::TelecentricInput telecentricInput() const;
+    SelectionRequest candidateRequest() const;
+
+    const CatalogRepository *m_catalog = nullptr;
+    QMap<QString, ParameterNumberField *> m_fields;
+    QMap<QString, QComboBox *> m_choices;
+    QMap<QString, QCheckBox *> m_flags;
+    QMap<QString, QLineEdit *> m_texts;
+    QMap<QString, QWidget *> m_wrappers;
+    QJsonObject m_provenance;
+    QJsonArray m_snapshots;
+    QString m_cameraMount;
+    QString m_lastCameraSignature;
+    bool m_loading = false;
+    QTabBar *m_tasks;
+    QFrame *m_cameraPanel;
+    QLabel *m_cameraSource;
+    QLabel *m_taskSource;
+    QStackedWidget *m_inputs;
+    QBoxLayout *m_columns;
+    QScrollArea *m_scroll;
+    QPushButton *m_importCamera;
+    QPushButton *m_importLens;
+    QPushButton *m_matchLens;
+    QPushButton *m_applyCheck;
+    QLabel *m_resultStatus;
+    QLabel *m_resultNote;
+    QLabel *m_metricLabels[3];
+    QLabel *m_metricValues[3];
+    QTableWidget *m_results;
+    FovDiagram *m_diagram;
+    QTextBrowser *m_compare;
+    QCheckBox *m_compareToggle;
+    QVector<double> m_comparisonValues;
+    QString m_comparisonKind;
+    QString m_report;
 };
 
 #endif

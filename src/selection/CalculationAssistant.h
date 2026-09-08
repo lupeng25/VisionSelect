@@ -2,10 +2,12 @@
 #define CALCULATIONASSISTANT_H
 
 #include "core/SelectionTypes.h"
+#include "selection/CalculationStatus.h"
 
 #include <QVector>
 
 struct RequirementEstimate {
+    bool valid = false;
     double requiredFovWidthMm = 0.0;
     double requiredFovHeightMm = 0.0;
     double targetObjectPixelUm = 0.0;
@@ -68,6 +70,13 @@ struct PureCalculationInput {
 
 struct PureCalculationResult {
     RequirementEstimate requirement;
+    CalculationStatus geometryStatus = CalculationStatus::Unknown;
+    CalculationStatus samplingStatus = CalculationStatus::Unknown;
+    CalculationStatus fpsStatus = CalculationStatus::Unknown;
+    CalculationStatus bandwidthStatus = CalculationStatus::Unknown;
+    CalculationStatus dofStatus = CalculationStatus::Unknown;
+    CalculationStatus telecentricErrorStatus = CalculationStatus::NotApplicable;
+    bool payloadEstimated = true;
     double sensorWidthMm = 0.0;
     double sensorHeightMm = 0.0;
     double sensorDiagonalMm = 0.0;

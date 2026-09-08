@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-find_package(Qt6 6.10.1 REQUIRED COMPONENTS Core Gui Widgets Sql Concurrent PrintSupport Test)
+find_package(Qt6 6.10.1 REQUIRED COMPONENTS Core Gui Widgets Sql Concurrent PrintSupport Test Svg)
 qt_standard_project_setup(REQUIRES 6.10)
 
 if(MSVC)
@@ -31,6 +31,7 @@ set(VS_RESOURCE_FILES
     resources/icons/visionselect_icon_256.png
     resources/icons/visionselect_icon_64.png
     resources/icons/ui/assistant.png
+    resources/icons/ui/check.svg
     resources/icons/ui/arrow-down.svg
     resources/icons/ui/arrow-down-light.svg
     resources/icons/ui/arrow-up.svg
@@ -54,6 +55,8 @@ set(VS_RESOURCE_FILES
 )
 
 add_library(visionselect_core STATIC
+    src/core/SamplingPolicy.cpp
+    src/core/PixelFormat.cpp
     src/core/Localization.cpp
     src/core/SelectionTypes.cpp
     src/i18n/LanguageManager.cpp
@@ -66,6 +69,7 @@ target_include_directories(visionselect_catalog PUBLIC "${VS_INCLUDE_DIR}")
 target_link_libraries(visionselect_catalog PUBLIC visionselect_core Qt6::Sql)
 
 add_library(visionselect_selection STATIC
+    src/selection/ParameterCalculator.cpp
     src/selection/CalculationAssistant.cpp
     src/selection/SelectionEngine.cpp
     src/selection/SelectionService.cpp
@@ -96,13 +100,16 @@ add_library(visionselect_ui_support STATIC
     src/ui/UiThemeManager.cpp
 )
 target_include_directories(visionselect_ui_support PUBLIC "${VS_INCLUDE_DIR}")
-target_link_libraries(visionselect_ui_support PUBLIC visionselect_core Qt6::Widgets)
+target_link_libraries(visionselect_ui_support PUBLIC visionselect_core Qt6::Widgets Qt6::Svg)
 
 add_library(visionselect_report STATIC src/report/PdfReportWriter.cpp)
 target_include_directories(visionselect_report PUBLIC "${VS_INCLUDE_DIR}")
 target_link_libraries(visionselect_report PUBLIC visionselect_selection visionselect_ui_support Qt6::PrintSupport)
 
 add_library(visionselect_ui STATIC
+    src/ui/ParameterNumberField.cpp
+    src/ui/FovDiagram.cpp
+    src/ui/ParameterCatalogDialog.cpp
     src/ui/CatalogDialogs.cpp
     src/ui/LicenseDialog.cpp
     src/ui/MainWindow.cpp
@@ -110,6 +117,9 @@ add_library(visionselect_ui STATIC
     src/ui/pages/CatalogPage.cpp
     src/ui/pages/InputPage.cpp
     src/ui/pages/PureCalculationPage.cpp
+    src/ui/pages/PureCalculationPanels.cpp
+    src/ui/pages/PureCalculationResults.cpp
+    src/ui/pages/PureCalculationCatalog.cpp
     src/ui/pages/ResultsPage.cpp
     src/ui/pages/ThreeDCameraPage.cpp
 )

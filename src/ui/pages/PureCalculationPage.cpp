@@ -1,507 +1,404 @@
 #include "ui/pages/PureCalculationPage.h"
 
-#include "core/SelectionTypes.h"
-#include "ui/UiHelpers.h"
+#include "ui/FovDiagram.h"
+#include "ui/ParameterNumberField.h"
+#include "ui/ParameterUi.h"
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
-#include <QDoubleSpinBox>
+#include <QDateTime>
 #include <QFrame>
 #include <QGridLayout>
-#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QJsonDocument>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMenu>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollArea>
-#include <QSizePolicy>
-#include <QSpinBox>
-#include <QTextEdit>
+#include <QScrollBar>
+#include <QStackedWidget>
+#include <QTabBar>
+#include <QTableWidget>
+#include <QTextBrowser>
+#include <QToolButton>
+#include <QTimer>
 #include <QVBoxLayout>
 
 using namespace UiHelpers;
+using namespace ParameterUi;
 
-PureCalculationPage::PureCalculationPage(QWidget *parent)
-    : QWidget(parent)
+namespace {
+class TaskStack : public QStackedWidget
 {
-    QVBoxLayout *outer = new QVBoxLayout(this);
-    outer->setContentsMargins(28, 24, 28, 24);
-    outer->setSpacing(14);
-    outer->addWidget(pageHeader(localizedText("视觉参数校算", "Vision Parameter Check"),
-        localizedText("手动输入相机、镜头和光源参数，用于快速视觉参数校算。", "Manually enter camera, lens, and light parameters for quick vision parameter checks.")));
+public:
+    QSize sizeHint() const override { return currentWidget() ? currentWidget()->sizeHint() : QSize(0, 0); }
+    QSize minimumSizeHint() const override { return QSize(0, 0); }
+};
+}
 
-    QHBoxLayout *body = new QHBoxLayout;
-    body->setSpacing(14);
+PureCalculationPage::PureCalculationPage(QWidget *parent) : QWidget(parent)
+{
+    m_loading = true;
+    setObjectName(QStringLiteral("ParameterWorkbench"));
+    auto *root = new QVBoxLayout(this);
+    root->setContentsMargins(16, 8, 16, 0);
+    root->setSpacing(12);
+    auto *actions = new QWidget;
+    auto *actionLayout = new QHBoxLayout(actions);
+    actionLayout->setContentsMargins(0, 0, 0, 0);
+    auto *example = actionButton(localizedText("载入示例", "Load example"), QString(), true);
+    example->setObjectName(QStringLiteral("WorkbenchExample"));
+    auto *more = new QToolButton;
+    more->setText(localizedText("更多", "More"));
+    more->setPopupMode(QToolButton::InstantPopup);
+    auto *menu = new QMenu(more);
+    menu->addAction(localizedText("清空当前任务", "Clear current task"), this, &PureCalculationPage::clearCurrentTask);
+    menu->addAction(localizedText("复制参数与结果", "Copy inputs and results"), this, &PureCalculationPage::copyReport);
+    more->setMenu(menu);
+    actionLayout->addWidget(example);
+    actionLayout->addWidget(more);
+    root->addWidget(pageHeader(localizedText("视觉参数工作台", "Vision parameter workbench"),
+        localizedText("选择要解决的问题，填写已知量，逐项核对结果。", "Choose a task, enter known values, and inspect the results."), actions));
+    connect(example, &QPushButton::clicked, this, &PureCalculationPage::resetDefaults);
 
-    QScrollArea *inputScroll = new QScrollArea;
-    inputScroll->setObjectName(QStringLiteral("ParameterScroll"));
-    inputScroll->setWidgetResizable(true);
-    inputScroll->setFrameShape(QFrame::NoFrame);
-    inputScroll->setMinimumWidth(430);
-    inputScroll->setMaximumWidth(520);
-    QWidget *inputPanel = new QWidget;
-    inputPanel->setObjectName(QStringLiteral("ParameterInputPanel"));
-    QVBoxLayout *inputLayout = new QVBoxLayout(inputPanel);
-    inputLayout->setContentsMargins(0, 0, 8, 0);
+    m_tasks = new QTabBar;
+    m_tasks->setObjectName(QStringLiteral("WorkbenchTasks"));
+    m_tasks->setAccessibleName(localizedText("计算任务", "Calculation task"));
+    m_tasks->setExpanding(false);
+    m_tasks->setUsesScrollButtons(true);
+    m_tasks->setElideMode(Qt::ElideNone);
+    for (const QString &label : taskLabels()) m_tasks->addTab(label);
+    for (auto *button : m_tasks->findChildren<QToolButton *>()) {
+        const bool left = button->arrowType() == Qt::LeftArrow;
+        if (!left && button->arrowType() != Qt::RightArrow) continue;
+        button->setArrowType(Qt::NoArrow);
+        button->setText(left ? QStringLiteral("‹") : QStringLiteral("›"));
+        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        button->setAccessibleName(left ? localizedText("前面的任务", "Earlier tasks") : localizedText("后面的任务", "Later tasks"));
+    }
+    root->addWidget(m_tasks);
+
+    m_cameraPanel = new QFrame;
+    m_cameraPanel->setObjectName(QStringLiteral("ParameterGroup"));
+    auto *cameraLayout = new QVBoxLayout(m_cameraPanel);
+    auto *cameraHeading = new QHBoxLayout;
+    m_cameraSource = new QLabel;
+    m_cameraSource->setTextFormat(Qt::PlainText);
+    m_cameraSource->setWordWrap(true);
+    m_cameraSource->setObjectName(QStringLiteral("WorkbenchCameraSource"));
+    m_importCamera = actionButton(localizedText("从产品库选相机", "Select camera"), QString(), true);
+    m_importCamera->setObjectName(QStringLiteral("WorkbenchImportCamera"));
+    cameraHeading->addWidget(m_cameraSource, 1);
+    cameraHeading->addWidget(m_importCamera);
+    cameraLayout->addLayout(cameraHeading);
+    auto *cameraGrid = new QGridLayout;
+    cameraGrid->setHorizontalSpacing(14);
+    addNumber(cameraGrid, "camera.nx", localizedText("有效分辨率 X", "Effective resolution X"), "px", 0, 0, true);
+    addNumber(cameraGrid, "camera.ny", localizedText("有效分辨率 Y", "Effective resolution Y"), "px", 0, 1, true);
+    addNumber(cameraGrid, "camera.pixel", localizedText("像元尺寸", "Pixel pitch"), "μm", 0, 2);
+    cameraLayout->addLayout(cameraGrid);
+    root->addWidget(m_cameraPanel);
+
+    m_scroll = new QScrollArea;
+    m_scroll->setObjectName(QStringLiteral("WorkbenchScroll"));
+    m_scroll->setWidgetResizable(true);
+    m_scroll->setFrameShape(QFrame::NoFrame);
+    m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto *content = new QWidget;
+    content->setObjectName(QStringLiteral("ParameterInputPanel"));
+    auto *contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(0, 0, 6, 0);
+    m_columns = new QBoxLayout(QBoxLayout::LeftToRight);
+    m_columns->setSpacing(16);
+    auto *inputFrame = new QFrame;
+    inputFrame->setObjectName(QStringLiteral("ParameterGroup"));
+    inputFrame->setMinimumWidth(0);
+    auto *inputLayout = new QVBoxLayout(inputFrame);
     inputLayout->setSpacing(12);
-
-    const auto prepareControl = [](QWidget *control) {
-        control->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        control->setMinimumWidth(0);
-        if (QComboBox *combo = qobject_cast<QComboBox *>(control)) {
-            combo->setMinimumContentsLength(0);
-            combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-        }
-    };
-    const auto field = [prepareControl](const QString &labelText, QWidget *control) {
-        QWidget *holder = new QWidget;
-        holder->setObjectName(QStringLiteral("ParameterField"));
-        QVBoxLayout *layout = new QVBoxLayout(holder);
-        layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(5);
-        QLabel *label = new QLabel(labelText);
-        label->setObjectName(QStringLiteral("ParameterFieldLabel"));
-        label->setToolTip(labelText);
-        prepareControl(control);
-        layout->addWidget(label);
-        layout->addWidget(control);
-        return holder;
-    };
-
-    struct ParameterGroup {
-        QFrame *frame;
-        QGridLayout *grid;
-    };
-    const auto makeGroup = [](const QString &title, const QString &subtitle) -> ParameterGroup {
-        QFrame *group = new QFrame;
-        group->setObjectName(QStringLiteral("ParameterGroup"));
-        QVBoxLayout *layout = new QVBoxLayout(group);
-        layout->setContentsMargins(14, 12, 14, 14);
-        layout->setSpacing(9);
-        QLabel *titleLabel = new QLabel(title);
-        titleLabel->setObjectName(QStringLiteral("ParameterGroupTitle"));
-        layout->addWidget(titleLabel);
-        if (!subtitle.isEmpty()) {
-            QLabel *subtitleLabel = new QLabel(subtitle);
-            subtitleLabel->setObjectName(QStringLiteral("ParameterGroupSubtitle"));
-            subtitleLabel->setWordWrap(true);
-            layout->addWidget(subtitleLabel);
-        }
-        QGridLayout *grid = new QGridLayout;
-        grid->setContentsMargins(0, 0, 0, 0);
-        grid->setHorizontalSpacing(10);
-        grid->setVerticalSpacing(9);
-        grid->setColumnStretch(0, 1);
-        grid->setColumnStretch(1, 1);
-        layout->addLayout(grid);
-        return ParameterGroup{group, grid};
-    };
-
-    ParameterGroup requestGroup = makeGroup(
-        localizedText("需求", "Requirements"),
-        localizedText("定义工件、精度、节拍和工艺约束。", "Define part size, accuracy, takt, and process constraints."));
-    const SelectionRequest defaultRequest;
-    m_widthSpin = makeSpin(0.1, 2000.0, defaultRequest.objectWidthMm, QStringLiteral(" mm"));
-    m_heightSpin = makeSpin(0.1, 2000.0, defaultRequest.objectHeightMm, QStringLiteral(" mm"));
-    m_marginSpin = makeSpin(0.0, 200.0, defaultRequest.placementMarginMm, QStringLiteral(" mm"));
-    m_minFeatureSpin = makeSpin(0.1, 10000.0, defaultRequest.minFeatureUm, QStringLiteral(" um"));
-    m_toleranceSpin = makeSpin(0.1, 10000.0, defaultRequest.measurementToleranceUm, QStringLiteral(" um"));
-    m_wdSpin = makeSpin(5.0, 3000.0, defaultRequest.workingDistanceMm, QStringLiteral(" mm"));
-    m_heightVariationSpin = makeSpin(0.0, 200.0, defaultRequest.heightVariationMm, QStringLiteral(" mm"));
-    m_speedSpin = makeSpin(0.0, 10000.0, defaultRequest.motionSpeedMmS, QStringLiteral(" mm/s"));
-    m_fpsSpin = makeSpin(1.0, 1000.0, defaultRequest.requiredFps, QStringLiteral(" fps"));
-    m_motionModeCombo = new QComboBox;
-    m_motionModeCombo->addItems({motionModeLabel(MotionMode::Static),
-                                 motionModeLabel(MotionMode::StopAndGo),
-                                 motionModeLabel(MotionMode::Continuous)});
-    m_motionModeCombo->setCurrentIndex(static_cast<int>(defaultRequest.motionMode));
-    m_detectionCombo = new QComboBox;
-    m_detectionCombo->addItems({detectionTypeLabel(DetectionType::Measurement),
-                                detectionTypeLabel(DetectionType::Positioning),
-                                detectionTypeLabel(DetectionType::DefectInspection),
-                                detectionTypeLabel(DetectionType::OcrCode)});
-    m_surfaceCombo = new QComboBox;
-    m_surfaceCombo->addItems({surfaceTypeLabel(SurfaceType::Matte),
-                              surfaceTypeLabel(SurfaceType::ReflectiveMetal),
-                              surfaceTypeLabel(SurfaceType::GlassTransparent),
-                              surfaceTypeLabel(SurfaceType::PCB),
-                              surfaceTypeLabel(SurfaceType::Plastic),
-                              surfaceTypeLabel(SurfaceType::Mixed)});
-    m_detectionCombo->setCurrentIndex(static_cast<int>(defaultRequest.detectionType));
-    m_surfaceCombo->setCurrentIndex(static_cast<int>(defaultRequest.surfaceType));
-    m_reflectiveCheck = new QCheckBox(localizedText("反光/高光表面", "Reflective / glossy surface"));
-    m_reflectiveCheck->setChecked(defaultRequest.reflective);
-    requestGroup.grid->addWidget(field(localizedText("工件宽度", "Part width"), m_widthSpin), 0, 0);
-    requestGroup.grid->addWidget(field(localizedText("工件高度", "Part height"), m_heightSpin), 0, 1);
-    requestGroup.grid->addWidget(field(localizedText("定位/装夹余量", "Positioning / fixture margin"), m_marginSpin), 1, 0);
-    requestGroup.grid->addWidget(field(localizedText("最小特征", "Minimum feature"), m_minFeatureSpin), 1, 1);
-    requestGroup.grid->addWidget(field(localizedText("允许测量误差", "Allowed measurement error"), m_toleranceSpin), 2, 0);
-    requestGroup.grid->addWidget(field(localizedText("工作距离", "Working distance"), m_wdSpin), 2, 1);
-    requestGroup.grid->addWidget(field(localizedText("高度波动", "Height variation"), m_heightVariationSpin), 3, 0);
-    requestGroup.grid->addWidget(field(localizedText("运动模式", "Motion mode"), m_motionModeCombo), 3, 1);
-    requestGroup.grid->addWidget(field(localizedText("运动速度", "Motion speed"), m_speedSpin), 4, 0);
-    requestGroup.grid->addWidget(field(localizedText("节拍/帧率", "Cycle / frame rate"), m_fpsSpin), 4, 1);
-    requestGroup.grid->addWidget(field(localizedText("检测类型", "Inspection type"), m_detectionCombo), 5, 0);
-    requestGroup.grid->addWidget(field(localizedText("表面材质", "Surface material"), m_surfaceCombo), 5, 1);
-    requestGroup.grid->addWidget(field(localizedText("表面条件", "Surface condition"), m_reflectiveCheck), 6, 0, 1, 2);
-
-    ParameterGroup cameraGroup = makeGroup(
-        localizedText("手动相机参数", "Manual Camera Parameters"),
-        localizedText("输入分辨率、像元、位深和接口能力。", "Enter resolution, pixel size, bit depth, and interface capacity."));
-    m_resolutionXSpin = dialogIntSpin(1, 200000, 2448);
-    m_resolutionYSpin = dialogIntSpin(1, 200000, 2048);
-    m_pixelSizeSpin = makeSpin(0.01, 1000.0, 3.45, QStringLiteral(" um"));
-    m_maxFpsSpin = makeSpin(0.0, 100000.0, 0.0, QStringLiteral(" fps"), 1);
-    m_bitDepthSpin = makeSpin(1.0, 32.0, 12.0, QStringLiteral(" bit"), 1);
-    m_interfaceBandwidthSpin = makeSpin(0.0, 100000.0, 380.0, QStringLiteral(" MB/s"), 1);
-    m_shutterCombo = new QComboBox;
-    m_shutterCombo->addItems({QStringLiteral("Global"), QStringLiteral("Rolling")});
-    cameraGroup.grid->addWidget(field(localizedText("最大帧率（0 表示未知）", "Maximum FPS (0 means unknown)"), m_maxFpsSpin), 3, 1);
-    cameraGroup.grid->addWidget(field(localizedText("分辨率 X", "Resolution X"), m_resolutionXSpin), 0, 0);
-    cameraGroup.grid->addWidget(field(localizedText("分辨率 Y", "Resolution Y"), m_resolutionYSpin), 0, 1);
-    cameraGroup.grid->addWidget(field(localizedText("像元", "Pixel size"), m_pixelSizeSpin), 1, 0);
-    cameraGroup.grid->addWidget(field(QStringLiteral("bit depth"), m_bitDepthSpin), 1, 1);
-    cameraGroup.grid->addWidget(field(localizedText("接口带宽", "Interface bandwidth"), m_interfaceBandwidthSpin), 2, 0);
-    cameraGroup.grid->addWidget(field(localizedText("快门", "Shutter"), m_shutterCombo), 2, 1);
-
-    ParameterGroup lensModeGroup = makeGroup(
-        localizedText("镜头模式", "Lens Mode"),
-        QString());
-    m_lensModeCombo = new QComboBox;
-    m_lensModeCombo->addItems({localizedText("普通镜头", "Fixed-focal Lens"), localizedText("远心镜头", "Telecentric Lens")});
-    lensModeGroup.grid->addWidget(field(localizedText("模式", "Mode"), m_lensModeCombo), 0, 0);
-
-    ParameterGroup fixedLensGroup = makeGroup(
-        localizedText("普通镜头参数", "Fixed-focal Lens Parameters"),
-        localizedText("按焦距、当前 WD 和相机靶面估算 FOV、倍率、景深和畸变误差。", "Estimate FOV, magnification, DOF, and distortion from focal length, current WD, and sensor size."));
-    m_fixedLensGroup = fixedLensGroup.frame;
-    m_focalSpin = makeSpin(0.1, 10000.0, 25.0, QStringLiteral(" mm"), 2);
-    m_fNumberSpin = makeSpin(0.0, 1000.0, 4.0, QStringLiteral(" F"), 2);
-    m_minWdSpin = makeSpin(0.0, 100000.0, 100.0, QStringLiteral(" mm"), 2);
-    m_distortionSpin = makeSpin(0.0, 100.0, 0.05, QStringLiteral(" %"), 3);
-    m_imageCircleSpin = makeSpin(0.0, 1000.0, 11.0, QStringLiteral(" mm"), 2);
-    m_lensMpSpin = makeSpin(0.0, 1000.0, 5.0, QStringLiteral(" MP"), 2);
-    fixedLensGroup.grid->addWidget(field(localizedText("焦距", "Focal length"), m_focalSpin), 0, 0);
-    fixedLensGroup.grid->addWidget(field(QStringLiteral("F/#"), m_fNumberSpin), 0, 1);
-    fixedLensGroup.grid->addWidget(field(localizedText("最小 WD", "Minimum WD"), m_minWdSpin), 1, 0);
-    fixedLensGroup.grid->addWidget(field(localizedText("畸变", "Distortion"), m_distortionSpin), 1, 1);
-    fixedLensGroup.grid->addWidget(field(localizedText("像面", "Image circle"), m_imageCircleSpin), 2, 0);
-    fixedLensGroup.grid->addWidget(field(localizedText("镜头 MP", "Lens MP"), m_lensMpSpin), 2, 1);
-
-    ParameterGroup telecentricLensGroup = makeGroup(
-        localizedText("远心镜头参数", "Telecentric Lens Parameters"),
-        localizedText("按倍率 PMAG 和标称 WD 校核远心 FOV、采样、DOF、远心度和安装距离。", "Check telecentric FOV, sampling, DOF, telecentricity, and WD from PMAG and nominal WD."));
-    m_telecentricLensGroup = telecentricLensGroup.frame;
-    m_pmagSpin = makeSpin(0.001, 1000.0, 0.5, QStringLiteral("x"), 3);
-    m_nominalWdSpin = makeSpin(0.0, 100000.0, 110.0, QStringLiteral(" mm"), 2);
-    m_wdToleranceSpin = makeSpin(0.0, 10000.0, 5.0, QStringLiteral(" mm"), 2);
-    m_dofSpin = makeSpin(0.0, 100000.0, 5.0, QStringLiteral(" mm"), 2);
-    m_telecentricitySpin = makeSpin(0.0, 90.0, 0.1, QStringLiteral(" deg"), 3);
-    m_teleFNumberSpin = makeSpin(0.0, 1000.0, 8.0, QStringLiteral(" F"), 2);
-    m_teleDistortionSpin = makeSpin(0.0, 100.0, 0.05, QStringLiteral(" %"), 3);
-    m_teleImageCircleSpin = makeSpin(0.0, 1000.0, 11.0, QStringLiteral(" mm"), 2);
-    m_teleLensMpSpin = makeSpin(0.0, 1000.0, 5.0, QStringLiteral(" MP"), 2);
-    telecentricLensGroup.grid->addWidget(field(QStringLiteral("PMAG"), m_pmagSpin), 0, 0);
-    telecentricLensGroup.grid->addWidget(field(localizedText("标称 WD", "Nominal WD"), m_nominalWdSpin), 0, 1);
-    telecentricLensGroup.grid->addWidget(field(localizedText("WD 容差", "WD tolerance"), m_wdToleranceSpin), 1, 0);
-    telecentricLensGroup.grid->addWidget(field(QStringLiteral("DOF"), m_dofSpin), 1, 1);
-    telecentricLensGroup.grid->addWidget(field(localizedText("远心度", "Telecentricity"), m_telecentricitySpin), 2, 0);
-    telecentricLensGroup.grid->addWidget(field(QStringLiteral("F/#"), m_teleFNumberSpin), 2, 1);
-    telecentricLensGroup.grid->addWidget(field(localizedText("畸变", "Distortion"), m_teleDistortionSpin), 3, 0);
-    telecentricLensGroup.grid->addWidget(field(localizedText("像面/最大靶面", "Image circle / max sensor"), m_teleImageCircleSpin), 3, 1);
-    telecentricLensGroup.grid->addWidget(field(localizedText("镜头 MP", "Lens MP"), m_teleLensMpSpin), 4, 0);
-
-    ParameterGroup lightGroup = makeGroup(
-        localizedText("光源约束", "Lighting Constraints"),
-        localizedText("输入照明类型、触发模式和有效照明范围。", "Enter light type, trigger mode, and active lighting area."));
-    m_lightTypeCombo = new QComboBox;
-    m_lightTypeCombo->addItems({lightTypeLabel(LightType::Backlight),
-                                lightTypeLabel(LightType::Ring),
-                                lightTypeLabel(LightType::Bar),
-                                lightTypeLabel(LightType::Coaxial),
-                                lightTypeLabel(LightType::Dome),
-                                lightTypeLabel(LightType::TelecentricBacklight),
-                                lightTypeLabel(LightType::DarkField)});
-    m_lightModeCombo = new QComboBox;
-    m_lightModeCombo->addItems({QStringLiteral("Continuous"), QStringLiteral("Strobe"), QStringLiteral("Trigger")});
-    m_lightWidthSpin = makeSpin(0.0, 100000.0, 100.0, QStringLiteral(" mm"), 1);
-    m_lightHeightSpin = makeSpin(0.0, 100000.0, 100.0, QStringLiteral(" mm"), 1);
-    lightGroup.grid->addWidget(field(localizedText("光型", "Light type"), m_lightTypeCombo), 0, 0);
-    lightGroup.grid->addWidget(field(localizedText("模式", "Mode"), m_lightModeCombo), 0, 1);
-    lightGroup.grid->addWidget(field(localizedText("有效宽度", "Active width"), m_lightWidthSpin), 1, 0);
-    lightGroup.grid->addWidget(field(localizedText("有效高度", "Active height"), m_lightHeightSpin), 1, 1);
-
-    inputLayout->addWidget(requestGroup.frame);
-    inputLayout->addWidget(cameraGroup.frame);
-    inputLayout->addWidget(lensModeGroup.frame);
-    inputLayout->addWidget(fixedLensGroup.frame);
-    inputLayout->addWidget(telecentricLensGroup.frame);
-    inputLayout->addWidget(lightGroup.frame);
+    m_taskSource = new QLabel;
+    m_taskSource->setTextFormat(Qt::PlainText);
+    m_taskSource->setWordWrap(true);
+    inputLayout->addWidget(m_taskSource);
+    auto *lensActions = new QHBoxLayout;
+    m_importLens = actionButton(localizedText("选用已有镜头", "Select existing lens"), QString(), true);
+    m_matchLens = actionButton(localizedText("按当前条件找镜头", "Find matching lenses"), QString(), true);
+    m_importLens->setObjectName(QStringLiteral("WorkbenchImportLens"));
+    m_matchLens->setObjectName(QStringLiteral("WorkbenchMatchLens"));
+    lensActions->addWidget(m_importLens);
+    lensActions->addWidget(m_matchLens);
+    inputLayout->addLayout(lensActions);
+    m_inputs = new TaskStack;
+    m_inputs->setObjectName(QStringLiteral("ParameterInputPanel"));
+    m_inputs->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    buildPanels();
+    inputLayout->addWidget(m_inputs);
     inputLayout->addStretch();
-    inputScroll->setWidget(inputPanel);
 
-    QFrame *outputPanel = new QFrame;
-    outputPanel->setObjectName(QStringLiteral("CalculationResultPanel"));
-    QVBoxLayout *outputLayout = new QVBoxLayout(outputPanel);
-    outputLayout->setContentsMargins(16, 14, 16, 16);
+    auto *outputFrame = new QFrame;
+    outputFrame->setObjectName(QStringLiteral("ParameterGroup"));
+    outputFrame->setMinimumWidth(0);
+    auto *outputLayout = new QVBoxLayout(outputFrame);
     outputLayout->setSpacing(12);
-    QHBoxLayout *actions = new QHBoxLayout;
-    actions->setContentsMargins(0, 0, 0, 0);
-    QWidget *resultHeader = new QWidget(outputPanel);
-    resultHeader->setObjectName(QStringLiteral("CalculationResultHeader"));
-    QVBoxLayout *resultHeaderLayout = new QVBoxLayout(resultHeader);
-    resultHeaderLayout->setContentsMargins(0, 0, 0, 0);
-    resultHeaderLayout->setSpacing(3);
-    QLabel *resultTitle = new QLabel(localizedText("计算结果", "Calculation Result"));
-    resultTitle->setObjectName(QStringLiteral("CalculationResultTitle"));
-    QLabel *resultSubtitle = new QLabel(localizedText(
-        "根据当前手动参数输出需求、相机、镜头和光源校核结论。",
-        "Review requirement, camera, lens, and lighting estimates from the current manual parameters."));
-    resultSubtitle->setObjectName(QStringLiteral("CalculationResultSubtitle"));
-    resultSubtitle->setWordWrap(true);
-    resultHeaderLayout->addWidget(resultTitle);
-    resultHeaderLayout->addWidget(resultSubtitle);
-    actions->addWidget(resultHeader, 1);
-    QPushButton *calculateButton = actionButton(localizedText("计算", "Calculate"), QStringLiteral(":/icons/ui/calculate.png"));
-    QPushButton *resetButton = actionButton(localizedText("恢复默认", "Reset Defaults"), QStringLiteral(":/icons/ui/info.png"), true);
-    actions->addWidget(resetButton);
-    actions->addWidget(calculateButton);
-    outputLayout->addLayout(actions);
-
-    m_output = new QTextEdit;
-    m_output->setObjectName(QStringLiteral("CalculationResultText"));
-    m_output->setReadOnly(true);
-    outputLayout->addWidget(m_output, 1);
-
-    body->addWidget(inputScroll);
-    body->addWidget(outputPanel, 1);
-    outer->addLayout(body, 1);
-
-    connect(calculateButton, &QPushButton::clicked, this, &PureCalculationPage::refresh);
-    connect(resetButton, &QPushButton::clicked, this, &PureCalculationPage::resetDefaults);
-    connect(m_lensModeCombo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
-            this, [this]() { updateLensParameterVisibility(); });
-    updateLensParameterVisibility();
-}
-
-PureCalculationInput PureCalculationPage::input() const
-{
-    PureCalculationInput input;
-    SelectionRequest &request = input.request;
-    request.objectWidthMm = m_widthSpin->value();
-    request.objectHeightMm = m_heightSpin->value();
-    request.placementMarginMm = m_marginSpin->value();
-    request.minFeatureUm = m_minFeatureSpin->value();
-    request.measurementToleranceUm = m_toleranceSpin->value();
-    request.workingDistanceMm = m_wdSpin->value();
-    request.heightVariationMm = m_heightVariationSpin->value();
-    request.motionMode = motionModeFromIndex(m_motionModeCombo->currentIndex());
-    request.motionSpeedMmS = m_speedSpin->value();
-    request.requiredFps = m_fpsSpin->value();
-    request.detectionType = detectionTypeFromIndex(m_detectionCombo->currentIndex());
-    request.surfaceType = surfaceTypeFromIndex(m_surfaceCombo->currentIndex());
-    request.reflective = m_reflectiveCheck->isChecked();
-    request.preferMono = true;
-    request.allowTelecentric = true;
-
-    CameraSpec &camera = input.camera;
-    camera.model = QStringLiteral("ManualCamera");
-    camera.manufacturer = QStringLiteral("Manual");
-    camera.resolutionX = m_resolutionXSpin->value();
-    camera.resolutionY = m_resolutionYSpin->value();
-    camera.pixelSizeUm = m_pixelSizeSpin->value();
-    camera.colorMode = QStringLiteral("Mono");
-    camera.shutterType = m_shutterCombo->currentText();
-    camera.maxFps = m_maxFpsSpin->value();
-    camera.interfaceType = QStringLiteral("Manual");
-    camera.bandwidthMBps = m_interfaceBandwidthSpin->value();
-    camera.bitDepth = m_bitDepthSpin->value();
-    camera.lensMount = QStringLiteral("C");
-
-    LensSpec &lens = input.lens;
-    input.telecentricMode = m_lensModeCombo->currentIndex() == 1;
-    lens.model = input.telecentricMode ? QStringLiteral("ManualTelecentricLens") : QStringLiteral("ManualFixedLens");
-    lens.manufacturer = QStringLiteral("Manual");
-    lens.lensType = input.telecentricMode ? LensType::ObjectTelecentric : LensType::FixedFocal;
-    lens.lensMount = QStringLiteral("C");
-    if (input.telecentricMode) {
-        lens.focalLengthMm = 0.0;
-        lens.minWorkingDistanceMm = 0.0;
-        lens.distortionPercent = m_teleDistortionSpin->value();
-        lens.imageCircleMm = m_teleImageCircleSpin->value();
-        lens.megapixelRating = m_teleLensMpSpin->value();
-        lens.pmag = m_pmagSpin->value();
-        lens.nominalWorkingDistanceMm = m_nominalWdSpin->value();
-        lens.workingDistanceToleranceMm = m_wdToleranceSpin->value();
-        lens.maxSensorDiagonalMm = m_teleImageCircleSpin->value();
-        lens.telecentricityDeg = m_telecentricitySpin->value();
-        lens.dofMm = m_dofSpin->value();
-        lens.fNumber = m_teleFNumberSpin->value();
-    } else {
-        lens.focalLengthMm = m_focalSpin->value();
-        lens.minWorkingDistanceMm = m_minWdSpin->value();
-        lens.distortionPercent = m_distortionSpin->value();
-        lens.imageCircleMm = m_imageCircleSpin->value();
-        lens.megapixelRating = m_lensMpSpin->value();
-        lens.pmag = 0.0;
-        lens.nominalWorkingDistanceMm = 0.0;
-        lens.workingDistanceToleranceMm = 0.0;
-        lens.maxSensorDiagonalMm = 0.0;
-        lens.telecentricityDeg = -1.0;
-        lens.dofMm = 0.0;
-        lens.fNumber = m_fNumberSpin->value();
+    m_resultStatus = new QLabel;
+    m_resultStatus->setObjectName(QStringLiteral("WorkbenchResultStatus"));
+    m_resultStatus->setWordWrap(true);
+    outputLayout->addWidget(m_resultStatus);
+    auto *metrics = new QGridLayout;
+    for (int i = 0; i < 3; ++i) {
+        auto *card = new QFrame;
+        card->setObjectName(QStringLiteral("WorkbenchMetric"));
+        auto *layout = new QVBoxLayout(card);
+        layout->setContentsMargins(10, 10, 10, 10);
+        m_metricLabels[i] = new QLabel;
+        m_metricLabels[i]->setWordWrap(true);
+        m_metricValues[i] = new QLabel(QStringLiteral("—"));
+        m_metricValues[i]->setTextFormat(Qt::PlainText);
+        m_metricValues[i]->setObjectName(QStringLiteral("WorkbenchMetricValue"));
+        m_metricValues[i]->setWordWrap(true);
+        m_metricValues[i]->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        layout->addWidget(m_metricLabels[i]);
+        layout->addWidget(m_metricValues[i]);
+        metrics->addWidget(card, 0, i);
+        metrics->setColumnStretch(i, 1);
     }
+    outputLayout->addLayout(metrics);
+    m_diagram = new FovDiagram;
+    outputLayout->addWidget(m_diagram);
+    m_results = new QTableWidget;
+    m_results->setObjectName(QStringLiteral("WorkbenchResults"));
+    m_results->setAccessibleName(localizedText("计算结果与逐项校核", "Calculation results and checks"));
+    setupTable(m_results);
+    m_results->setWordWrap(true);
+    m_results->setMinimumWidth(0);
+    m_results->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_results->verticalHeader()->hide();
+    outputLayout->addWidget(m_results);
+    m_resultNote = new QLabel;
+    m_resultNote->setObjectName(QStringLiteral("WorkbenchModelNote"));
+    m_resultNote->setWordWrap(true);
+    m_resultNote->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    outputLayout->addWidget(m_resultNote);
+    auto *resultActions = new QHBoxLayout;
+    m_applyCheck = actionButton(localizedText("用于方案校核", "Use in system check"), QString(), true);
+    m_applyCheck->setObjectName(QStringLiteral("WorkbenchApplyCheck"));
+    auto *copy = actionButton(localizedText("复制", "Copy"), QString(), true);
+    auto *saveA = actionButton(localizedText("保存 A", "Save A"), QString(), true);
+    auto *saveB = actionButton(localizedText("保存 B", "Save B"), QString(), true);
+    saveA->setObjectName(QStringLiteral("WorkbenchSaveA"));
+    saveB->setObjectName(QStringLiteral("WorkbenchSaveB"));
+    resultActions->addWidget(m_applyCheck);
+    resultActions->addStretch();
+    resultActions->addWidget(copy);
+    resultActions->addWidget(saveA);
+    resultActions->addWidget(saveB);
+    outputLayout->addLayout(resultActions);
+    outputLayout->addStretch();
+    m_columns->addWidget(inputFrame, 4);
+    m_columns->addWidget(outputFrame, 6);
+    contentLayout->addLayout(m_columns);
+    m_compareToggle = new QCheckBox(localizedText("展开 A/B 独立快照对照", "Show independent A/B snapshots"));
+    m_compareToggle->setObjectName(QStringLiteral("WorkbenchCompareToggle"));
+    contentLayout->addWidget(m_compareToggle);
+    m_compare = new QTextBrowser;
+    m_compare->setObjectName(QStringLiteral("WorkbenchComparison"));
+    m_compare->setMinimumHeight(300);
+    m_compare->setVisible(false);
+    contentLayout->addWidget(m_compare);
+    contentLayout->addStretch();
+    m_scroll->setWidget(content);
+    root->addWidget(m_scroll, 1);
 
-    LightSpec &light = input.light;
-    light.model = QStringLiteral("ManualLight");
-    light.manufacturer = QStringLiteral("Manual");
-    switch (m_lightTypeCombo->currentIndex()) {
-    case 0: light.lightType = LightType::Backlight; break;
-    case 1: light.lightType = LightType::Ring; break;
-    case 2: light.lightType = LightType::Bar; break;
-    case 3: light.lightType = LightType::Coaxial; break;
-    case 4: light.lightType = LightType::Dome; break;
-    case 5: light.lightType = LightType::TelecentricBacklight; break;
-    case 6: light.lightType = LightType::DarkField; break;
-    default: light.lightType = LightType::Ring; break;
-    }
-    light.mode = m_lightModeCombo->currentText();
-    light.color = QStringLiteral("White");
-    light.activeWidthMm = m_lightWidthSpin->value();
-    light.activeHeightMm = m_lightHeightSpin->value();
-    return input;
-}
-
-void PureCalculationPage::refresh()
-{
-    if (!m_output || !m_widthSpin)
-        return;
-
-    const PureCalculationInput pureInput = input();
-    const PureCalculationResult r = CalculationAssistant::estimatePure(pureInput);
-    const QString risks = r.risks.isEmpty()
-        ? localizedText("无主要风险", "No major risk")
-        : r.risks.join(localizedText("；", "; "));
-    const QString reasons = r.reasons.isEmpty()
-        ? localizedText("按当前手动参数计算", "Calculated from current manual parameters")
-        : r.reasons.join(localizedText("；", "; "));
-    const QString exposure = r.requirement.hasMotionConstraint
-        ? QStringLiteral("%1 us").arg(r.requirement.maxExposureUsForOnePixelBlur, 0, 'f', 1)
-        : localizedText("无运动约束", "No motion constraint");
-
-    QString html;
-    html += localizedText("<h3>视觉参数校算结果</h3>", "<h3>Vision Parameter Check Result</h3>");
-    html += localizedText("<h4>需求估算</h4>", "<h4>Requirement Estimate</h4>");
-    html += localizedText("<p>需求 FOV：<b>%1 x %2 mm</b>；目标物方像素：<b>%3 um/px</b>；最低分辨率：<b>%4 x %5</b>（%6 MP）；12 bit 原始带宽：<b>%7 MB/s</b>；曝光上限：<b>%8</b>。</p>",
-                          "<p>Required FOV: <b>%1 x %2 mm</b>; target object pixel: <b>%3 um/px</b>; minimum resolution: <b>%4 x %5</b> (%6 MP); 12-bit raw bandwidth: <b>%7 MB/s</b>; exposure limit: <b>%8</b>.</p>")
-        .arg(r.requirement.requiredFovWidthMm, 0, 'f', 2)
-        .arg(r.requirement.requiredFovHeightMm, 0, 'f', 2)
-        .arg(r.requirement.targetObjectPixelUm, 0, 'f', 2)
-        .arg(r.requirement.requiredResolutionX)
-        .arg(r.requirement.requiredResolutionY)
-        .arg(r.requirement.requiredMegapixels, 0, 'f', 2)
-        .arg(r.requirement.requiredBandwidthMBps12Bit, 0, 'f', 1)
-        .arg(exposure);
-
-    html += localizedText("<h4>相机估算</h4>", "<h4>Camera Estimate</h4>");
-    html += localizedText("<p>传感器：<b>%1 x %2 mm</b>，对角线 %3 mm；按需求 FOV 的物方像素：<b>%4 um/px</b>；单帧数据：%5 MB；吞吐：%6 MB/s；接口带宽：%7 MB/s；利用率：<b>%8%</b>；原始存储：<b>%9 GB/h</b>。</p>",
-                          "<p>Sensor: <b>%1 x %2 mm</b>, diagonal %3 mm; object pixel at required FOV: <b>%4 um/px</b>; frame payload: %5 MB; throughput: %6 MB/s; interface bandwidth: %7 MB/s; utilization: <b>%8%</b>; raw storage: <b>%9 GB/h</b>.</p>")
-        .arg(r.sensorWidthMm, 0, 'f', 2)
-        .arg(r.sensorHeightMm, 0, 'f', 2)
-        .arg(r.sensorDiagonalMm, 0, 'f', 2)
-        .arg(r.cameraObjectPixelSizeUm, 0, 'f', 2)
-        .arg(r.framePayloadMB, 0, 'f', 2)
-        .arg(r.bandwidthRequiredMBps, 0, 'f', 1)
-        .arg(r.interfaceCapacityMBps, 0, 'f', 1)
-        .arg(r.bandwidthUtilizationPercent, 0, 'f', 0)
-        .arg(r.storagePerHourGB, 0, 'f', 0);
-
-    html += localizedText("<h4>镜头估算</h4>", "<h4>Lens Estimate</h4>");
-    html += QStringLiteral("<p>%1</p>").arg(r.lensFormulaSummary);
-    if (pureInput.telecentricMode) {
-        html += localizedText("<p>远心 PMAG：<b>%1x</b>；实际 FOV：<b>%2 x %3 mm</b>；物方像素：<b>%4 um/px</b>；残余远心误差：<b>%5 um</b>；DOF：<b>%6 mm</b>；畸变边缘误差：<b>%7 um</b>。</p>",
-                              "<p>Telecentric PMAG: <b>%1x</b>; actual FOV: <b>%2 x %3 mm</b>; object pixel: <b>%4 um/px</b>; residual telecentric error: <b>%5 um</b>; DOF: <b>%6 mm</b>; edge distortion error: <b>%7 um</b>.</p>")
-            .arg(r.magnification, 0, 'f', 3)
-            .arg(r.effectiveFovWidthMm, 0, 'f', 2)
-            .arg(r.effectiveFovHeightMm, 0, 'f', 2)
-            .arg(r.lensObjectPixelSizeUm, 0, 'f', 2)
-            .arg(r.residualTelecentricErrorUm, 0, 'f', 2)
-            .arg(r.estimatedDofMm, 0, 'f', 2)
-            .arg(r.distortionErrorUm, 0, 'f', 2);
-    } else {
-        html += localizedText("<p>目标焦距：<b>%1 mm</b>；输入焦距下实际 FOV：<b>%2 x %3 mm</b>；倍率：<b>%4x</b>；物方像素：<b>%5 um/px</b>；估算 DOF：<b>%6 mm</b>；畸变边缘误差：<b>%7 um</b>。</p>",
-                              "<p>Target focal length: <b>%1 mm</b>; actual FOV with entered focal length: <b>%2 x %3 mm</b>; magnification: <b>%4x</b>; object pixel: <b>%5 um/px</b>; estimated DOF: <b>%6 mm</b>; edge distortion error: <b>%7 um</b>.</p>")
-            .arg(r.targetFixedFocalLengthMm, 0, 'f', 2)
-            .arg(r.effectiveFovWidthMm, 0, 'f', 2)
-            .arg(r.effectiveFovHeightMm, 0, 'f', 2)
-            .arg(r.magnification, 0, 'f', 3)
-            .arg(r.lensObjectPixelSizeUm, 0, 'f', 2)
-            .arg(r.estimatedDofMm, 0, 'f', 2)
-            .arg(r.distortionErrorUm, 0, 'f', 2);
-    }
-
-    html += localizedText("<h4>光源估算</h4>", "<h4>Lighting Estimate</h4>");
-    html += localizedText("<p>建议有效照明面积：<b>%1 x %2 mm</b>；当前光源覆盖余量：<b>%3%</b>。</p>",
-                          "<p>Recommended active lighting area: <b>%1 x %2 mm</b>; current light coverage margin: <b>%3%</b>.</p>")
-        .arg(r.suggestedLightWidthMm, 0, 'f', 1)
-        .arg(r.suggestedLightHeightMm, 0, 'f', 1)
-        .arg(r.lightCoverageMarginPercent, 0, 'f', 0);
-    html += localizedText("<h4>判断</h4>", "<h4>Verdict</h4>");
-    html += localizedText("<p><b>依据：</b>%1</p>", "<p><b>Reasons:</b> %1</p>").arg(reasons);
-    html += localizedText("<p><b>风险：</b>%1</p>", "<p><b>Risks:</b> %1</p>").arg(risks);
-    m_output->setHtml(html);
-}
-
-void PureCalculationPage::updateLensParameterVisibility()
-{
-    const bool telecentric = m_lensModeCombo && m_lensModeCombo->currentIndex() == 1;
-    if (m_fixedLensGroup)
-        m_fixedLensGroup->setVisible(!telecentric);
-    if (m_telecentricLensGroup)
-        m_telecentricLensGroup->setVisible(telecentric);
-}
-
-void PureCalculationPage::resetDefaults()
-{
-    const SelectionRequest defaultRequest;
-    m_widthSpin->setValue(defaultRequest.objectWidthMm);
-    m_heightSpin->setValue(defaultRequest.objectHeightMm);
-    m_marginSpin->setValue(defaultRequest.placementMarginMm);
-    m_minFeatureSpin->setValue(defaultRequest.minFeatureUm);
-    m_toleranceSpin->setValue(defaultRequest.measurementToleranceUm);
-    m_wdSpin->setValue(defaultRequest.workingDistanceMm);
-    m_heightVariationSpin->setValue(defaultRequest.heightVariationMm);
-    m_motionModeCombo->setCurrentIndex(static_cast<int>(defaultRequest.motionMode));
-    m_speedSpin->setValue(defaultRequest.motionSpeedMmS);
-    m_fpsSpin->setValue(defaultRequest.requiredFps);
-    m_detectionCombo->setCurrentIndex(static_cast<int>(defaultRequest.detectionType));
-    m_surfaceCombo->setCurrentIndex(static_cast<int>(defaultRequest.surfaceType));
-    m_reflectiveCheck->setChecked(defaultRequest.reflective);
-    m_resolutionXSpin->setValue(2448);
-    m_resolutionYSpin->setValue(2048);
-    m_pixelSizeSpin->setValue(3.45);
-    m_maxFpsSpin->setValue(0.0);
-    m_bitDepthSpin->setValue(12.0);
-    m_interfaceBandwidthSpin->setValue(380.0);
-    m_shutterCombo->setCurrentIndex(0);
-    m_lensModeCombo->setCurrentIndex(0);
-    m_focalSpin->setValue(25.0);
-    m_fNumberSpin->setValue(4.0);
-    m_minWdSpin->setValue(100.0);
-    m_distortionSpin->setValue(0.05);
-    m_imageCircleSpin->setValue(11.0);
-    m_lensMpSpin->setValue(5.0);
-    m_pmagSpin->setValue(0.5);
-    m_nominalWdSpin->setValue(110.0);
-    m_wdToleranceSpin->setValue(5.0);
-    m_dofSpin->setValue(5.0);
-    m_telecentricitySpin->setValue(0.1);
-    m_teleFNumberSpin->setValue(8.0);
-    m_teleDistortionSpin->setValue(0.05);
-    m_teleImageCircleSpin->setValue(11.0);
-    m_teleLensMpSpin->setValue(5.0);
-    m_lightTypeCombo->setCurrentIndex(1);
-    m_lightModeCombo->setCurrentIndex(0);
-    m_lightWidthSpin->setValue(100.0);
-    m_lightHeightSpin->setValue(100.0);
-    updateLensParameterVisibility();
+    connect(m_tasks, &QTabBar::currentChanged, this, [this](int index) {
+        m_inputs->setCurrentIndex(index);
+        m_scroll->verticalScrollBar()->setValue(0);
+        refresh();
+    });
+    connect(m_importCamera, &QPushButton::clicked, this, &PureCalculationPage::chooseCamera);
+    connect(m_importLens, &QPushButton::clicked, this, [this]() { chooseLens(false); });
+    connect(m_matchLens, &QPushButton::clicked, this, [this]() { chooseLens(true); });
+    connect(m_applyCheck, &QPushButton::clicked, this, &PureCalculationPage::applyToCheck);
+    connect(copy, &QPushButton::clicked, this, &PureCalculationPage::copyReport);
+    connect(saveA, &QPushButton::clicked, this, [this]() { saveSnapshot(0); });
+    connect(saveB, &QPushButton::clicked, this, [this]() { saveSnapshot(1); });
+    connect(m_compareToggle, &QCheckBox::toggled, m_compare, &QWidget::setVisible);
+    connect(m_results, &QTableWidget::itemSelectionChanged, this, [this]() {
+        if (m_comparisonKind != QLatin1String("check")) return;
+        const int row = m_results->currentRow();
+        if (row >= 0 && m_results->item(row, 0))
+            m_resultNote->setText(m_results->item(row, 0)->data(Qt::UserRole).toString());
+    });
+    connect(m_results, &QTableWidget::cellClicked, this, [this](int row, int) {
+        if (row < 0 || row >= m_comparisonValues.size()) return;
+        m_loading = true;
+        if (m_comparisonKind == QLatin1String("focal")) {
+            const auto previous = Parameters::optics(opticsInput());
+            setNumber("optics.distance", previous.distanceMm);
+            setNumber("optics.focal", m_comparisonValues.at(row));
+            setChoice("optics.solve", "fov");
+        } else if (m_comparisonKind == QLatin1String("mag")) {
+            setNumber("tele.mag", m_comparisonValues.at(row));
+            setChoice("tele.solve", "fov");
+        }
+        setSource(task(), "manual");
+        m_loading = false;
+        refresh();
+    });
+    m_loading = false;
+    setCatalog(nullptr);
     refresh();
+}
+
+void PureCalculationPage::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    m_columns->setDirection(width() < 1000 ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
+    m_results->resizeRowsToContents();
+    QTimer::singleShot(0, m_tasks, [this]() {
+        // 滚动按钮可能直到首次溢出时才创建，不能只在构造期间设置。
+        for (auto *button : m_tasks->findChildren<QToolButton *>()) {
+            const bool left = button->arrowType() == Qt::LeftArrow;
+            if (!left && button->arrowType() != Qt::RightArrow) continue;
+            button->setArrowType(Qt::NoArrow);
+            button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+            button->setText(left ? QStringLiteral("‹") : QStringLiteral("›"));
+            button->setAccessibleName(left ? localizedText("前面的任务", "Earlier tasks") : localizedText("后面的任务", "Later tasks"));
+        }
+    });
+}
+QString PureCalculationPage::task() const { return taskKeys.value(m_tasks->currentIndex(), taskKeys.first()); }
+void PureCalculationPage::setTask(const QString &task)
+{
+    const int index = taskKeys.indexOf(task);
+    if (index >= 0) m_tasks->setCurrentIndex(index);
+}
+void PureCalculationPage::fieldChanged(const QString &key)
+{
+    if (m_loading) return;
+    const QString scope = key.section(QLatin1Char('.'), 0, 0);
+    if (scope == QLatin1String("camera") && cameraSignature() != m_lastCameraSignature)
+        invalidateMeasuredFov();
+    auto source = m_provenance.value(scope).toObject();
+    if ((key == QLatin1String("check.actualWidth") || key == QLatin1String("check.actualHeight"))
+        && usable(number("check.actualWidth")) && usable(number("check.actualHeight")))
+        source.remove("measurementStale");
+    if (!source.value("type").toString().isEmpty()) {
+        source.insert("edited", true);
+        m_provenance.insert(scope, source);
+    } else setSource(scope, "manual");
+    refresh();
+}
+QString PureCalculationPage::cameraSignature() const
+{
+    return valueText(number("camera.nx")) + QLatin1Char('/') + valueText(number("camera.ny"))
+        + QLatin1Char('/') + valueText(number("camera.pixel"));
+}
+void PureCalculationPage::invalidateMeasuredFov()
+{
+    if (choice("check.geometry") != QLatin1String("measured")) return;
+    const bool wasLoading = m_loading;
+    m_loading = true;
+    setNumber("check.actualWidth", {}); setNumber("check.actualHeight", {});
+    auto source = m_provenance.value("check").toObject();
+    source.insert("measurementStale", true);
+    m_provenance.insert("check", source);
+    m_loading = wasLoading;
+}
+void PureCalculationPage::clearLensSpecifications()
+{
+    for (const auto &key : {"check.imageCircle", "check.minDistance", "check.nominalDistance", "check.distanceTolerance", "check.dof", "check.telecentricity"})
+        setNumber(key, {});
+    m_texts.value("check.lensMount")->clear();
+    m_flags.value("check.dofConfirmed")->setChecked(false);
+}
+void PureCalculationPage::setSource(const QString &scope, const QString &type, const QString &label)
+{
+    m_provenance.insert(scope, QJsonObject{{"type", type}, {"label", label}, {"edited", false}});
+}
+QString PureCalculationPage::sourceText(const QString &scope) const
+{
+    const auto source = m_provenance.value(scope).toObject();
+    const auto type = source.value("type").toString();
+    QString text;
+    if (type == QLatin1String("catalog")) text = localizedText("产品库：", "Catalog: ") + source.value("label").toString();
+    else if (type == QLatin1String("example")) text = localizedText("示例参数 · 尚未选择实物", "Example values · no hardware selected");
+    else if (type == QLatin1String("derived")) {
+        const QString origin = source.value("label").toString();
+        text = localizedText("来自计算任务：", "From calculation: ") + taskLabels().value(taskKeys.indexOf(origin), origin);
+    }
+    else if (type == QLatin1String("manual")) text = localizedText("手动参数", "Manual parameters");
+    else text = localizedText("尚未填写参数", "No parameters entered");
+    if (source.value("edited").toBool()) text += localizedText(" · 已手动修改", " · manually edited");
+    if (source.value("measurementStale").toBool())
+        text += localizedText(" · 相机已变化，请重新填写实测视场", " · camera changed; re-enter measured FOV");
+    return text;
+}
+ParameterWorkspaceState PureCalculationPage::workspaceState() const
+{
+    ParameterWorkspaceState state;
+    state.task = task();
+    for (auto it = m_fields.cbegin(); it != m_fields.cend(); ++it) state.fields.insert(it.key(), it.value()->state());
+    for (auto it = m_choices.cbegin(); it != m_choices.cend(); ++it) state.choices.insert(it.key(), it.value()->currentData().toString());
+    for (auto it = m_flags.cbegin(); it != m_flags.cend(); ++it) state.flags.insert(it.key(), it.value()->isChecked());
+    for (auto it = m_texts.cbegin(); it != m_texts.cend(); ++it) state.texts.insert(it.key(), it.value()->text());
+    state.texts.insert("camera.mount", m_cameraMount);
+    state.flags.insert("compare.expanded", m_compareToggle->isChecked());
+    state.provenance = m_provenance;
+    state.snapshots = m_snapshots;
+    return state;
+}
+void PureCalculationPage::restoreWorkspaceState(const ParameterWorkspaceState &state)
+{
+    m_loading = true;
+    for (auto it = m_fields.begin(); it != m_fields.end(); ++it) it.value()->restoreState(state.fields.value(it.key()).toObject());
+    for (auto it = m_choices.begin(); it != m_choices.end(); ++it) setChoice(it.key(), state.choices.value(it.key()).toString());
+    for (auto it = m_flags.begin(); it != m_flags.end(); ++it) it.value()->setChecked(state.flags.value(it.key()).toBool());
+    for (auto it = m_texts.begin(); it != m_texts.end(); ++it) it.value()->setText(state.texts.value(it.key()).toString());
+    m_cameraMount = state.texts.value("camera.mount").toString();
+    m_provenance = state.provenance;
+    m_snapshots = state.snapshots;
+    setTask(state.task);
+    m_compareToggle->setChecked(state.flags.value("compare.expanded").toBool());
+    m_loading = false;
+    refresh();
+    updateSnapshots();
+}
+void PureCalculationPage::clearCurrentTask()
+{
+    m_loading = true;
+    const QString prefix = task() + QLatin1Char('.');
+    for (auto it = m_fields.begin(); it != m_fields.end(); ++it) if (it.key().startsWith(prefix)) it.value()->setValue({});
+    for (auto it = m_choices.begin(); it != m_choices.end(); ++it) if (it.key().startsWith(prefix)) it.value()->setCurrentIndex(0);
+    for (auto it = m_flags.begin(); it != m_flags.end(); ++it) if (it.key().startsWith(prefix)) it.value()->setChecked(false);
+    for (auto it = m_texts.begin(); it != m_texts.end(); ++it) if (it.key().startsWith(prefix)) it.value()->clear();
+    m_provenance.remove(task());
+    m_loading = false;
+    refresh();
+}
+void PureCalculationPage::copyReport() { QApplication::clipboard()->setText(m_report); }
+void PureCalculationPage::saveSnapshot(int slot)
+{
+    if (slot < 0 || slot > 1) return;
+    auto state = workspaceState();
+    state.snapshots = {};
+    const QJsonObject snapshot{{"time", QDateTime::currentDateTime().toString(Qt::ISODate)},
+                               {"task", task()}, {"state", state.toJson()}, {"report", m_report}};
+    while (m_snapshots.size() < 2) m_snapshots.append(QJsonObject());
+    m_snapshots.replace(slot, snapshot);
+    updateSnapshots();
+    m_compareToggle->setChecked(true);
+}
+void PureCalculationPage::updateSnapshots()
+{
+    QString html = QStringLiteral("<table width='100%' cellpadding='8'><tr><th>A</th><th>B</th></tr><tr>");
+    for (int i = 0; i < 2; ++i) {
+        const auto snapshot = i < m_snapshots.size() ? m_snapshots.at(i).toObject() : QJsonObject();
+        const QString report = snapshot.isEmpty() ? localizedText("尚未保存", "Not saved")
+            : snapshot.value("time").toString() + QLatin1Char('\n') + snapshot.value("report").toString();
+        html += QStringLiteral("<td width='50%' valign='top'>%1</td>").arg(report.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br>")));
+    }
+    m_compare->setHtml(html + QStringLiteral("</tr></table>"));
 }

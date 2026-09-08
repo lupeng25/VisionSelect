@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
     }
 
     MainWindow window;
-    window.setMinimumSize(1080, 700);
+    window.setMinimumSize(1024, 700);
     window.resize(1280, 820);
     UiSettings::instance().restoreWindow(&window);
     window.show();
