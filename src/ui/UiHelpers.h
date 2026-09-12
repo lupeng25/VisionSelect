@@ -7,6 +7,7 @@
 #include <QStringList>
 #include <QColor>
 #include <QIcon>
+#include <optional>
 
 class QComboBox;
 class QDoubleSpinBox;
@@ -29,6 +30,10 @@ QLabel *statusBadge(const QString &text, const QString &state = QString());
 QPushButton *actionButton(const QString &text, const QString &iconPath = QString(), bool secondary = false);
 QTableWidgetItem *item(const QString &text);
 QTableWidgetItem *indexedItem(const QString &text, int sourceIndex);
+QTableWidgetItem *numericItem(const QString &text, std::optional<double> value);
+QString candidateStatusText(const CandidateChecks &checks, bool hardPassed = true);
+QString candidateChecksHtml(const CandidateChecks &checks);
+void decorateCandidateStatus(QTableWidgetItem *item, const CandidateChecks &checks, bool hardPassed = true);
 int rowSourceIndex(const QTableWidget *table, int row);
 void copySelectionToClipboard(QTableWidget *table);
 void installTableCopyShortcut(QTableWidget *table);

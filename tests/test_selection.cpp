@@ -1,3 +1,6 @@
+#include "selection/CandidateValidator.h"
+#include "report/BomCsvWriter.h"
+#include <QBuffer>
 #include "catalog/CatalogRepository.h"
 #include "core/Localization.h"
 #include "i18n/LanguageManager.h"
@@ -40,6 +43,8 @@ private slots:
     void pureCalculationFixedLens();
     void pureCalculationTelecentric();
     void calculationAuditRegressions();
+    void candidateValidationMatchesAssistantAndPreservesUnknowns();
+    void candidateRecallKeepsCompatibleCameraBeyond96();
     void parameterOpticsSolvesBothModelsAndAxes();
     void parameterSamplingAndCalibration();
     void parameterTelecentricRangeAndMotion();
@@ -64,6 +69,7 @@ private slots:
     void sqliteMigrationPreservesLocalCsvRows();
     void sqliteLightCandidatesUseLensFeatureCache();
     void catalogPerformanceGate();
+    void diagnosticPruningMatchesExhaustiveRanking();
     void sampleOnlyLightCatalogIsUpgraded();
     void motionExposureAndStrobePreference();
     void dataThroughputAndInterfaceRisk();
@@ -104,6 +110,10 @@ private slots:
     void invalidTelecentricCsvFails();
     void invalidLightCsvFails();
     void pdfReportWrites();
+    void projectReviewNumericAndGeometryRegressions();
+    void projectReviewImportPreservesDataAndMetadata();
+    void projectReviewBuiltinUpdateAndRecall();
+    void projectReviewDiagnosticsAndExports();
 
 private:
     QTemporaryDir m_catalogStorage;
@@ -246,6 +256,106 @@ void SelectionEngineTest::measurementToleranceUsesPixelBudget()
     QCOMPARE(strict.requiredResolutionX, 120000);
     QCOMPARE(strict.requiredResolutionY, 70000);
     QCOMPARE(strict.requiredMegapixels, 8400.0);
+}
+
+void SelectionEngineTest::candidateValidationMatchesAssistantAndPreservesUnknowns()
+{
+    SelectionRequest request;
+    CameraSpec camera;
+    camera.model = "CAM";
+    camera.resolutionX = camera.resolutionY = 5120;
+    camera.pixelSizeUm = 2.5;
+    camera.maxFps = 100;
+    camera.colorMode = "Mono8";
+    camera.interfaceType = "CoaXPress";
+    camera.bandwidthMBps = 2400;
+    camera.lensMount = "C";
+    LensSpec lens;
+    lens.model = "像圈不足";
+    lens.lensType = LensType::ObjectTelecentric;
+    lens.lensMount = "C";
+    lens.pmag = 0.5;
+    lens.imageCircleMm = lens.maxSensorDiagonalMm = 11;
+    lens.nominalWorkingDistanceMm = 110;
+    lens.workingDistanceToleranceMm = 3;
+    lens.dofMm = 6.4;
+    LightSpec light;
+    light.activeWidthMm = light.activeHeightMm = 100;
+    SelectionEngine engine;
+    auto assistant = CalculationAssistant::estimateLenses(request, camera, {lens});
+    auto result = engine.select(request, {camera}, {lens}, {light});
+    QVERIFY(assistant.first().checks.failed());
+    QVERIFY(!result.first().hardConstraintsPassed);
+    for (int i = 0; i <= static_cast<int>(CandidateCheck::DepthOfField); ++i)
+        QCOMPARE(assistant.first().checks[static_cast<CandidateCheck>(i)], result.first().checks[static_cast<CandidateCheck>(i)]);
+    LensSpec compatible = lens;
+    compatible.model = "完整覆盖";
+    compatible.imageCircleMm = compatible.maxSensorDiagonalMm = 20;
+    assistant = CalculationAssistant::estimateLenses(request, camera, {lens, compatible});
+    QCOMPARE(assistant.first().lens.model, compatible.model);
+    QVERIFY(!assistant.first().checks.failed());
+    compatible.dofMm = 0.9;
+    compatible.dofConditionsConfirmed = true;
+    result = engine.select(request, {camera}, {compatible}, {light});
+    QVERIFY(!result.first().hardConstraintsPassed);
+    QCOMPARE(result.first().checks[CandidateCheck::DepthOfField], CandidateCheckState::Failed);
+    compatible.dofMm = 0;
+    compatible.workingDistanceToleranceMm = 0;
+    result = engine.select(request, {camera}, {compatible}, {light});
+    QVERIFY(result.first().hardConstraintsPassed);
+    QVERIFY(result.first().checks.unknown());
+    QCOMPARE(result.first().checks[CandidateCheck::WorkingDistance], CandidateCheckState::Unknown);
+    QCOMPARE(result.first().checks[CandidateCheck::DepthOfField], CandidateCheckState::Unknown);
+
+    camera.resolutionX = 9344; camera.resolutionY = 7000; camera.pixelSizeUm = 3.2;
+    compatible.lensType = LensType::FixedFocal;
+    compatible.focalLengthMm = 50;
+    compatible.imageCircleMm = compatible.maxSensorDiagonalMm = 46;
+    compatible.dofMm = 10;
+    compatible.minWorkingDistanceMm = 0;
+    result = engine.select(request, {camera}, {compatible}, {light});
+    QVERIFY(result.first().hardConstraintsPassed);
+    QCOMPARE(result.first().checks[CandidateCheck::WorkingDistance], CandidateCheckState::Unknown);
+    assistant = CalculationAssistant::estimateLenses(request, camera, {compatible});
+    QCOMPARE(assistant.first().checks[CandidateCheck::WorkingDistance], CandidateCheckState::Unknown);
+    QVERIFY(!assistant.first().workingDistanceOk);
+}
+
+void SelectionEngineTest::candidateRecallKeepsCompatibleCameraBeyond96()
+{
+    SelectionRequest request;
+    CameraSpec camera;
+    camera.resolutionX = camera.resolutionY = 4800;
+    camera.pixelSizeUm = 5;
+    camera.maxFps = 100;
+    camera.colorMode = "Mono8";
+    camera.interfaceType = "CoaXPress";
+    camera.bandwidthMBps = 10000;
+    camera.lensMount = "C";
+    QVector<CameraSpec> cameras;
+    for (int i = 0; i < 96; ++i) {
+        camera.model = QString("不兼容%1").arg(i);
+        cameras.append(camera);
+    }
+    camera.model = "唯一可行相机";
+    camera.lensMount = "M58";
+    camera.resolutionX = camera.resolutionY = 5000;
+    cameras.append(camera);
+    LensSpec lens;
+    lens.lensType = LensType::ObjectTelecentric;
+    lens.lensMount = "M58";
+    lens.pmag = 1;
+    lens.imageCircleMm = lens.maxSensorDiagonalMm = 40;
+    lens.nominalWorkingDistanceMm = 110;
+    lens.workingDistanceToleranceMm = 5;
+    lens.dofMm = 20;
+    LightSpec light;
+    light.activeWidthMm = light.activeHeightMm = 100;
+    SelectionEngine engine;
+    const auto results = engine.select(request, cameras, {lens}, {light}, 20);
+    QVERIFY(!results.isEmpty());
+    QVERIFY(results.first().hardConstraintsPassed);
+    QCOMPARE(results.first().camera.model, camera.model);
 }
 
 void SelectionEngineTest::calculationAuditRegressions()
@@ -1535,6 +1645,46 @@ void SelectionEngineTest::sqliteLightCandidatesUseLensFeatureCache()
     QCOMPARE(reflectiveCandidates.first().model, QStringLiteral("LARGE-COAXIAL"));
 }
 
+void SelectionEngineTest::diagnosticPruningMatchesExhaustiveRanking()
+{
+    QVector<CameraSpec> cameras;
+    QVector<LensSpec> lenses;
+    for (int i = 0; i < 12; ++i) {
+        CameraSpec camera;
+        camera.model = QStringLiteral("BOUND-CAM-%1").arg(i);
+        camera.manufacturer = QStringLiteral("Fixture");
+        camera.resolutionX = 2000 + (i % 3) * 100; camera.resolutionY = 2000;
+        camera.pixelSizeUm = 3.45; camera.colorMode = QStringLiteral("Mono");
+        camera.pixelFormat = QStringLiteral("Mono8"); camera.maxFps = 100;
+        camera.lensMount = QStringLiteral("C"); camera.bandwidthMBps = 1000;
+        cameras.append(camera);
+        LensSpec lens;
+        lens.model = QStringLiteral("BOUND-LENS-%1").arg(i);
+        lens.manufacturer = QStringLiteral("Fixture"); lens.lensMount = QStringLiteral("C");
+        lens.lensType = LensType::FixedFocal; lens.focalLengthMm = 8 + i;
+        lens.minWorkingDistanceMm = 10; lens.imageCircleMm = 25;
+        lens.fNumber = 2.8; lens.megapixelRating = 10;
+        lenses.append(lens);
+    }
+    LightSpec light; light.model = QStringLiteral("BOUND-LIGHT");
+    light.lightType = LightType::Backlight; light.activeWidthMm = light.activeHeightMm = 100;
+    SelectionRequest request; request.allowTelecentric = false;
+    SelectionEngine engine;
+    for (const double feature : {50.0, 2000.0}) {
+        request.minFeatureUm = feature; request.measurementToleranceUm = feature;
+        const auto exhaustive = engine.select(request, cameras, lenses, {light}, 0);
+        const auto bounded = engine.select(request, cameras, lenses, {light}, 7);
+        QCOMPARE(bounded.size(), 7);
+        QVERIFY(exhaustive.size() > bounded.size());
+        for (int i = 0; i < bounded.size(); ++i) {
+            QCOMPARE(bounded[i].camera.model, exhaustive[i].camera.model);
+            QCOMPARE(bounded[i].lens.model, exhaustive[i].lens.model);
+            QCOMPARE(bounded[i].score.score, exhaustive[i].score.score);
+            QCOMPARE(bounded[i].hardConstraintsPassed, exhaustive[i].hardConstraintsPassed);
+        }
+    }
+}
+
 void SelectionEngineTest::catalogPerformanceGate()
 {
     if (qgetenv("VISIONSELECT_PERF_GATE") != "1")
@@ -1622,6 +1772,7 @@ void SelectionEngineTest::catalogPerformanceGate()
     SelectionService service(&repo);
     const QVector<SelectionResult> results = service.select(request, 20, &error);
     const qint64 selectMs = timer.elapsed();
+    qInfo().noquote() << QStringLiteral("十万条目录：筛选 %1 ms，翻页 %2 ms，选型 %3 ms").arg(filterMs).arg(pageMs).arg(selectMs);
     QVERIFY2(error.isEmpty(), qPrintable(error));
     QVERIFY(!results.isEmpty());
     QVERIFY2(selectMs < 2000, qPrintable(QStringLiteral("Selection took %1 ms").arg(selectMs)));
@@ -1797,14 +1948,12 @@ void SelectionEngineTest::motionExposureAndStrobePreference()
     const QVector<SelectionResult> stopAndGoResults = engine.select(stopAndGo, {rollingCamera}, {lens}, {continuous}, 1);
     QVERIFY(!stopAndGoResults.isEmpty());
     QCOMPARE(stopAndGoResults.first().maxExposureUsForOnePixelBlur, 0.0);
-    QVERIFY(!stopAndGoResults.first().hardFailures.contains(
-        QStringLiteral("Continuous motion requires a global-shutter camera.")));
+    QCOMPARE(stopAndGoResults.first().checks[CandidateCheck::GlobalShutter], CandidateCheckState::NotApplicable);
 
     const QVector<SelectionResult> rollingResults = engine.select(request, {rollingCamera}, {lens}, {continuous}, 1);
     QVERIFY(!rollingResults.isEmpty());
     QVERIFY(!rollingResults.first().hardConstraintsPassed);
-    QVERIFY(rollingResults.first().hardFailures.contains(
-        QStringLiteral("Continuous motion requires a global-shutter camera.")));
+    QCOMPARE(rollingResults.first().checks[CandidateCheck::GlobalShutter], CandidateCheckState::Failed);
 }
 
 void SelectionEngineTest::dataThroughputAndInterfaceRisk()
@@ -1821,6 +1970,7 @@ void SelectionEngineTest::dataThroughputAndInterfaceRisk()
 
     CameraSpec camera;
     camera.model = QStringLiteral("HIGH-DATA-CAM");
+    camera.pixelFormat = QStringLiteral("Mono12");
     camera.manufacturer = QStringLiteral("Test");
     camera.resolutionX = 4096;
     camera.resolutionY = 4096;
@@ -1873,6 +2023,11 @@ void SelectionEngineTest::dataThroughputAndInterfaceRisk()
     QVERIFY2(risks.contains(QStringLiteral("MP")), qPrintable(risks));
     QVERIFY(!results.first().hardConstraintsPassed);
     QVERIFY(results.first().hardFailures.join(QStringLiteral(";")).contains(QString::fromUtf8("接口带宽")));
+    camera.pixelFormat.clear();
+    const auto unknownFormat = engine.select(request, {camera}, {lens}, {light}, 1);
+    QVERIFY(!unknownFormat.isEmpty());
+    QCOMPARE(unknownFormat.first().checks[CandidateCheck::PixelFormat], CandidateCheckState::Unknown);
+    QCOMPARE(unknownFormat.first().checks[CandidateCheck::Bandwidth], CandidateCheckState::Unknown);
 }
 
 void SelectionEngineTest::highResolutionFramePayloadDoesNotOverflow()
@@ -3176,10 +3331,14 @@ void SelectionEngineTest::pdfReportWrites()
     const QVector<SelectionResult> results = engine.select(request, m_catalog.cameras(), m_catalog.lenses(), m_catalog.lights(), 5);
     QVERIFY(!results.isEmpty());
 
-    QTemporaryFile file(QDir::tempPath() + QStringLiteral("/visionselect_report_XXXXXX.pdf"));
-    QVERIFY(file.open());
-    const QString path = file.fileName();
-    file.close();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("report.pdf"));
+    {
+        QFile existing(path);
+        QVERIFY(existing.open(QIODevice::WriteOnly));
+        existing.write("previous report");
+    }
 
     PdfReportWriter writer;
     QString error;
@@ -3188,4 +3347,144 @@ void SelectionEngineTest::pdfReportWrites()
 }
 
 QTEST_MAIN(SelectionEngineTest)
+void SelectionEngineTest::projectReviewNumericAndGeometryRegressions()
+{
+    CameraSpec camera; camera.resolutionX=100000;camera.resolutionY=100000;
+    QCOMPARE(camera.megapixels(),10000.0);
+    LensSpec lens;lens.distortionPercent=-2;
+    QCOMPARE(SelectionEngine::distortionErrorUm(lens,100,100),2000.0);
+    ThreeDCameraSpec spec;spec.referenceDistanceMm=150;spec.workingDistanceMinMm=100;spec.workingDistanceMaxMm=200;
+    spec.xFovNearMm=100;spec.xFovReferenceMm=150;spec.xFovFarMm=200;
+    ThreeDCameraRequirement req;req.workingDistanceMm=100;req.targetXCoverageMm=180;
+    QCOMPARE(ThreeDCameraMatcher().match(req,{spec}).first().status,ThreeDMatchStatus::NoMatch);
+    req.workingDistanceMm=125;
+    QCOMPARE(ThreeDCameraMatcher().match(req,{spec}).first().status,ThreeDMatchStatus::MissingData);
+    req.workingDistanceMm=200;
+    QCOMPARE(ThreeDCameraMatcher().match(req,{spec}).first().status,ThreeDMatchStatus::Match);
+    spec.workingDistanceMinMm=spec.workingDistanceMaxMm=-1;spec.referenceDistanceMm=100;
+    req.workingDistanceMm=110;req.targetXCoverageMm=-1;
+    QCOMPARE(ThreeDCameraMatcher().match(req,{spec}).first().status,ThreeDMatchStatus::MissingData);
+    ThreeDMotionSamplingInput input;input.scanDistanceMm=1;input.profileIntervalMm=.3;
+    QCOMPARE(ThreeDCalculation::estimateMotionSampling(input).profileCount,qint64(4));
+    for(auto mode:{ThreeDTriggerMode::Encoder,ThreeDTriggerMode::ExternalTrigger}) {
+        input=ThreeDMotionSamplingInput();input.triggerMode=mode;
+        spec.supportsEncoder=spec.supportsExternalTrigger=0;
+        const auto unsupported=ThreeDCalculation::estimateMotionSampling(input,&spec);
+        QVERIFY(!unsupported.valid);QCOMPARE(unsupported.status,ThreeDCalculationStatus::Infeasible);
+        spec.supportsEncoder=spec.supportsExternalTrigger=-1;
+        const auto unknown=ThreeDCalculation::estimateMotionSampling(input,&spec);
+        QVERIFY(unknown.valid);QCOMPARE(unknown.status,ThreeDCalculationStatus::Warning);
+    }
+    SelectionRequest request;request.heightVariationMm=1;
+    lens.dofConditionsConfirmed=true;
+    const auto checks=CandidateValidator::lens(request,camera,lens,24,24,5,1.2);
+    QCOMPARE(checks[CandidateCheck::DepthOfField],CandidateCheckState::Failed);
+    Parameters::SystemInput system;system.heightVariationMm=1;system.dofMm=1.2;system.dofConditionsConfirmed=true;
+    for(const auto &check:Parameters::checkSystem(system).checks) if(check.key=="dof") QCOMPARE(check.status,CalculationStatus::Failed);
+}
+
+void SelectionEngineTest::projectReviewImportPreservesDataAndMetadata()
+{
+    QTemporaryDir directory;CatalogRepository repo;repo.setStorageDirectory(directory.path());QString error;
+    QVERIFY2(repo.initializeDatabase(&error),qPrintable(error));
+    const int before=repo.productCount(CatalogDomain::Camera,&error);
+    QFile csv(directory.filePath("incoming.csv"));QVERIFY(csv.open(QIODevice::WriteOnly));
+    csv.write("model,manufacturer,resolution_x,resolution_y,pixel_size_um,color_mode,shutter_type,max_fps,interface,bandwidth_mbps,bit_depth,lens_mount,bandwidth_source\nAUDIT-MONO,audit,2000,2000,5,Mono12,Global,20,GigE,120,12,C,specified\n");csv.close();
+    CatalogImportPreview preview;
+    QVERIFY2(repo.previewImport(CatalogDomain::Camera,csv.fileName(),CatalogImportMode::Merge,&preview,&error),qPrintable(error));
+    QCOMPARE(preview.added,1);QCOMPARE(preview.removed,0);
+    QString backup;
+    QVERIFY2(repo.importCsv(CatalogDomain::Camera,csv.fileName(),CatalogImportMode::Merge,&backup,&error),qPrintable(error));
+    QVERIFY(QFileInfo::exists(backup));QCOMPARE(repo.productCount(CatalogDomain::Camera,&error),before+1);
+    CatalogQuery query;query.manufacturer="audit";
+    const auto camera=repo.queryCameras(query,&error).items.first();
+    QCOMPARE(camera.colorMode,QStringLiteral("Mono"));QCOMPARE(camera.pixelFormat,QStringLiteral("Mono12"));
+    QCOMPARE(camera.bandwidthSource,QStringLiteral("specified"));QCOMPARE(SelectionEngine::framePayloadMB(camera),8.0);
+    QVERIFY(repo.previewImport(CatalogDomain::Camera,csv.fileName(),CatalogImportMode::Replace,&preview,&error));
+    QCOMPARE(preview.updated,1);QCOMPARE(preview.removed,before);
+    // 替换必须通过显式模式，合并和替换都保留可恢复备份。
+    QVERIFY(repo.importCsv(CatalogDomain::Camera,csv.fileName(),CatalogImportMode::Replace,&backup,&error));
+    QCOMPARE(repo.productCount(CatalogDomain::Camera,&error),1);
+    const QString exported=directory.filePath("roundtrip.csv");QVERIFY(repo.exportCameraCsvByQuery(exported,query,&error));
+    QVERIFY(repo.loadCameraCsv(exported,&error));
+    QCOMPARE(repo.queryCameras(query,&error).items.first().pixelFormat,QStringLiteral("Mono12"));
+    CameraSpec estimated = camera;
+    estimated.bandwidthSource = QStringLiteral("estimated");
+    CandidateChecks checks;
+    CandidateValidator::camera(SelectionRequest(), estimated, 1000, 120, &checks);
+    QCOMPARE(checks[CandidateCheck::Bandwidth], CandidateCheckState::Unknown);
+    QCOMPARE(checks[CandidateCheck::PixelFormat], CandidateCheckState::Passed);
+    // 8 MB/帧 × 20 fps，再保留既有 10% 传输开销。
+    QCOMPARE(CalculationAssistant::estimateCameras(SelectionRequest(), {camera}, 1).first().bandwidthRequiredMBps, 176.0);
+    PureCalculationInput input; input.camera = camera;
+    QVERIFY(!CalculationAssistant::estimatePure(input).payloadEstimated);
+    LensSpec lens = repo.queryLenses(CatalogQuery(), &error).items.first();
+    lens.manufacturer = QStringLiteral("audit"); lens.model = QStringLiteral("CONFIRMED-DOF");
+    lens.dofMm = 1.2; lens.dofConditionsConfirmed = true;
+    QVERIFY2(repo.addLens(lens, &error), qPrintable(error));
+    const auto storedLens = repo.queryLenses(query, &error);
+    QVERIFY(!storedLens.items.isEmpty());
+    QVERIFY(storedLens.items.first().dofConditionsConfirmed);
+    const QString lensExport = directory.filePath(QStringLiteral("lenses-roundtrip.csv"));
+    QVERIFY(repo.exportLensCsvByQuery(lensExport, query, &error));
+    QVERIFY(repo.loadLensCsv(lensExport, &error));
+    QVERIFY(repo.queryLenses(query, &error).items.first().dofConditionsConfirmed);
+}
+
+void SelectionEngineTest::projectReviewBuiltinUpdateAndRecall()
+{
+    QTemporaryDir directory;CatalogRepository repo;repo.setStorageDirectory(directory.path());QString error;
+    QVERIFY2(repo.initializeDatabase(&error),qPrintable(error));
+    CatalogQuery all;all.limit=1;
+    const auto original=repo.queryCameras(all,&error);
+    const auto id=original.ids.first();const auto fps=original.items.first().maxFps;
+    const QString connection="review-upgrade";
+    {
+        auto db=QSqlDatabase::addDatabase("QSQLITE",connection);db.setDatabaseName(directory.filePath("catalog.db"));QVERIFY(db.open());
+        QSqlQuery q(db);QVERIFY(q.exec(QStringLiteral("UPDATE camera_products SET max_fps=0.1,source_version='1' WHERE id=%1").arg(id)));
+        q.finish();db.close();
+    }
+    QSqlDatabase::removeDatabase(connection);
+    QVERIFY2(repo.initializeDatabase(&error),qPrintable(error));
+    CameraSpec camera;QVERIFY(repo.cameraById(id,&camera,&error));QCOMPARE(camera.maxFps,fps);
+    camera.maxFps=321;QVERIFY(repo.updateCameraById(id,camera,&error));QVERIFY(repo.initializeDatabase(&error));
+    QVERIFY(repo.cameraById(id,&camera,&error));QCOMPARE(camera.maxFps,321.0);
+    QFile csv(directory.filePath("cameras.csv"));QVERIFY(csv.open(QIODevice::WriteOnly));
+    QByteArray data="model,manufacturer,resolution_x,resolution_y,pixel_size_um,color_mode,shutter_type,max_fps,interface,bandwidth_mbps,bit_depth,lens_mount\n";
+    for(int i=0;i<301;i++) data+=QString("AUDIT-%1,audit,2000,2000,5,Mono8,Global,100,GigE,120,8,%2\n").arg(i,3,10,QChar('0')).arg(i==300?"C":"F").toUtf8();
+    csv.write(data);csv.close();QVERIFY(repo.loadCameraCsv(csv.fileName(),&error));
+    QFile lensCsv(directory.filePath("lenses.csv"));QVERIFY(lensCsv.open(QIODevice::WriteOnly));
+    lensCsv.write("model,manufacturer,lens_type,lens_mount,distortion_percent,image_circle_mm,pmag,nominal_wd_mm,wd_tolerance_mm\nAUDIT-LENS,audit,ObjectTelecentric,C,0,30,1,100,10\n");lensCsv.close();
+    QVERIFY2(repo.loadLensCsv(lensCsv.fileName(),&error),qPrintable(error));
+    SelectionRequest request;request.objectWidthMm=request.objectHeightMm=10;request.placementMarginMm=0;request.minFeatureUm=request.measurementToleranceUm=50;
+    request.workingDistanceMm=100;request.heightVariationMm=0;
+    const auto results=SelectionService(&repo).select(request,20,&error);
+    QVERIFY2(error.isEmpty(),qPrintable(error));QVERIFY(!results.isEmpty());QVERIFY(results.first().hardConstraintsPassed);
+    QCOMPARE(results.first().camera.model,QStringLiteral("AUDIT-300"));QCOMPARE(results.first().searchedCameras,301);
+}
+
+void SelectionEngineTest::projectReviewDiagnosticsAndExports()
+{
+    SelectionResult source;source.hasDiagnosticSource=true;source.diagnosticScheme=QString::fromUtf8("远心镜头方案");
+    source.checks[CandidateCheck::Mount]=CandidateCheckState::Failed;source.hardConstraintsPassed=false;
+    source.diagnosticRisks={QString::fromUtf8("远心镜头缺少远心度数据，无法估算高度波动带来的残余视差")};
+    const auto english=localizedResult(source,"en_US");
+    QVERIFY(!containsCjk(english.hardFailures.join(';')));QVERIFY(!containsCjk(english.score.risks.join(';')));
+    class FailedDevice final:public QIODevice {
+    public:FailedDevice(){open(QIODevice::WriteOnly);}
+    protected:qint64 readData(char*,qint64)override{return -1;}qint64 writeData(const char*,qint64)override{setErrorString("injected write failure");return -1;}
+    } failed;
+    QString error;SelectionRequest request;
+    QVERIFY(!BomCsvWriter().writeToDevice(&failed,request,{source},&error));QVERIFY(!error.isEmpty());
+    QBuffer buffer;QVERIFY(buffer.open(QIODevice::WriteOnly));source.camera.model="FULL-MODEL-ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789";
+    QVERIFY(BomCsvWriter().writeToDevice(&buffer,request,{source},&error));
+    QVERIFY(buffer.data().contains("failed"));QVERIFY(buffer.data().contains(source.camera.model.toUtf8()));QVERIFY(buffer.data().contains("request_json"));
+    const QString capture=qEnvironmentVariable("VISIONSELECT_REPORT_CAPTURE");
+    if(!capture.isEmpty()) {
+        request.projectNotes=QString::fromUtf8("分页回归：完整型号、方案状态、缺失规格和长备注均应保留。\n").repeated(25);
+        source.camera.manufacturer="Audit Camera";source.lens.model=source.camera.model;source.lens.manufacturer="Audit Lens";
+        QVERIFY2(PdfReportWriter().write(capture,request,{source,source},&error),qPrintable(error));
+    }
+}
+
 #include "test_selection.moc"

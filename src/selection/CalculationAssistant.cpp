@@ -3,6 +3,7 @@
 #include "core/Localization.h"
 #include "core/PixelFormat.h"
 #include "selection/SelectionEngine.h"
+#include "selection/CandidateValidator.h"
 
 #include <algorithm>
 #include <cmath>
@@ -92,6 +93,9 @@ void appendCommonLensJudgement(const SelectionRequest &request,
                                const CameraSpec &camera,
                                LensCalculationEstimate *estimate)
 {
+    estimate->checks = CandidateValidator::lens(request, camera, estimate->lens,
+        estimate->effectiveFovWidthMm, estimate->effectiveFovHeightMm,
+        estimate->objectPixelSizeUm, estimate->estimatedDofMm);
     estimate->fovOk = estimate->effectiveFovWidthMm >= requirement.requiredFovWidthMm
         && estimate->effectiveFovHeightMm >= requirement.requiredFovHeightMm;
     estimate->samplingOk = estimate->objectPixelSizeUm <= requirement.targetObjectPixelUm;
@@ -206,7 +210,7 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
     result.sensorHeightMm = camera.sensorHeightMm();
     result.sensorDiagonalMm = camera.sensorDiagonalMm();
     result.framePayloadMB = SelectionEngine::framePayloadMB(camera);
-    result.payloadEstimated = !PixelFormat::layout(camera.colorMode).has_value();
+    result.payloadEstimated = !PixelFormat::layout(camera.transportPixelFormat()).has_value();
     result.bandwidthRequiredMBps = SelectionEngine::bandwidthRequiredMBps(camera, qMax(1.0, input.request.requiredFps));
     result.interfaceCapacityMBps = SelectionEngine::interfaceCapacityMBps(camera);
     result.bandwidthUtilizationPercent = result.interfaceCapacityMBps > 0.0
@@ -225,7 +229,7 @@ PureCalculationResult CalculationAssistant::estimatePure(const PureCalculationIn
         result.risks.append(QStringLiteral("相机最大帧率未填写，无法确认节拍"));
     else if (result.fpsStatus == CalculationStatus::Passed)
         result.reasons.append(QStringLiteral("相机标称帧率满足需求，实际节拍仍取决于曝光和读出"));
-    result.bandwidthStatus = result.interfaceCapacityMBps > 0.0 && !result.payloadEstimated
+    result.bandwidthStatus = camera.bandwidthMBps > 0.0 && camera.bandwidthSource == QLatin1String("specified") && !result.payloadEstimated
         ? checkUpperBound(result.bandwidthRequiredMBps, result.interfaceCapacityMBps) : CalculationStatus::Unknown;
 
     if (camera.resolutionX > 0 && camera.resolutionY > 0) {
@@ -614,13 +618,14 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
             estimate.estimatedDofMm = SelectionEngine::estimatedFixedLensDofMm(camera, lens, estimate.magnification);
             estimate.distortionErrorUm = SelectionEngine::distortionErrorUm(lens, estimate.effectiveFovWidthMm, estimate.effectiveFovHeightMm);
             estimate.formulaSummary = QString::fromUtf8("M = SensorSize / FOV\357\274\214f \342\211\210 WD x SensorSize / (FOV + SensorSize)");
-            estimate.workingDistanceOk = request.workingDistanceMm >= lens.minWorkingDistanceMm;
+            estimate.workingDistanceOk = lens.minWorkingDistanceMm > 0.0
+                && request.workingDistanceMm >= lens.minWorkingDistanceMm;
             estimate.dofOk = request.heightVariationMm <= 0.0
                 || (estimate.estimatedDofMm > 0.0 && estimate.estimatedDofMm >= request.heightVariationMm * 1.5);
 
             if (estimate.workingDistanceOk) {
                 estimate.score += 8.0;
-            } else {
+            } else if (lens.minWorkingDistanceMm > 0.0) {
                 estimate.score -= 20.0;
                 estimate.risks.append(QString::fromUtf8("\345\275\223\345\211\215 WD \344\275\216\344\272\216\351\225\234\345\244\264\346\234\200\345\260\217\345\267\245\344\275\234\350\267\235\347\246\273"));
             }
@@ -670,13 +675,25 @@ QVector<LensCalculationEstimate> CalculationAssistant::estimateLenses(const Sele
         estimates.append(estimate);
     }
 
+    CandidateChecks cameraChecks;
+    CandidateValidator::camera(request, camera, SelectionEngine::bandwidthRequiredMBps(camera, qMax(1.0, request.requiredFps)),
+        SelectionEngine::interfaceCapacityMBps(camera), &cameraChecks);
+    for (auto &estimate : estimates)
+        for (int i = static_cast<int>(CandidateCheck::FrameRate); i < static_cast<int>(CandidateCheck::Count); ++i)
+            estimate.checks[static_cast<CandidateCheck>(i)] = cameraChecks[static_cast<CandidateCheck>(i)];
     std::sort(estimates.begin(), estimates.end(), [](const LensCalculationEstimate &a, const LensCalculationEstimate &b) {
+        if (a.checks.priority() != b.checks.priority())
+            return a.checks.priority() < b.checks.priority();
         return a.score > b.score;
     });
     if (limit > 0 && estimates.size() > limit)
         estimates.resize(limit);
-    for (LensCalculationEstimate &estimate : estimates)
+    for (LensCalculationEstimate &estimate : estimates) {
         localizeLensEstimate(&estimate);
+        estimate.risks = candidateCheckMessages(estimate.checks, CandidateCheckState::Failed)
+            + candidateCheckMessages(estimate.checks, CandidateCheckState::Unknown) + estimate.risks;
+        estimate.risks.removeDuplicates();
+    }
     return estimates;
 }
 

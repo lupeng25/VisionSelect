@@ -16,7 +16,7 @@
 
 ParameterNumberField::ParameterNumberField(const QString &key, const QString &title, const QString &unit,
                                          bool integer, QWidget *parent)
-    : QWidget(parent), m_label(new QLabel(title)), m_edit(new QLineEdit), m_unit(unit)
+    : QWidget(parent), m_label(new QLabel(title, this)), m_edit(new QLineEdit(this)), m_unit(unit)
 {
     setObjectName(QStringLiteral("ParameterField"));
     auto *layout = new QVBoxLayout(this);
@@ -26,6 +26,7 @@ ParameterNumberField::ParameterNumberField(const QString &key, const QString &ti
     m_label->setBuddy(m_edit);
     layout->addWidget(m_label);
     auto *row = new QHBoxLayout;
+    layout->addLayout(row);
     row->setSpacing(4);
     m_edit->setObjectName(key);
     m_edit->setAccessibleName(title);
@@ -43,7 +44,7 @@ ParameterNumberField::ParameterNumberField(const QString &key, const QString &ti
     row->addWidget(m_edit, 1);
     if (unit == QLatin1String("mm") || unit == QStringLiteral("μm")
         || unit == QStringLiteral("μs") || unit == QLatin1String("mm/s")) {
-        m_units = new QComboBox;
+        m_units = new QComboBox(this);
         m_units->setObjectName(key + QStringLiteral(".unit"));
         m_units->setAccessibleName(title + UiHelpers::localizedText("单位", " unit"));
         m_units->addItem(unit, 1.0);
@@ -60,11 +61,10 @@ ParameterNumberField::ParameterNumberField(const QString &key, const QString &ti
             if (!m_restoring) emit changed();
         });
     } else if (!unit.isEmpty()) {
-        auto *suffix = new QLabel(unit);
+        auto *suffix = new QLabel(unit, this);
         suffix->setObjectName(QStringLiteral("FieldUnit"));
         row->addWidget(suffix);
     }
-    layout->addLayout(row);
     connect(m_edit, &QLineEdit::textChanged, this, [this]() { if (!m_restoring) emit changed(); });
 }
 

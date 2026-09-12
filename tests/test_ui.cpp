@@ -5,7 +5,10 @@
 #include "i18n/LanguageManager.h"
 #include "ui/pages/CatalogPage.h"
 #include "ui/pages/InputPage.h"
+#include "ui/pages/ResultsPage.h"
+#include "ui/UiHelpers.h"
 #include "ui/pages/PureCalculationPage.h"
+#include "ui/pages/ThreeDCameraPage.h"
 #include "ui/ParameterNumberField.h"
 #include "ui/ParameterCatalogDialog.h"
 #include "ui/ParameterUi.h"
@@ -14,12 +17,14 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QElapsedTimer>
 #include <QDir>
 #include <QDialog>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QJsonDocument>
+#include <QLayout>
 #include <QMenu>
 #include <QPushButton>
 #include <QSettings>
@@ -33,8 +38,11 @@
 #include <QTimer>
 #include <QTabBar>
 #include <QTextEdit>
+#include <QTextBrowser>
+#include <QTabWidget>
 #include <QToolButton>
 #include <QtTest>
+#include <memory>
 
 class VisionSelectUiTests : public QObject
 {
@@ -55,6 +63,12 @@ private slots:
     void parameterWorkbenchImportsAndChecksUnknownSpecifications();
     void parameterCatalogPickersSupportSearchAndImport();
     void parameterWorkbenchLayoutLanguageAndPersistence();
+    void threeDCameraPrioritizesResultsAndKeepsFilters();
+    void calculationSelectionUsesKeyboardAndLensIdentity();
+    void resultsSortNumericallyAndShowChecks();
+    void resultSnapshotSurvivesInputNavigationAndLanguage();
+    void navigationReusesPagesAndKeepsState();
+    void riskSummaryUsesCurrentLanguageWithoutDuplicates();
 };
 
 void VisionSelectUiTests::initTestCase()
@@ -102,6 +116,29 @@ void VisionSelectUiTests::noPositiveScoreHasNoMatchPercentage()
     const QVector<ResultPresentation> presentation = buildResultPresentations(results);
     QVERIFY(!presentation[0].matchAvailable);
     QVERIFY(!presentation[1].matchAvailable);
+}
+
+void VisionSelectUiTests::riskSummaryUsesCurrentLanguageWithoutDuplicates()
+{
+    const QString originalLanguage = LanguageManager::instance().currentLanguage();
+    const auto restoreLanguage = qScopeGuard([&] { LanguageManager::instance().setLanguage(originalLanguage); });
+    SelectionResult result;
+    result.hardConstraintsPassed = false;
+    result.checks[CandidateCheck::Mount] = CandidateCheckState::Failed;
+    result.checks[CandidateCheck::LightCoverage] = CandidateCheckState::Unknown;
+    result.hasDiagnosticSource = true;
+    for (const QString &language : {QStringLiteral("zh_CN"), QStringLiteral("en_US"), QStringLiteral("zh_CN")}) {
+        QVERIFY(LanguageManager::instance().setLanguage(language));
+        result = localizedResult(result);
+        const QString summary = UiHelpers::riskSummary(result);
+        const auto failures = candidateCheckMessages(result.checks, CandidateCheckState::Failed);
+        const auto unknowns = candidateCheckMessages(result.checks, CandidateCheckState::Unknown);
+        QCOMPARE(summary.count(failures.first()), 1);
+        QCOMPARE(summary.count(unknowns.first()), 1);
+        QVERIFY(!summary.contains(QStringLiteral("Hard mismatch")));
+        if (language == QLatin1String("en_US"))
+            for (const auto character : summary) QVERIFY(character.unicode() < 0x4e00 || character.unicode() > 0x9fff);
+    }
 }
 
 void VisionSelectUiTests::inputPageUsesSingleRunPathAndAccessibleFields()
@@ -602,6 +639,372 @@ void VisionSelectUiTests::parameterWorkbenchLayoutLanguageAndPersistence()
     QCOMPARE(loaded->workspaceState().snapshots, snapshots);
     LanguageManager::instance().setLanguage("zh_CN");
     UiSettings::instance().setDensity(UiDensity::Comfortable);
+}
+
+void VisionSelectUiTests::threeDCameraPrioritizesResultsAndKeepsFilters()
+{
+    LanguageManager::instance().setLanguage("zh_CN");
+    UiSettings::instance().setDensity(UiDensity::Comfortable);
+    UiSettings::instance().setValue("ui/threeD/advancedExpanded", false);
+    MainWindow window;
+    window.setAttribute(Qt::WA_DontShowOnScreen);
+    window.resize(1440, 900);
+    window.show();
+    const auto navigate = [&](int index) {
+        for (auto *button : window.findChildren<QPushButton *>("NavButton"))
+            if (button->property("pageIndex").toInt() == index) button->click();
+        QCoreApplication::processEvents();
+    };
+    navigate(3);
+    auto *page = window.findChild<ThreeDCameraPage *>();
+    QVERIFY(page);
+    auto *filterScroll = page->findChild<QScrollArea *>("ThreeDFilterScroll");
+    auto *filters = page->findChild<QPushButton *>("ThreeDFiltersToggle");
+    auto *details = page->findChild<QPushButton *>("ThreeDDetailsToggle");
+    auto *detailsPanel = page->findChild<QFrame *>("ThreeDDetailsPanel");
+    auto *table = page->findChild<QTableWidget *>("threeD/table");
+    QVERIFY(filterScroll && filters && details && detailsPanel && table);
+    QVERIFY(filterScroll->isHidden());
+    QVERIFY(detailsPanel->isHidden());
+    QVERIFY(table->rowCount() > 5);
+    QVERIFY(table->height() > page->height() * 0.65);
+
+    const QString directory = qEnvironmentVariable("VISIONSELECT_UI_CAPTURE_DIR");
+    if (!directory.isEmpty()) QVERIFY(QDir().mkpath(directory));
+    const auto capture = [&](const QString &name) {
+        QCoreApplication::processEvents();
+        return directory.isEmpty() || window.grab().save(QDir(directory).filePath(name + ".png"));
+    };
+    QVERIFY(capture("three-d-results-wide"));
+    window.resize(1080, 700);
+    QCoreApplication::processEvents();
+    QVERIFY(window.width() <= 1080);
+    QVERIFY(table->height() > page->height() * 0.60);
+    QVERIFY(capture("three-d-results-narrow"));
+
+    filters->click();
+    QVERIFY(!filterScroll->isHidden());
+    QComboBox *brand = nullptr;
+    for (auto *combo : page->findChildren<QComboBox *>())
+        if (combo->accessibleName() == QStringLiteral("品牌")) brand = combo;
+    QVERIFY(brand && brand->count() > 1);
+    brand->setCurrentIndex(1);
+    QVERIFY(filters->text().contains(QStringLiteral("未应用")));
+    const QString brandValue = brand->currentData().toString();
+    QVERIFY(capture("three-d-filters"));
+    auto *advanced = page->findChild<QToolButton *>("ThreeDAdvancedFilters");
+    QVERIFY(advanced);
+    advanced->click();
+    QCoreApplication::processEvents();
+    filterScroll->verticalScrollBar()->setValue(filterScroll->verticalScrollBar()->maximum());
+    auto *integration = page->findChild<QWidget *>("FilterCheckGroup");
+    QVERIFY(integration);
+    for (auto *check : integration->findChildren<QCheckBox *>())
+        QVERIFY(integration->rect().contains(check->geometry()));
+    QVERIFY(capture("three-d-advanced-filters"));
+    advanced->click();
+    page->findChild<QPushButton *>("ThreeDApplyFilters")->click();
+    QVERIFY(filterScroll->isHidden());
+    QVERIFY(!filters->text().contains(QStringLiteral("未应用")));
+    QCOMPARE(brand->currentData().toString(), brandValue);
+    navigate(0);
+    navigate(3);
+    QCOMPARE(brand->currentData().toString(), brandValue);
+    filters->click();
+    page->findChild<QPushButton *>("ThreeDClearFilters")->click();
+    QCOMPARE(brand->currentIndex(), 0);
+    filters->click();
+
+    table->setCurrentCell(1, 4);
+    table->scrollToItem(table->item(1, 4));
+    QCoreApplication::processEvents();
+    const QString selected = table->item(1, 4)->text();
+    QTest::mouseClick(table->viewport(), Qt::LeftButton, Qt::NoModifier,
+                     table->visualItemRect(table->item(1, 4)).center());
+    QTest::mouseDClick(table->viewport(), Qt::LeftButton, Qt::NoModifier,
+                      table->visualItemRect(table->item(1, 4)).center());
+    QVERIFY(details->isChecked());
+    QVERIFY(!detailsPanel->isHidden());
+    auto *text = detailsPanel->findChild<QTextBrowser *>();
+    QVERIFY(text && text->toPlainText().contains(selected));
+    table->setFocus();
+    QTest::keyClick(table, Qt::Key_Down);
+    QVERIFY(text->toPlainText().contains(table->item(table->currentRow(), 4)->text()));
+    QVERIFY(capture("three-d-details"));
+    page->findChild<QPushButton *>("ThreeDDetailsClose")->click();
+    QVERIFY(detailsPanel->isHidden());
+    QTest::keyClick(table, Qt::Key_Return);
+    QVERIFY(details->isChecked());
+    details->click();
+    const QString selectedBeforeFilter = table->item(table->currentRow(), 4)->text();
+    filters->click();
+    page->findChild<QPushButton *>("ThreeDApplyFilters")->click();
+    QCOMPARE(table->item(table->currentRow(), 4)->text(), selectedBeforeFilter);
+
+    LanguageManager::instance().setLanguage("en_US");
+    QTest::qWait(30);
+    auto *english = qobject_cast<ThreeDCameraPage *>(window.findChild<QStackedWidget *>("WorkspacePages")->currentWidget());
+    QVERIFY(english);
+    auto *englishTable = english->findChild<QTableWidget *>("threeD/table");
+    QVERIFY(capture("three-d-results-english"));
+    QVERIFY(englishTable->height() > english->height() * 0.60);
+    auto *tabs = english->findChild<QTabWidget *>("ThreeDTasks");
+    tabs->setCurrentIndex(1);
+    QCoreApplication::processEvents();
+    QVERIFY(english->findChild<QTextEdit *>("CalculationResultText")->isVisible());
+    LanguageManager::instance().setLanguage("zh_CN");
+}
+
+void VisionSelectUiTests::navigationReusesPagesAndKeepsState()
+{
+    LanguageManager::instance().setLanguage("zh_CN");
+    UiSettings::instance().setDensity(UiDensity::Comfortable);
+    MainWindow window;
+    window.setAttribute(Qt::WA_DontShowOnScreen);
+    window.resize(1440, 900);
+    window.show();
+    QTest::qWait(50);
+    auto *pages = window.findChild<QStackedWidget *>("WorkspacePages");
+    QVERIFY(pages);
+    const auto navigation = window.findChildren<QPushButton *>("NavButton");
+    const auto navigate = [&](int index) {
+        for (auto *button : navigation)
+            if (button->property("pageIndex").toInt() == index) button->click();
+        QCoreApplication::processEvents();
+    };
+    QVector<QWidget *> created(6, nullptr);
+    std::unique_ptr<QSignalSpy> candidateChanges;
+    std::unique_ptr<QSignalSpy> workbenchResets;
+    ParameterWorkspaceState savedState;
+    int selectedCamera = -1;
+    const QString captures = qEnvironmentVariable("VISIONSELECT_UI_CAPTURE_DIR");
+    if (!captures.isEmpty()) QVERIFY(QDir().mkpath(captures));
+    for (int round = 0; round < 3; ++round) {
+        for (auto *button : navigation) {
+            const int index = button->property("pageIndex").toInt();
+            QElapsedTimer timer;
+            timer.start();
+            button->click();
+            const qint64 clicked = timer.elapsed();
+            QCoreApplication::processEvents();
+            qInfo() << "页面切换" << round << index << "点击/含事件处理(ms)" << clicked << timer.elapsed();
+            QCOMPARE(pages->currentIndex(), index);
+            if (round == 0) created[index] = pages->currentWidget();
+            else QCOMPARE(pages->currentWidget(), created[index]);
+            if (index == 4) {
+                auto *run = window.findChild<QPushButton *>("RunSelectionButton");
+                QTRY_VERIFY_WITH_TIMEOUT(run->isEnabled(), 60000);
+            }
+            if (round == 0 && !captures.isEmpty())
+                QVERIFY(window.grab().save(QDir(captures).filePath(QStringLiteral("navigation-%1.png").arg(index))));
+        }
+        if (round == 0) {
+            auto *workbench = window.findChild<PureCalculationPage *>();
+            QVERIFY(workbench);
+            workbench->setTask("optics");
+            workbench->resetDefaults();
+            workbench->findChild<QLineEdit *>("optics.width")->setText("123");
+            workbench->saveSnapshot(0);
+            savedState = workbench->workspaceState();
+            auto *table = window.findChild<QTableWidget *>("calculation/cameras");
+            QVERIFY(table && table->rowCount() > 2);
+            navigate(2);
+            window.findChild<QPushButton *>("AssistantChooseCamera")->setChecked(true);
+            QTest::mouseClick(table->viewport(), Qt::LeftButton, Qt::NoModifier,
+                             table->visualItemRect(table->item(2, 0)).center());
+            selectedCamera = table->currentRow();
+            QCOMPARE(selectedCamera, 2);
+            candidateChanges = std::make_unique<QSignalSpy>(table->model(), &QAbstractItemModel::dataChanged);
+            workbenchResets = std::make_unique<QSignalSpy>(
+                workbench->findChild<QTableWidget *>("WorkbenchResults")->model(), &QAbstractItemModel::modelReset);
+        }
+    }
+    QCOMPARE(candidateChanges->count(), 0);
+    QCOMPARE(workbenchResets->count(), 0);
+    QCOMPARE(window.findChild<QTableWidget *>("calculation/cameras")->currentRow(), selectedCamera);
+    QCOMPARE(window.findChild<PureCalculationPage *>()->workspaceState().toJson(), savedState.toJson());
+
+    auto *input = window.findChild<InputPage *>();
+    SelectionRequest changed = input->request();
+    changed.objectWidthMm += 10;
+    input->setRequest(changed);
+    navigate(2);
+    QVERIFY2(candidateChanges->count() > 0, "修改需求后应重新计算候选");
+    candidateChanges->clear();
+    window.findChild<CalculationPage *>()->recalculateRequested();
+    QVERIFY2(candidateChanges->count() > 0, "主动重算应刷新候选");
+    candidateChanges->clear();
+    navigate(2);
+    QCOMPARE(candidateChanges->count(), 0);
+
+    // 参数工作台内部任务切换也保留状态，并输出可比的交互耗时。
+    navigate(1);
+    auto *workbench = window.findChild<PureCalculationPage *>();
+    for (const auto &key : ParameterUi::taskKeys) {
+        QElapsedTimer timer;
+        timer.start();
+        workbench->setTask(key);
+        QCoreApplication::processEvents();
+        qInfo() << "计算任务切换" << key << timer.elapsed();
+    }
+    window.resize(1080, 700);
+    navigate(3);
+    for (auto *step : window.findChildren<QLabel *>("WorkflowStep"))
+        QVERIFY(!step->isVisible());
+    navigate(2);
+    for (auto *step : window.findChildren<QLabel *>("WorkflowStep"))
+        QCOMPARE(step->isVisible(), step->property("state").toString() == QStringLiteral("active"));
+}
+
+void VisionSelectUiTests::calculationSelectionUsesKeyboardAndLensIdentity()
+{
+    LanguageManager::instance().setLanguage("zh_CN");
+    CalculationPage page;
+    page.setAttribute(Qt::WA_DontShowOnScreen);
+    page.resize(1200, 710);
+    page.show();
+    QVector<CameraCalculationEstimate> cameras(2);
+    cameras[0].camera.model = "相机 A";
+    cameras[1].camera.model = "相机 B";
+    page.setCameraEstimates(cameras);
+    auto *cameraTable = page.findChild<QTableWidget *>("calculation/cameras");
+    QVERIFY(cameraTable->isHidden() || !cameraTable->isVisible());
+    page.findChild<QPushButton *>("AssistantChooseCamera")->setChecked(true);
+    cameraTable->sortItems(0, Qt::AscendingOrder);
+    cameraTable->setCurrentCell(0, 0);
+    QSignalSpy selection(&page, &CalculationPage::cameraSelectionChanged);
+    QTest::keyClick(cameraTable, Qt::Key_Down);
+    QCOMPARE(selection.count(), 1);
+    QCOMPARE(selection.first().first().toInt(), 1);
+    QCOMPARE(page.selectedCameraEstimateRow(), 1);
+    QVERIFY(page.findChild<QLabel *>("AssistantCameraSummary")->text().contains("相机 B"));
+    std::reverse(cameras.begin(), cameras.end());
+    page.setCameraEstimates(cameras);
+    QCOMPARE(page.selectedCameraEstimateRow(), 0);
+    QVERIFY(page.findChild<QLabel *>("AssistantCameraSummary")->text().contains("相机 B"));
+
+    QVector<LensCalculationEstimate> lenses(2);
+    lenses[0].lens.model = "镜头 A";
+    lenses[0].checks[CandidateCheck::ImageCircle] = CandidateCheckState::Failed;
+    lenses[1].lens.model = "镜头 B";
+    lenses[1].checks[CandidateCheck::WorkingDistance] = CandidateCheckState::Unknown;
+    page.setLensEstimates(lenses);
+    auto *lensTable = page.findChild<QTableWidget *>("calculation/lenses");
+    lensTable->sortItems(2, Qt::AscendingOrder);
+    QVERIFY(lensTable->item(0, 9)->text().contains("像圈"));
+    lensTable->setCurrentCell(1, 2);
+    page.findChild<QPushButton *>("AssistantDetailsToggle")->setChecked(true);
+    auto *details = page.findChild<QTextEdit *>("AssistantLensDetails");
+    QVERIFY(details->toPlainText().contains("镜头 B"));
+    QVERIFY(details->toPlainText().contains("待确认"));
+    QVERIFY(!details->toPlainText().contains("镜头 A"));
+    page.findChild<QPushButton *>("AssistantChooseCamera")->setChecked(false);
+    page.findChild<QPushButton *>("AssistantDetailsToggle")->setChecked(false);
+    QCoreApplication::processEvents();
+    QVERIFY(lensTable->height() > page.height() * 0.60);
+}
+
+void VisionSelectUiTests::resultsSortNumericallyAndShowChecks()
+{
+    ResultsPage page;
+    page.setAttribute(Qt::WA_DontShowOnScreen);
+    page.resize(1200, 710);
+    page.show();
+    QVector<SelectionResult> results(4);
+    const double scores[] = {100, 97, 9, 0};
+    for (int i = 0; i < results.size(); ++i) {
+        results[i].score.score = scores[i];
+        results[i].camera.model = QString("相机%1").arg(i);
+        results[i].lens.model = QString("镜头%1").arg(i);
+    }
+    results[0].checks[CandidateCheck::WorkingDistance] = CandidateCheckState::Unknown;
+    results[0].interfaceCapacityMBps = 2400;
+    results[0].bandwidthRequiredMBps = 675;
+    results[3].hardConstraintsPassed = false;
+    results[3].checks[CandidateCheck::DepthOfField] = CandidateCheckState::Failed;
+    page.setResults(results, SelectionRequest());
+    auto *table = page.findChild<QTableWidget *>("results/table");
+    table->sortItems(2, Qt::DescendingOrder);
+    QCOMPARE(table->item(0, 2)->text(), "100%");
+    QCOMPARE(table->item(1, 2)->text(), "97%");
+    QCOMPARE(table->item(2, 2)->text(), "9%");
+    table->sortItems(2, Qt::AscendingOrder);
+    QCOMPARE(table->item(0, 2)->text(), "9%");
+    QCOMPARE(table->item(2, 2)->text(), "100%");
+    table->sortItems(2, Qt::DescendingOrder);
+    table->setCurrentCell(0, 0);
+    QCOMPARE(table->item(0, 1)->text(), "待确认");
+    page.findChild<QPushButton *>("ResultsDetailsToggle")->setChecked(true);
+    const QString text = page.findChild<QTextEdit *>("ResultsDetails")->toPlainText();
+    QVERIFY(text.contains("接口容量 2400.0"));
+    QVERIFY(text.contains("1725.0 MB/s"));
+    QVERIFY(text.contains("WD 工作距离"));
+    page.findChild<QPushButton *>("ResultsDetailsToggle")->setChecked(false);
+    QCoreApplication::processEvents();
+    QVERIFY(table->height() > page.height() * 0.60);
+}
+
+void VisionSelectUiTests::resultSnapshotSurvivesInputNavigationAndLanguage()
+{
+    LanguageManager::instance().setLanguage("zh_CN");
+    MainWindow window;
+    window.setAttribute(Qt::WA_DontShowOnScreen);
+    window.resize(1440, 900);
+    window.show();
+    auto *input = window.findChild<InputPage *>();
+    input->setRequest(SelectionRequest());
+    input->runSelectionRequested();
+    QTRY_VERIFY_WITH_TIMEOUT(window.findChild<QPushButton *>("RunSelectionButton")->isEnabled(), 60000);
+    QVERIFY(!window.selectionSnapshot().results.isEmpty());
+    const auto snapshot = window.selectionSnapshot();
+    const auto navigate = [&](int index) {
+        for (auto *button : window.findChildren<QPushButton *>("NavButton"))
+            if (button->property("pageIndex").toInt() == index) button->click();
+        QCoreApplication::processEvents();
+    };
+    const QString captureDir = qEnvironmentVariable("VISIONSELECT_UI_CAPTURE_DIR");
+    const auto capture = [&](const QString &name) {
+        if (captureDir.isEmpty()) return true;
+        QDir().mkpath(captureDir);
+        QCoreApplication::processEvents();
+        return window.grab().save(QDir(captureDir).filePath(name + ".png"));
+    };
+    QVERIFY(capture("results-wide"));
+    window.resize(1280, 790);
+    QVERIFY(capture("results-compact"));
+    auto *resultTable = window.findChild<QTableWidget *>("results/table");
+    auto *resultPage = qobject_cast<ResultsPage *>(window.findChild<QStackedWidget *>("WorkspacePages")->currentWidget());
+    QVERIFY(resultTable->height() > resultPage->height() * 0.60);
+    window.findChild<QPushButton *>("ResultsDetailsToggle")->setChecked(true);
+    QVERIFY(capture("results-details"));
+    window.findChild<QPushButton *>("ResultsDetailsToggle")->setChecked(false);
+    navigate(2);
+    QVERIFY(capture("assistant-compact"));
+    window.findChild<QPushButton *>("AssistantChooseCamera")->setChecked(true);
+    QVERIFY(capture("assistant-camera-selection"));
+    window.findChild<QPushButton *>("AssistantChooseCamera")->setChecked(false);
+    window.findChild<QPushButton *>("AssistantDetailsToggle")->setChecked(true);
+    QVERIFY(capture("assistant-details"));
+    window.findChild<QPushButton *>("AssistantDetailsToggle")->setChecked(false);
+    navigate(0);
+    auto changed = input->request();
+    changed.objectWidthMm = 60;
+    input->setRequest(changed);
+    navigate(2);
+    navigate(4);
+    QCOMPARE(window.selectionSnapshot().request.objectWidthMm, snapshot.request.objectWidthMm);
+    QCOMPARE(window.selectionSnapshot().results.first().requiredFovWidthMm, 24.0);
+    QVERIFY(window.findChild<QFrame *>("ResultsOutdatedBanner")->isVisible());
+    QVERIFY(capture("results-outdated"));
+    LanguageManager::instance().setLanguage("en_US");
+    QTest::qWait(30);
+    QCOMPARE(window.selectionSnapshot().request.objectWidthMm, 20.0);
+    auto *english = window.findChild<QStackedWidget *>("WorkspacePages")->currentWidget();
+    QVERIFY(english->findChild<QFrame *>("ResultsOutdatedBanner")->isVisible());
+    QVERIFY(capture("results-english"));
+    navigate(2);
+    QVERIFY(capture("assistant-english"));
+    LanguageManager::instance().setLanguage("zh_CN");
 }
 
 QTEST_MAIN(VisionSelectUiTests)

@@ -1,4 +1,5 @@
 #include "selection/SelectionEngine.h"
+#include "selection/CandidateValidator.h"
 
 #include "core/Localization.h"
 #include "core/PixelFormat.h"
@@ -9,6 +10,7 @@
 #include <QtMath>
 
 namespace {
+constexpr double failedScoreCeiling = 20.0;
 double clamp(double value, double low, double high)
 {
     return qMax(low, qMin(high, value));
@@ -121,24 +123,14 @@ void addHardFailure(SelectionResult *result, const QString &reason)
         result->hardFailures.append(reason);
 }
 
-void localizeSelectionResult(SelectionResult *result, const QString &languageCode)
-{
-    if (!result)
-        return;
-    result->schemeTitle = CoreI18n::localizedDiagnosticForLanguage(result->schemeTitle, languageCode);
-    result->formulaSummary = CoreI18n::localizedDiagnosticForLanguage(result->formulaSummary, languageCode);
-    result->hardFailures = CoreI18n::localizedDiagnosticsForLanguage(result->hardFailures, languageCode);
-    result->score.reasons = CoreI18n::localizedDiagnosticsForLanguage(result->score.reasons, languageCode);
-    result->score.risks = CoreI18n::localizedDiagnosticsForLanguage(result->score.risks, languageCode);
-}
-
 struct PairCandidate
 {
     int cameraIndex;
     int lensIndex;
-    LightSpec light;
+    int lightIndex;
     double score;
     bool hardConstraintsPassed;
+    int checkPriority;
 };
 
 bool samePairCandidate(const PairCandidate &a, const PairCandidate &b)
@@ -159,6 +151,8 @@ bool betterCandidate(const SelectionResult &a, const SelectionResult &b)
 {
     if (a.hardConstraintsPassed != b.hardConstraintsPassed)
         return a.hardConstraintsPassed;
+    if (a.checks.priority() != b.checks.priority())
+        return a.checks.priority() < b.checks.priority();
     return a.score.score > b.score.score;
 }
 
@@ -166,7 +160,13 @@ bool betterPairCandidate(const PairCandidate &a, const PairCandidate &b)
 {
     if (a.hardConstraintsPassed != b.hardConstraintsPassed)
         return a.hardConstraintsPassed;
-    return a.score > b.score;
+    if (a.checkPriority != b.checkPriority)
+        return a.checkPriority < b.checkPriority;
+    if (a.score != b.score)
+        return a.score > b.score;
+    if (a.cameraIndex != b.cameraIndex)
+        return a.cameraIndex < b.cameraIndex;
+    return a.lensIndex < b.lensIndex;
 }
 
 int fixedFocalReserveCount(int limit)
@@ -244,7 +244,8 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
             };
             return score(a) > score(b);
         });
-        indexes.resize(96);
+        // 这里只调整遍历顺序。接口、像圈和倍率可行性必须在组合检查后判断，
+        // 不能因相机自身的预评分删除唯一可行组合。
         return indexes;
     }();
 
@@ -308,50 +309,87 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
         }
         if (pool->size() < poolLimit) {
             pool->append(candidate);
+            std::push_heap(pool->begin(), pool->end(), betterPairCandidate);
             return;
         }
-        int worstIndex = 0;
-        for (int i = 1; i < pool->size(); ++i) {
-            if (betterPairCandidate(pool->at(worstIndex), pool->at(i)))
-                worstIndex = i;
+        // 堆顶保留最差项，避免每个组合线性扫描整份候选列表。
+        if (betterPairCandidate(candidate, pool->first())) {
+            std::pop_heap(pool->begin(), pool->end(), betterPairCandidate);
+            pool->last() = candidate;
+            std::push_heap(pool->begin(), pool->end(), betterPairCandidate);
         }
-        if (betterPairCandidate(candidate, pool->at(worstIndex)))
-            (*pool)[worstIndex] = candidate;
     };
 
-    // scoreLight only depends on the camera and two lens traits.  Build this
-    // small matrix once so catalog-scale selection stays O(cameras * lenses).
+    // 光源评分只使用相机的全局快门属性和镜头的远心/同轴属性。
+    // 复用八种组合，避免对每台相机重复扫描整个光源目录。
     constexpr int lightProfileCount = 4;
     QVector<LightSpec> lightByCameraProfile;
-    lightByCameraProfile.reserve(rankedCameraIndexes.size() * lightProfileCount);
-    for (int cameraIndex : rankedCameraIndexes) {
-        const CameraSpec &camera = cameras.at(cameraIndex);
+    QVector<double> lightScores;
+    lightByCameraProfile.reserve(2 * lightProfileCount);
+    lightScores.reserve(2 * lightProfileCount);
+    for (int shutter = 0; shutter < 2; ++shutter) {
+        CameraSpec camera;
+        camera.shutterType = shutter ? QStringLiteral("Global") : QStringLiteral("Rolling");
         for (int profile = 0; profile < lightProfileCount; ++profile) {
             LensSpec lightProfileLens;
             lightProfileLens.lensType = (profile & 2) != 0
                 ? LensType::ObjectTelecentric : LensType::FixedFocal;
             lightProfileLens.coaxialIllumination = (profile & 1) != 0;
             lightByCameraProfile.append(chooseLight(request, camera, lightProfileLens, lights, nullptr));
+            lightScores.append(scoreLight(request, camera, lightProfileLens, lightByCameraProfile.last(), nullptr));
         }
     }
 
     for (int rankedCameraIndex = 0; rankedCameraIndex < rankedCameraIndexes.size(); ++rankedCameraIndex) {
         const int cameraIndex = rankedCameraIndexes.at(rankedCameraIndex);
         const CameraSpec &camera = cameras.at(cameraIndex);
+        const int cameraLightProfile = camera.isGlobalShutter() ? lightProfileCount : 0;
+        SelectionResult cameraEvaluation;
+        scoreCamera(request, camera, &cameraEvaluation, false);
+        CandidateValidator::camera(request, camera, cameraEvaluation.bandwidthRequiredMBps,
+            cameraEvaluation.interfaceCapacityMBps, &cameraEvaluation.checks);
+        const double targetPixel = targetObjectPixelUm(request);
+        const double requiredWidth = requiredFovWidth(request), requiredHeight = requiredFovHeight(request);
+        const bool insufficientResolution = camera.resolutionX > 0 && camera.resolutionY > 0
+            && std::isfinite(targetPixel) && targetPixel > 0.0
+            && std::isfinite(requiredWidth) && std::isfinite(requiredHeight) && requiredWidth > 0.0 && requiredHeight > 0.0
+            && (camera.resolutionX * targetPixel / 1000.0 < requiredWidth * (1.0 - 1e-6)
+                || camera.resolutionY * targetPixel / 1000.0 < requiredHeight * (1.0 - 1e-6));
         for (int lensIndex : rankedLensIndexes) {
             const LensSpec &lens = lenses.at(lensIndex);
             if (!request.allowTelecentric && lens.isTelecentric())
                 continue;
             const int lightProfile = (lens.isTelecentric() ? 2 : 0)
                 + (lens.coaxialIllumination ? 1 : 0);
-            const LightSpec &light = lightByCameraProfile.at(rankedCameraIndex * lightProfileCount + lightProfile);
-            const SelectionResult quickResult = evaluatePair(request, camera, lens, light, false);
+            const int lightIndex = cameraLightProfile + lightProfile;
+            const LightSpec &light = lightByCameraProfile.at(lightIndex);
+            if (insufficientResolution && limit > 0) {
+                const double fovW = lens.isTelecentric() ? camera.sensorWidthMm() / lens.pmag
+                    : camera.sensorWidthMm() * (request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
+                const double fovH = lens.isTelecentric() ? camera.sensorHeightMm() / lens.pmag
+                    : camera.sensorHeightMm() * (request.workingDistanceMm - lens.focalLengthMm) / lens.focalLengthMm;
+                // 分辨率不足时，有限正视野不可能同时通过视野与采样校核。
+                // 用失败方案分数上限判断能否进入候选池，绝不截掉可能通过的组合。
+                if (std::isfinite(fovW) && std::isfinite(fovH) && fovW > 0.0 && fovH > 0.0
+                    && std::isfinite(qMax(fovW * 1000.0 / camera.resolutionX, fovH * 1000.0 / camera.resolutionY))) {
+                    const PairCandidate upperBound{cameraIndex, lensIndex, lightIndex, failedScoreCeiling,
+                        false, static_cast<int>(CandidateCheckState::Failed)};
+                    const auto canImprove = [&](const auto &pool, int sizeLimit) {
+                        return pool.size() < sizeLimit || betterPairCandidate(upperBound, pool.first());
+                    };
+                    if (!canImprove(candidates, limit)
+                        && (lens.isTelecentric() || !canImprove(fixedFocalCandidates, typePoolLimit)))
+                        continue;
+                }
+            }
+            const SelectionResult quickResult = evaluatePair(request, camera, lens, light, false, {}, &cameraEvaluation, &lightScores.at(lightIndex));
             PairCandidate candidate;
             candidate.cameraIndex = cameraIndex;
             candidate.lensIndex = lensIndex;
-            candidate.light = light;
+            candidate.lightIndex = lightIndex;
             candidate.score = quickResult.score.score;
             candidate.hardConstraintsPassed = quickResult.hardConstraintsPassed;
+            candidate.checkPriority = quickResult.checks.priority();
             appendCandidate(&candidates, limit, candidate);
             if (!lens.isTelecentric())
                 appendCandidate(&fixedFocalCandidates, typePoolLimit, candidate);
@@ -433,10 +471,10 @@ QVector<SelectionResult> SelectionEngine::select(const SelectionRequest &request
     for (const PairCandidate &candidate : candidates) {
         const CameraSpec &camera = cameras.at(candidate.cameraIndex);
         const LensSpec &lens = lenses.at(candidate.lensIndex);
-        results.append(evaluatePair(request, camera, lens, candidate.light, true, resultLanguage));
+        results.append(evaluatePair(request, camera, lens, lightByCameraProfile.at(candidate.lightIndex), true, resultLanguage));
     }
 
-    std::sort(results.begin(), results.end(), betterCandidate);
+    std::stable_sort(results.begin(), results.end(), betterCandidate);
 
     if (limit > 0 && results.size() > limit)
         results.resize(limit);
@@ -467,7 +505,7 @@ double SelectionEngine::framePayloadMB(const CameraSpec &camera)
 {
     if (camera.resolutionX <= 0 || camera.resolutionY <= 0)
         return 0.0;
-    if (const auto bytes = PixelFormat::frameBytes(camera.resolutionX, camera.resolutionY, camera.colorMode))
+    if (const auto bytes = PixelFormat::frameBytes(camera.resolutionX, camera.resolutionY, camera.transportPixelFormat()))
         return *bytes / 1000000.0;
     // 旧目录仅提供色彩类型和位深时保留载荷估算；调用方需标明格式待确认。
     const double bitsPerFrame = static_cast<double>(camera.resolutionX)
@@ -526,9 +564,9 @@ double SelectionEngine::estimatedFixedLensDofMm(const CameraSpec &camera,
 
 double SelectionEngine::distortionErrorUm(const LensSpec &lens, double fovWidthMm, double fovHeightMm)
 {
-    if (lens.distortionPercent <= 0.0)
+    if (!std::isfinite(lens.distortionPercent))
         return 0.0;
-    return qMax(fovWidthMm, fovHeightMm) * 1000.0 * lens.distortionPercent / 100.0;
+    return qMax(fovWidthMm, fovHeightMm) * 1000.0 * qAbs(lens.distortionPercent) / 100.0;
 }
 
 double SelectionEngine::lightCoverageMarginPercent(const SelectionRequest &request, const LightSpec &light)
@@ -548,9 +586,11 @@ SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
                                               const LensSpec &lens,
                                               const LightSpec &light,
                                               bool includeDetails,
-                                              const QString &languageCode) const
+                                              const QString &languageCode,
+                                              const SelectionResult *cameraEvaluation,
+                                              const double *lightScore) const
 {
-    SelectionResult result;
+    SelectionResult result = cameraEvaluation ? *cameraEvaluation : SelectionResult();
     if (includeDetails) {
         result.camera = camera;
         result.lens = lens;
@@ -560,30 +600,54 @@ SelectionResult SelectionEngine::evaluatePair(const SelectionRequest &request,
     result.requiredFovHeightMm = requiredFovHeight(request);
     result.maxExposureUsForOnePixelBlur = maxExposureUsForOnePixelBlur(request);
     result.lightCoverageMarginPercent = lightCoverageMarginPercent(request, light);
-    result.score.score = 50.0;
+    result.score.score += 50.0;
     if (includeDetails) {
         result.schemeTitle = lens.isTelecentric()
             ? QString::fromUtf8("\350\277\234\345\277\203\351\225\234\345\244\264\346\226\271\346\241\210")
             : QString::fromUtf8("\346\231\256\351\200\232\351\225\234\345\244\264\346\226\271\346\241\210");
     }
 
-    scoreCamera(request, camera, &result, includeDetails);
+    if (!cameraEvaluation)
+        scoreCamera(request, camera, &result, includeDetails);
     if (lens.isTelecentric())
         scoreTelecentricLens(request, camera, lens, &result, includeDetails);
     else
         scoreFixedFocalLens(request, camera, lens, &result, includeDetails);
 
+    result.checks = CandidateValidator::lens(request, camera, lens, result.effectiveFovWidthMm,
+        result.effectiveFovHeightMm, result.objectPixelSizeUm, result.estimatedDofMm);
+    result.checks[CandidateCheck::LightCoverage] = result.lightCoverageMarginPercent < 0.0
+        ? CandidateCheckState::Unknown : CandidateCheckState::Passed;
+    if (cameraEvaluation) {
+        for (int i = static_cast<int>(CandidateCheck::FrameRate); i < static_cast<int>(CandidateCheck::Count); ++i)
+            result.checks[static_cast<CandidateCheck>(i)] = cameraEvaluation->checks[static_cast<CandidateCheck>(i)];
+    } else {
+        CandidateValidator::camera(request, camera, result.bandwidthRequiredMBps,
+            result.interfaceCapacityMBps, &result.checks);
+    }
+    result.hardConstraintsPassed = !result.checks.failed();
+    if (result.hardConstraintsPassed)
+        result.hardFailures.clear();
+
     QStringList lightReasons;
-    result.score.score += scoreLight(request, camera, lens, light, includeDetails ? &lightReasons : nullptr);
+    // 快速筛选复用同一快门/镜头照明类型的评分；最终方案仍生成完整理由。
+    result.score.score += lightScore && !includeDetails ? *lightScore
+        : scoreLight(request, camera, lens, light, includeDetails ? &lightReasons : nullptr);
     if (includeDetails)
         result.score.reasons.append(lightReasons);
 
     if (result.score.score < 0.0)
         result.score.score = 0.0;
     if (!result.hardConstraintsPassed)
-        result.score.score = qMin(result.score.score, 20.0);
-    if (includeDetails)
-        localizeSelectionResult(&result, languageCode);
+        result.score.score = qMin(result.score.score, failedScoreCeiling);
+    if (includeDetails) {
+        result.hasDiagnosticSource = true;
+        result.diagnosticReasons = result.score.reasons;
+        result.diagnosticRisks = result.score.risks;
+        result.diagnosticScheme = result.schemeTitle;
+        result.diagnosticFormula = result.formulaSummary;
+        result = localizedResult(result, languageCode);
+    }
     return result;
 }
 
@@ -704,7 +768,7 @@ void SelectionEngine::scoreCamera(const SelectionRequest &request,
                                   SelectionResult *result,
                                   bool includeDetails) const
 {
-    if (!PixelFormat::layout(camera.colorMode))
+    if (!PixelFormat::layout(camera.transportPixelFormat()))
         ADD_DETAIL_RISK(QStringLiteral("传输像素格式未确认，带宽和存储仅按位深估算"));
     const double fps = qMax(1.0, request.requiredFps);
     result->bandwidthRequiredMBps = bandwidthRequiredMBps(camera, fps);
@@ -857,7 +921,9 @@ void SelectionEngine::scoreFixedFocalLens(const SelectionRequest &request,
             .arg(camera.lensMount, lens.lensMount));
     }
 
-    if (request.workingDistanceMm >= lens.minWorkingDistanceMm) {
+    if (lens.minWorkingDistanceMm <= 0.0) {
+        result->score.score -= 4.0;
+    } else if (request.workingDistanceMm >= lens.minWorkingDistanceMm) {
         result->score.score += 5.0;
     } else {
         ADD_DETAIL_HARD_FAILURE( QString::fromUtf8("工作距离小于镜头最小工作距离"));

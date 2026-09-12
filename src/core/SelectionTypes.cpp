@@ -101,7 +101,7 @@ double CameraSpec::sensorDiagonalMm() const
 
 double CameraSpec::megapixels() const
 {
-    return resolutionX * resolutionY / 1000000.0;
+    return static_cast<double>(resolutionX) * resolutionY / 1000000.0;
 }
 
 bool CameraSpec::isMono() const
@@ -174,6 +174,21 @@ bool LightSpec::isDarkFieldLike() const
 bool SelectionResult::isTelecentric() const
 {
     return lens.isTelecentric();
+}
+
+SelectionResult localizedResult(const SelectionResult &source, const QString &language)
+{
+    SelectionResult result = source;
+    if (!source.hasDiagnosticSource) return result;
+    const QString code = language.isEmpty() ? LanguageManager::instance().currentLanguage() : language;
+    result.schemeTitle = CoreI18n::localizedDiagnosticForLanguage(source.diagnosticScheme, code);
+    result.formulaSummary = CoreI18n::localizedDiagnosticForLanguage(source.diagnosticFormula, code);
+    result.score.reasons = CoreI18n::localizedDiagnosticsForLanguage(source.diagnosticReasons, code);
+    result.score.risks = CoreI18n::localizedDiagnosticsForLanguage(source.diagnosticRisks, code);
+    result.hardFailures = candidateCheckMessages(source.checks, CandidateCheckState::Failed, code);
+    result.score.risks += candidateCheckMessages(source.checks, CandidateCheckState::Unknown, code);
+    result.score.risks.removeDuplicates();
+    return result;
 }
 
 QString detectionTypeLabel(DetectionType type)

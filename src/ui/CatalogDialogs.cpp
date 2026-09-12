@@ -121,7 +121,11 @@ bool editCameraDialog(QWidget *parent, CameraSpec *camera, const QString &title)
     QDialog dialog(parent);
     dialog.setWindowTitle(title);
     QVBoxLayout *outer = new QVBoxLayout(&dialog);
-    QFormLayout *form = new QFormLayout;
+    QScrollArea *scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    QWidget *content = new QWidget;
+    QFormLayout *form = new QFormLayout(content);
     form->setLabelAlignment(Qt::AlignLeft);
 
     QLineEdit *model = new QLineEdit(camera->model);
@@ -131,6 +135,9 @@ bool editCameraDialog(QWidget *parent, CameraSpec *camera, const QString &title)
     QDoubleSpinBox *pixelSize = dialogSpin(0.01, 1000.0, camera->pixelSizeUm, QStringLiteral(" um"));
     QLineEdit *sensorFormat = new QLineEdit(camera->sensorFormat);
     QComboBox *colorMode = editableCombo({QStringLiteral("Mono"), QStringLiteral("Color")}, camera->colorMode);
+    QLineEdit *pixelFormat = new QLineEdit(camera->pixelFormat);
+    QCheckBox *bandwidthConfirmed = new QCheckBox(localizedText("容量有明确规格或实测依据", "Capacity is specified or measured"));
+    bandwidthConfirmed->setChecked(camera->bandwidthSource == QLatin1String("specified"));
     QComboBox *shutterType = editableCombo({QStringLiteral("Global"), QStringLiteral("Rolling")}, camera->shutterType);
     QDoubleSpinBox *maxFps = dialogSpin(0.0, 100000.0, camera->maxFps, QStringLiteral(" fps"), 2);
     QComboBox *interfaceType = editableCombo({QStringLiteral("GigE"), QStringLiteral("USB3"), QStringLiteral("10GigE"), QStringLiteral("CameraLink"), QStringLiteral("CoaXPress")}, camera->interfaceType);
@@ -146,6 +153,8 @@ bool editCameraDialog(QWidget *parent, CameraSpec *camera, const QString &title)
     form->addRow(localizedText("像元", "Pixel Size"), pixelSize);
     form->addRow(localizedText("靶面/传感器", "Format / Sensor"), sensorFormat);
     form->addRow(localizedText("颜色", "Color"), colorMode);
+    form->addRow(localizedText("传输格式（如 Mono12p）", "Pixel format (e.g. Mono12p)"), pixelFormat);
+    form->addRow(bandwidthConfirmed);
     form->addRow(localizedText("快门", "Shutter"), shutterType);
     form->addRow(QStringLiteral("fps"), maxFps);
     form->addRow(localizedText("接口", "Interface"), interfaceType);
@@ -153,7 +162,9 @@ bool editCameraDialog(QWidget *parent, CameraSpec *camera, const QString &title)
     form->addRow(localizedText("位深", "Bit Depth"), bitDepth);
     form->addRow(localizedText("动态范围", "Dynamic Range"), dynamicRange);
     form->addRow(localizedText("镜头口", "Lens Mount"), lensMount);
-    outer->addLayout(form);
+    scroll->setWidget(content);
+    outer->addWidget(scroll, 1);
+    dialog.resize(620, 640);
 
     QDialogButtonBox *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     QObject::connect(box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
@@ -170,6 +181,8 @@ bool editCameraDialog(QWidget *parent, CameraSpec *camera, const QString &title)
     camera->pixelSizeUm = pixelSize->value();
     camera->sensorFormat = sensorFormat->text().trimmed();
     camera->colorMode = colorMode->currentText().trimmed();
+    camera->pixelFormat = pixelFormat->text().trimmed();
+    camera->bandwidthSource = bandwidthConfirmed->isChecked() ? QStringLiteral("specified") : QStringLiteral("estimated");
     camera->shutterType = shutterType->currentText().trimmed();
     camera->maxFps = maxFps->value();
     camera->interfaceType = interfaceType->currentText().trimmed();
@@ -203,7 +216,7 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     QComboBox *mount = editableCombo({QStringLiteral("C"), QStringLiteral("M12"), QStringLiteral("M42"), QStringLiteral("M58"), QStringLiteral("F")}, lens->lensMount);
     QDoubleSpinBox *focal = dialogSpin(0.0, 10000.0, lens->focalLengthMm, QStringLiteral(" mm"));
     QDoubleSpinBox *minWd = dialogSpin(0.0, 100000.0, lens->minWorkingDistanceMm, QStringLiteral(" mm"));
-    QDoubleSpinBox *distortion = dialogSpin(0.0, 100.0, lens->distortionPercent, QStringLiteral(" %"));
+    QDoubleSpinBox *distortion = dialogSpin(-100.0, 100.0, lens->distortionPercent, QStringLiteral(" %"));
     QDoubleSpinBox *imageCircle = dialogSpin(0.0, 1000.0, lens->imageCircleMm, QStringLiteral(" mm"));
     QDoubleSpinBox *mp = dialogSpin(0.0, 1000.0, lens->megapixelRating, QStringLiteral(" MP"), 2);
     QDoubleSpinBox *recommendedPixel = dialogSpin(0.0, 1000.0, lens->recommendedMinPixelUm, QStringLiteral(" um"));
@@ -244,6 +257,9 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     form->addRow(localizedText("最大靶面", "Max Sensor"), maxSensor);
     form->addRow(localizedText("远心度", "Telecentricity"), telecentricityField);
     form->addRow(QStringLiteral("DOF"), dof);
+    auto *dofConfirmed = new QCheckBox(localizedText("景深适用于当前倍率、光圈与评价标准", "DOF applies to the current magnification, aperture and acceptance criterion"));
+    dofConfirmed->setChecked(lens->dofConditionsConfirmed);
+    form->addRow(dofConfirmed);
     form->addRow(QStringLiteral("NA"), na);
     form->addRow(QStringLiteral("F/#"), fNumber);
     form->addRow(QString(), coaxial);
@@ -284,6 +300,7 @@ bool editLensDialog(QWidget *parent, LensSpec *lens, const QString &title)
     if (dialog.exec() != QDialog::Accepted)
         return false;
 
+    lens->dofConditionsConfirmed = dofConfirmed->isChecked();
     lens->model = model->text().trimmed();
     lens->manufacturer = manufacturer->text().trimmed();
     lens->lensType = lensTypeFromString(currentCodeOrText(type));

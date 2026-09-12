@@ -1,0 +1,239 @@
+{
+  "审查日期": "2026-09-12",
+  "基准提交": "adcbc8014679c376216c56916a7e6a300060d546",
+  "审查范围": "当前工作树及现有 MSVC Release 构建；包含此前未提交修复。本轮不修改业务实现。",
+  "问题统计": {
+    "P2": 12,
+    "模块数": 12,
+    "P1": 7
+  },
+  "常规测试": {
+    "CTest总耗时秒": 57.05,
+    "说明": "性能门槛用例默认跳过，已额外执行。",
+    "VisionSelectTests": "通过，39.03 秒",
+    "VisionSelectUiTests": "通过，18.01 秒"
+  },
+  "专项界面验证": {
+    "结果": "通过",
+    "计算任务切换毫秒": "2–18",
+    "测试": [
+      "redesignedWorkspaceKeepsInputsAndNavigation",
+      "navigationReusesPagesAndKeepsState"
+    ],
+    "首次进入非需求页含事件处理毫秒": "10–55",
+    "重复导航含事件处理毫秒": "3–14",
+    "限制": "不包括后台选型完成时间。本轮没有重新进行 150% 缩放、屏幕阅读器验收。",
+    "截图尺寸": [
+      "1440×900",
+      "1080×700"
+    ]
+  },
+  "十万条目录性能": {
+    "数据规模": {
+      "相机": 20000,
+      "光源": 50000,
+      "镜头": 30000
+    },
+    "解释": "首轮期间有审查探针编译，不能据此认定稳定性能故障；应受控重复测量。",
+    "首轮": "失败，选型 2387 毫秒；整项测试 54733 毫秒",
+    "门槛毫秒": 2000,
+    "独立复测": "通过，选型低于 2000 毫秒；整项测试 44822 毫秒；测试未输出通过时的确切选型耗时"
+  },
+  "隔离探针结果": {
+    "3d_near_fov_status": 0,
+    "3d_reference_only_wd_status": 0,
+    "builtin_refresh": {
+      "after_initialize_fps": 0.12345,
+      "resource_fps": 120,
+      "simulated_old_fps": 0.12345
+    },
+    "camera_count_after_one_row_import": 1,
+    "dof_1_2_for_height_1": {
+      "selection_state": 3,
+      "workbench_state": 0
+    },
+    "existing_result_risks_after_language_switch": [
+      "Camera / lens mount: Failed",
+      "相机与远心镜头接口不匹配",
+      "相机/镜头接口: 不满足",
+      "相机接口 F 与远心镜头接口 C 不匹配",
+      "远心镜头缺少远心度数据，无法估算高度波动带来的残余视差"
+    ],
+    "megapixels_100000_squared": 1410.065408,
+    "negative_distortion_at_100mm_um": 0,
+    "pdf_geometry": {
+      "bom_table_width": 670,
+      "content_width": 671,
+      "top_table_width": 670,
+      "writer_width": 767
+    },
+    "pixel_format_csv_import": {
+      "input": "Mono12",
+      "input_payload_mb": 8,
+      "output": "Mono",
+      "output_payload_mb": 6
+    },
+    "profile_count_for_1mm_at_0_3mm": 3.3333333333333335,
+    "recall_limit": {
+      "recalled_cameras": 300,
+      "service_hard_passed": 0,
+      "service_results": 20,
+      "stored_cameras": 301,
+      "unique_compatible_direct_passed": true
+    },
+    "undersized_light": {
+      "coverage_percent": -90,
+      "hard_passed": true,
+      "reasons": [
+        "黑白相机通常有更高灵敏度和边缘稳定性",
+        "相机帧率满足节拍需求",
+        "接口带宽利用率约 9%，连续采集余量充足",
+        "原始图像数据量约 288 GB/h",
+        "远心 FOV 10.00 x 10.00 mm 覆盖需求",
+        "远心物方像素 5.00 um 满足目标 10.00 um",
+        "工作距离落在远心镜头标称 WD 容差内",
+        "光源有效照明面积小于需求 FOV，需要确认安装与亮度",
+        "反光/透明表面使用当前光型可能需要额外控反光验证"
+      ],
+      "risks": [
+        "远心镜头缺少远心度数据，无法估算高度波动带来的残余视差"
+      ]
+    },
+    "unsupported_encoder": {
+      "risks": [
+        "当前型号未公开编码器输入频率上限，编码器脉冲频率需向厂商确认。"
+      ],
+      "status": 1,
+      "valid": true
+    },
+    "unsupported_external_trigger": {
+      "risks": [
+        "当前型号标记为不支持外部触发。"
+      ],
+      "status": 1,
+      "valid": true
+    }
+  },
+  "探针结果解释": {
+    "negative_distortion_at_100mm_um": "输入 -2% 畸变，代码返回 0；仅验证负值不应被视为无畸变，不把线性粗估当实际标定结果。",
+    "工作台校核状态": "0=通过，1=失败，2=未知，3=不适用，4=无效",
+    "pixel_format_csv_import": "2000×2000 像素，显式 Mono12 按当前格式模块占 16 bit；导入丢失格式后按 nominal bit_depth=12 估算，8 MB 变 6 MB。",
+    "推荐校核状态": "0=不适用，1=通过，2=未知，3=失败",
+    "recall_limit": "301 台满足分辨率和帧率的相机，前 300 台 F 接口，最后一台 C 接口；仅有 C 镜头。",
+    "PDF宽度": "实际内容宽度 671，表格和 670；排除了初步怀疑的总宽度越界。未渲染 PDF。",
+    "undersized_light": "覆盖不足被写入理由，未进入风险集合。valid/hardPassed 不代表实物打光验证通过。",
+    "builtin_refresh": "在临时库把内置行参数设为模拟旧值后，再加载当前资源，验证同名内置行未更新。不是用户实际数据库中的值。",
+    "3D匹配状态": "0=满足，1=资料缺失，2=不满足",
+    "3D采样状态": "0=参数正常，1=需要确认，2=输入无效，3=不可行"
+  },
+  "资源数据统计": {
+    "cameras": 1393,
+    "lenses": 1004,
+    "lights": 2180,
+    "three_d": 267,
+    "camera_formats": [
+      {
+        "Name": "",
+        "Count": 8
+      },
+      {
+        "Name": "Color",
+        "Count": 649
+      },
+      {
+        "Name": "Mono",
+        "Count": 733
+      },
+      {
+        "Name": "Near IR",
+        "Count": 1
+      },
+      {
+        "Name": "Near-infrared",
+        "Count": 1
+      },
+      {
+        "Name": "NIR",
+        "Count": 1
+      }
+    ],
+    "camera_bandwidth": [
+      {
+        "Name": "1000",
+        "Count": 85
+      },
+      {
+        "Name": "120",
+        "Count": 592
+      },
+      {
+        "Name": "1200",
+        "Count": 115
+      },
+      {
+        "Name": "2400",
+        "Count": 28
+      },
+      {
+        "Name": "250",
+        "Count": 23
+      },
+      {
+        "Name": "380",
+        "Count": 512
+      },
+      {
+        "Name": "500",
+        "Count": 2
+      },
+      {
+        "Name": "680",
+        "Count": 36
+      }
+    ],
+    "cameras_missing_mount": 1,
+    "cameras_missing_fps": 0,
+    "lenses_missing_dof": 247,
+    "lenses_missing_wd": 24,
+    "duplicate_camera_models_across_brands": [],
+    "duplicate_lens_models_across_brands": [],
+    "three_d_missing_trigger": 267,
+    "three_d_missing_encoder": 49
+  },
+  "构建与公钥核对": {
+    "public_key_fields": [
+      "algorithm",
+      "productId",
+      "modulus",
+      "exponent"
+    ],
+    "production_modulus_bits": 2048,
+    "production_key_matches_test_fixture": false,
+    "old_build_script_exists": false,
+    "old_qmake_project_exists": false
+  },
+  "关键源码SHA256": {
+    "src/core/SelectionTypes.cpp": "CB7BF956C1DE21C71CA77B18993D472DCC3F9D281E5464CF4B1D02A43C24897C",
+    "src/catalog/CatalogRepository.cpp": "799AD78E486A4C0499F6B372EAD3F4941AF0983E1F277567F0E61778F383B6D3",
+    "src/selection/SelectionService.cpp": "36A264D2BAEFA25E70A6A69B72D56883BDA1CA9136EEA7D521A2887BF5061C5E",
+    "src/selection/SelectionEngine.cpp": "3DBAF608537E264A0920DE973E4E622BE0445DCD6549ABFDC7A1D65C371D2CAB",
+    "src/selection/CandidateValidator.cpp": "C9987CBD7804C5089B056AF684F0D47035A19343C53E1F866EBA2CD9C1448D00",
+    "src/selection/ParameterCalculator.cpp": "C0C6119472719BCAF71F11DE3907BCA8445AB7F176D722A26FA78A9940CAFC7B",
+    "src/three_d/ThreeDCameraMatcher.cpp": "B98697C9BFA6A6B63B971CA8C0DE6E17021C25E7BAB92702B832D21CFD899F1E",
+    "src/three_d/ThreeDCalculation.cpp": "9CCBEAB7DDD08BD45958F399487D6976067667309C5516517B5D855CD4446E9C",
+    "src/ui/MainWindow.cpp": "038A11B14A9AF550D300A79D58ACAF9FD79355914E1A7BFF84C630F8EF62521D",
+    "src/ui/ResultPresentation.cpp": "5CC42A946B3A70185E4700352168709C6516378E068F16500D52BC49B1E21B56",
+    "src/report/PdfReportWriter.cpp": "AFB1787DADC05E7255D61E65B72951F1DBF459BD11CCD91F9B8ACEF722F12CAE",
+    "CMakeLists.txt": "C1E948E322CDE3FC5427942EDE85D6E8033B42C6CF681F62D5898A63A75C2EE4",
+    "installer/VisionSelect.iss": "DE7049F2892FF269B82C55C04B089E20B9C5C9DD54279C7DD66404AAB91E7601",
+    "tools/update_public_product_catalog.ps1": "B27BF746EC4AA1F341325C6E6D6AE43CCE391747C362527CC9A351D95003CEE1"
+  },
+  "验证边界": [
+    "没有操作用户真实产品库、许可证或私钥",
+    "没有运行安装器",
+    "未逐条验证厂商规格",
+    "未重建所有工具链配置",
+    "未注入磁盘满或断电故障",
+    "业务源码和正式测试本轮未修改"
+  ]
+}

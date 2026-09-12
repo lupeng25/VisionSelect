@@ -39,6 +39,7 @@ struct CameraCalculationEstimate {
 };
 
 struct LensCalculationEstimate {
+    CandidateChecks checks;
     LensSpec lens;
     double score = 0.0;
     double estimatedFocalLengthMm = 0.0;

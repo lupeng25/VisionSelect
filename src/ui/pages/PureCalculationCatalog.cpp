@@ -23,15 +23,15 @@ void PureCalculationPage::importCamera(const CameraSpec &camera)
     m_loading = true;
     const auto known = [](double value) { return value > 0.0 ? Number(value) : Number(); };
     setNumber("camera.nx", known(camera.resolutionX)); setNumber("camera.ny", known(camera.resolutionY)); setNumber("camera.pixel", known(camera.pixelSizeUm));
-    setNumber("check.maxFps", known(camera.maxFps)); setNumber("check.capacity", known(camera.bandwidthMBps));
+    setNumber("check.maxFps", known(camera.maxFps)); setNumber("check.capacity", camera.bandwidthSource == QLatin1String("specified") ? known(camera.bandwidthMBps) : Number());
     m_cameraMount = camera.lensMount;
     m_texts.value("check.cameraMount")->setText(camera.lensMount);
     // 目录中的 Mono / Color 不是传输格式，不凭位深推测打包方式。
-    const QString format = formats().contains(camera.colorMode) ? camera.colorMode : QString();
+    const QString format = formats().contains(camera.transportPixelFormat()) ? camera.transportPixelFormat() : QString();
     setChoice("check.format", format);
     if (task() == QLatin1String("data")) {
         setChoice("data.format", format);
-        setNumber("data.capacity", known(camera.bandwidthMBps));
+        setNumber("data.capacity", camera.bandwidthSource == QLatin1String("specified") ? known(camera.bandwidthMBps) : Number());
     }
     setSource("camera", "catalog", productLabel(camera.manufacturer, camera.model));
     if (cameraSignature() != previousSignature) invalidateMeasuredFov();

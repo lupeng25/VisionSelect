@@ -8,6 +8,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Set-Location -LiteralPath $PSScriptRoot
 
 if (-not $env:QT_ROOT) {
     throw 'QT_ROOT is required, for example D:\Qt6\6.10.1\mingw_64.'
@@ -40,6 +41,6 @@ if ($Test) {
 
 if ($Install) {
     $installPrefix = Join-Path $PSScriptRoot 'dist\VisionSelect'
-    cmake --install "build/$preset" --prefix $installPrefix
+    cmake --install "build/$preset" --prefix $installPrefix --component Runtime
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }

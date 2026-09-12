@@ -36,7 +36,9 @@ private:
                                  const LensSpec &lens,
                                  const LightSpec &light,
                                  bool includeDetails = true,
-                                 const QString &languageCode = QString()) const;
+                                 const QString &languageCode = QString(),
+                                 const SelectionResult *cameraEvaluation = nullptr,
+                                 const double *lightScore = nullptr) const;
 
     LightSpec chooseLight(const SelectionRequest &request,
                           const CameraSpec &camera,

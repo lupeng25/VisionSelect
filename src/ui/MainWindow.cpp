@@ -1,4 +1,5 @@
 #include "ui/MainWindow.h"
+#include "report/BomCsvWriter.h"
 
 #include "i18n/LanguageManager.h"
 #include "license/LicenseManager.h"
@@ -814,7 +815,8 @@ void MainWindow::restorePersistentState(QWidget *root)
     }
     for (QTableView *table : root->findChildren<QTableView *>()) {
         if (!table->objectName().isEmpty())
-            UiSettings::instance().restoreHeader(table->objectName(), table->horizontalHeader());
+            UiSettings::instance().restoreHeader(table->property("headerStateKey").isValid()
+                ? table->property("headerStateKey").toString() : table->objectName(), table->horizontalHeader());
     }
 }
 
@@ -831,7 +833,8 @@ void MainWindow::savePersistentState(QWidget *root) const
     }
     for (QTableView *table : root->findChildren<QTableView *>()) {
         if (!table->objectName().isEmpty())
-            UiSettings::instance().saveHeader(table->objectName(), table->horizontalHeader());
+            UiSettings::instance().saveHeader(table->property("headerStateKey").isValid()
+                ? table->property("headerStateKey").toString() : table->objectName(), table->horizontalHeader());
     }
 }
 
@@ -839,11 +842,11 @@ void MainWindow::runSelectionAndShowResults()
 {
     if (!m_inputPage || selectionCalculationRunning())
         return;
-    m_request = m_inputPage->request();
+    const SelectionRequest request = m_inputPage->request();
     ensureResultsPage();
     if (m_resultsPage)
-        m_resultsPage->setBusy(m_request);
-    startSelectionCalculation(m_request);
+        m_resultsPage->setBusy(request);
+    startSelectionCalculation(request);
     setActivePage(kResultsPageIndex);
 }
 
@@ -974,7 +977,7 @@ void MainWindow::rebuildPagesForLanguage()
         return;
 
     const int currentIndex = m_pages->currentIndex();
-    const SelectionRequest savedRequest = m_inputPage ? m_inputPage->request() : m_request;
+    const SelectionRequest savedRequest = m_inputPage ? m_inputPage->request() : m_selection.request;
     const ParameterWorkspaceState pureCalculationState = m_pureCalculationPage
         ? m_pureCalculationPage->workspaceState() : ParameterWorkspaceState();
     const PageUiState calculationState = capturePageUiState(m_calculationPage);
@@ -994,11 +997,12 @@ void MainWindow::rebuildPagesForLanguage()
 
     m_pureCalculationPage = nullptr;
     m_calculationPage = nullptr;
+    m_assistantRequest.reset();
+    m_activePageIndex = -1;
     m_threeDCameraPage = nullptr;
     m_resultsPage = nullptr;
     m_catalogPage = nullptr;
     m_catalogPageInitialized = false;
-    m_request = savedRequest;
 
     if (hadPureCalculationPage)
         ensurePureCalculationPage();
@@ -1049,14 +1053,13 @@ void MainWindow::setActivePage(int index)
 {
     if (!m_pages || index < 0 || index >= m_pages->count())
         return;
+    if (index == m_activePageIndex)
+        return;
     if (index == kPureCalculationPageIndex) {
         ensurePureCalculationPage();
-        if (m_pureCalculationPage)
-            m_pureCalculationPage->refresh();
     }
     if (index == kCalculationPageIndex) {
         ensureCalculationPage();
-        m_request = m_inputPage->request();
         refreshCalculationAssistant();
     }
     if (index == kThreeDCameraPageIndex) {
@@ -1068,12 +1071,13 @@ void MainWindow::setActivePage(int index)
         ensureResultsPage();
     if (index == kCatalogPageIndex)
         ensureCatalogPageInitialized();
-    if (index == kResultsPageIndex && m_results.isEmpty() && !selectionCalculationRunning()) {
+    if (index == kResultsPageIndex && !m_selectionCompleted && !selectionCalculationRunning()) {
         calculate();
-    } else if (index == kResultsPageIndex && selectionCalculationRunning() && m_resultsPage) {
-        m_resultsPage->setBusy(m_request);
     }
+    if (index == kResultsPageIndex && m_resultsPage)
+        m_resultsPage->setRequestOutdated(m_selectionCompleted && m_selection.request != m_inputPage->request());
     m_pages->setCurrentIndex(index);
+    m_activePageIndex = index;
     if (m_topPageLabel)
         m_topPageLabel->setText(navigationLabels().at(index));
 
@@ -1090,16 +1094,21 @@ void MainWindow::setActivePage(int index)
             ? QStringLiteral("pending")
             : (i < workflowStage ? QStringLiteral("done")
                                  : (i == workflowStage ? QStringLiteral("active") : QStringLiteral("pending")));
-        step->setProperty("state", state);
-        step->style()->unpolish(step);
-        step->style()->polish(step);
+        if (step->property("state") != state) {
+            step->setProperty("state", state);
+            step->style()->unpolish(step);
+            step->style()->polish(step);
+        }
+        step->setVisible(width() >= 1280 || state == QLatin1String("active"));
     }
     for (int i = 0; i < m_navButtons.size(); ++i) {
         if (!m_navButtons.at(i))
             continue;
-        m_navButtons.at(i)->setProperty("active", i == index);
-        m_navButtons.at(i)->style()->unpolish(m_navButtons.at(i));
-        m_navButtons.at(i)->style()->polish(m_navButtons.at(i));
+        if (m_navButtons.at(i)->property("active") != QVariant(i == index)) {
+            m_navButtons.at(i)->setProperty("active", i == index);
+            m_navButtons.at(i)->style()->unpolish(m_navButtons.at(i));
+            m_navButtons.at(i)->style()->polish(m_navButtons.at(i));
+        }
     }
 }
 
@@ -1108,7 +1117,8 @@ void MainWindow::ensurePureCalculationPage()
     if (m_pureCalculationPage || !m_pages)
         return;
 
-    m_pureCalculationPage = new PureCalculationPage;
+    // 创建时即绑定最终父级，避免挂载大型控件树时重新传播整页样式和布局。
+    m_pureCalculationPage = new PureCalculationPage(m_pages);
     m_pureCalculationPage->setCatalog(&m_catalog);
     const auto state = ParameterWorkspaceState::fromJson(QJsonDocument::fromJson(
         QSettings().value(QStringLiteral("parameterWorkbench/state")).toByteArray()).object());
@@ -1122,10 +1132,9 @@ void MainWindow::ensureCalculationPage()
     if (m_calculationPage || !m_pages)
         return;
 
-    m_calculationPage = new CalculationPage;
+    m_calculationPage = new CalculationPage(m_pages);
     connect(m_calculationPage, &CalculationPage::recalculateRequested, this, [this]() {
-        m_request = m_inputPage->request();
-        refreshCalculationAssistant();
+        refreshCalculationAssistant(true);
     });
     connect(m_calculationPage, &CalculationPage::inputRequested, this, [this]() { setActivePage(0); });
     connect(m_calculationPage, &CalculationPage::cameraSelectionChanged, this, [this](int row) {
@@ -1140,15 +1149,17 @@ void MainWindow::ensureResultsPage()
     if (m_resultsPage || !m_pages)
         return;
 
-    m_resultsPage = new ResultsPage;
+    m_resultsPage = new ResultsPage(m_pages);
     connect(m_resultsPage, &ResultsPage::exportPdfRequested, this, &MainWindow::exportReportPdf);
     connect(m_resultsPage, &ResultsPage::exportBomRequested, this, &MainWindow::exportBomCsv);
     connect(m_resultsPage, &ResultsPage::inputRequested, this, [this]() { setActivePage(0); });
     connect(m_resultsPage, &ResultsPage::retryRequested, this, &MainWindow::runSelectionAndShowResults);
     replaceStackPage(m_pages, kResultsPageIndex, m_resultsPage);
     restorePersistentState(m_resultsPage);
-    if (!m_results.isEmpty())
-        m_resultsPage->setResults(m_results, m_request);
+    if (selectionCalculationRunning())
+        m_resultsPage->setBusy(m_selection.request);
+    else if (m_selectionCompleted)
+        m_resultsPage->setResults(m_selection.results, m_selection.request);
 }
 
 void MainWindow::ensureCatalogPage()
@@ -1156,7 +1167,7 @@ void MainWindow::ensureCatalogPage()
     if (m_catalogPage || !m_pages)
         return;
 
-    m_catalogPage = new CatalogPage;
+    m_catalogPage = new CatalogPage(m_pages);
     connect(m_catalogPage, &CatalogPage::cameraAddRequested, this, &MainWindow::addCamera);
     connect(m_catalogPage, &CatalogPage::cameraEditRequested, this, &MainWindow::editCamera);
     connect(m_catalogPage, &CatalogPage::cameraRemoveRequested, this, &MainWindow::removeCamera);
@@ -1186,7 +1197,7 @@ void MainWindow::ensureThreeDCameraPage()
     if (m_threeDCameraPage || !m_pages)
         return;
 
-    m_threeDCameraPage = new ThreeDCameraPage;
+    m_threeDCameraPage = new ThreeDCameraPage(m_pages);
     replaceStackPage(m_pages, kThreeDCameraPageIndex, m_threeDCameraPage);
 }
 
@@ -1204,8 +1215,7 @@ void MainWindow::calculate()
 {
     if (!m_inputPage)
         return;
-    m_request = m_inputPage->request();
-    startSelectionCalculation(m_request);
+    startSelectionCalculation(m_inputPage->request());
 }
 
 void MainWindow::startSelectionCalculation(const SelectionRequest &request)
@@ -1222,8 +1232,9 @@ void MainWindow::startSelectionCalculation(const SelectionRequest &request)
         return;
     }
 
-    m_request = request;
-    m_results.clear();
+    m_selection.request = request;
+    m_selectionCompleted = false;
+    m_selection.results.clear();
     if (m_inputPage)
         m_inputPage->setBusy(true);
     if (m_resultsPage)
@@ -1246,8 +1257,9 @@ void MainWindow::finishSelectionCalculation()
         return;
 
     const SelectionJobResult result = m_selectionWatcher->result();
-    m_request = result.request;
-    m_results = result.results;
+    m_selectionCompleted = true;
+    m_selection = result;
+    m_assistantRequest.reset();
 
     if (m_inputPage)
         m_inputPage->setBusy(false);
@@ -1263,16 +1275,18 @@ void MainWindow::finishSelectionCalculation()
     if (m_pages && m_pages->currentIndex() == kCalculationPageIndex)
         refreshCalculationAssistant();
     if (m_resultsPage && result.error.isEmpty())
-        m_resultsPage->setResults(m_results, m_request);
+        m_resultsPage->setResults(m_selection.results, m_selection.request);
+    if (m_resultsPage)
+        m_resultsPage->setRequestOutdated(m_selection.request != m_inputPage->request());
     if (result.error.isEmpty()) {
         announceAccessibleStatus(m_resultsPage ? static_cast<QWidget *>(m_resultsPage)
                                                : static_cast<QWidget *>(this),
-                                 m_results.isEmpty()
+                                 m_selection.results.isEmpty()
                                      ? localizedText("选型完成，没有可显示的候选方案。",
                                                      "Selection completed with no candidates to display.")
                                      : localizedText("选型完成，共生成 %1 个候选方案。",
                                                      "Selection completed with %1 candidate solutions.")
-                                           .arg(m_results.size()));
+                                           .arg(m_selection.results.size()));
     }
     refreshSidebarSummary();
 
@@ -1288,14 +1302,41 @@ bool MainWindow::selectionCalculationRunning() const
     return m_selectionWatcher && m_selectionWatcher->isRunning();
 }
 
-void MainWindow::refreshCalculationAssistant()
+void MainWindow::refreshCalculationAssistant(bool force)
 {
     if (!m_calculationPage)
         return;
 
-    const RequirementEstimate requirement = CalculationAssistant::estimateRequirement(m_request);
-    const QVector<CameraSpec> cameraCandidates = m_catalog.selectionCandidateCameras(m_request, 300);
-    m_assistantCameraEstimates = CalculationAssistant::estimateCameras(m_request, cameraCandidates, 12);
+    const SelectionRequest request = m_inputPage->request();
+    // 普通导航复用已有候选；输入变化、目录维护和主动重算会使缓存失效。
+    if (!force && m_assistantRequest && *m_assistantRequest == request)
+        return;
+    const RequirementEstimate requirement = CalculationAssistant::estimateRequirement(request);
+    QString error;
+    QVector<CameraSpec> cameraCandidates = m_catalog.selectionCandidateCameras(request, 300, &error);
+    if (error.isEmpty()) m_assistantLensCandidates = m_catalog.selectionCandidateLenses(request, 500, &error);
+    if (!error.isEmpty()) {
+        m_assistantRequest.reset();
+        m_assistantCameraEstimates.clear(); m_assistantLensCandidates.clear();
+        m_calculationPage->setCameraEstimates({}); m_calculationPage->setLensEstimates({});
+        m_calculationPage->setSummary(localizedText("目录查询失败，请点击重新计算：%1", "Catalog query failed. Recalculate to retry: %1").arg(error));
+        m_calculationPage->setDetails(error);
+        return;
+    }
+    m_assistantRequest = request;
+    // 扩大召回找到的产品也必须能在计算助手中复核。
+    if (m_selection.request == request && m_selection.error.isEmpty()) {
+        const auto appendMissing = [](auto &specs, const auto &spec) {
+            for (const auto &existing : specs)
+                if (existing.manufacturer == spec.manufacturer && existing.model == spec.model) return;
+            specs.append(spec);
+        };
+        for (const auto &result : m_selection.results) {
+            appendMissing(cameraCandidates, result.camera);
+            appendMissing(m_assistantLensCandidates, result.lens);
+        }
+    }
+    m_assistantCameraEstimates = CalculationAssistant::estimateCameras(request, cameraCandidates, 0);
 
     m_calculationPage->setSummary(localizedText("需求 FOV：%1 x %2 mm，目标物方像素：%3 um/px，相机下限：%4 x %5（%6 MP）",
                                                 "Required FOV: %1 x %2 mm, target object pixel: %3 um/px, minimum camera: %4 x %5 (%6 MP)")
@@ -1306,19 +1347,24 @@ void MainWindow::refreshCalculationAssistant()
         .arg(requirement.requiredResolutionY)
         .arg(requirement.requiredMegapixels, 0, 'f', 2));
 
-    m_calculationPage->setCameraEstimates(m_assistantCameraEstimates);
+    const CameraSpec *initialCamera = m_selection.request == request && !m_selection.results.isEmpty()
+        && m_selection.results.first().hardConstraintsPassed ? &m_selection.results.first().camera : nullptr;
+    m_calculationPage->setCameraEstimates(m_assistantCameraEstimates, initialCamera);
     m_assistantSelectedCameraRow = m_calculationPage->selectedCameraEstimateRow();
     refreshAssistantLensTable();
 }
 
 void MainWindow::refreshAssistantLensTable()
 {
-    if (!m_calculationPage)
+    if (!m_calculationPage || !m_assistantRequest)
         return;
 
-    const RequirementEstimate requirement = CalculationAssistant::estimateRequirement(m_request);
+    const SelectionRequest &request = *m_assistantRequest;
+    const RequirementEstimate requirement = CalculationAssistant::estimateRequirement(request);
     QString details;
     details += localizedText("参数要求\n", "Requirements\n");
+    details += localizedText("- 本次工作距离：%1 mm；高度波动：%2 mm。\n", "- Requested WD: %1 mm; height variation: %2 mm.\n")
+        .arg(request.workingDistanceMm, 0, 'f', 1).arg(request.heightVariationMm, 0, 'f', 2);
     details += localizedText("- 最低分辨率：%1 x %2，建议不低于 %3 MP。\n",
                              "- Minimum resolution: %1 x %2, recommended at least %3 MP.\n")
         .arg(requirement.requiredResolutionX)
@@ -1327,7 +1373,7 @@ void MainWindow::refreshAssistantLensTable()
     details += localizedText("- 12 bit 原始数据带宽估算：%1 MB/s @ %2 fps。\n",
                              "- Estimated 12-bit raw bandwidth: %1 MB/s @ %2 fps.\n")
         .arg(requirement.requiredBandwidthMBps12Bit, 0, 'f', 1)
-        .arg(m_request.requiredFps, 0, 'f', 1);
+        .arg(request.requiredFps, 0, 'f', 1);
     details += localizedText("- 镜头类型倾向：%1。\n", "- Lens type preference: %1.\n")
         .arg(requirement.telecentricPreferred
             ? localizedText("高精度/高度波动，优先评估远心镜头", "high precision / height variation, evaluate telecentric lenses first")
@@ -1345,32 +1391,11 @@ void MainWindow::refreshAssistantLensTable()
     }
 
     const CameraSpec camera = m_assistantCameraEstimates.at(m_assistantSelectedCameraRow).camera;
-    const QVector<LensSpec> lensCandidates = m_catalog.selectionCandidateLenses(m_request, 500);
-    m_assistantLensEstimates = CalculationAssistant::estimateLenses(m_request, camera, lensCandidates, 12);
+    m_assistantLensEstimates = CalculationAssistant::estimateLenses(request, camera, m_assistantLensCandidates, 12);
     m_calculationPage->setLensEstimates(m_assistantLensEstimates);
 
     details += localizedText("\n当前镜头候选基于相机：%1。\n", "\nCurrent lens candidates are based on camera: %1.\n")
         .arg(productLabel(camera.manufacturer, camera.model));
-    if (!m_assistantLensEstimates.isEmpty()) {
-        const LensCalculationEstimate &top = m_assistantLensEstimates.first();
-        details += localizedText("- 首选镜头：%1 %2，FOV %3 x %4 mm，物方像素 %5 um/px。\n",
-                                 "- Top lens: %1 %2, FOV %3 x %4 mm, object pixel %5 um/px.\n")
-            .arg(top.lens.manufacturer, top.lens.model)
-            .arg(top.effectiveFovWidthMm, 0, 'f', 2)
-            .arg(top.effectiveFovHeightMm, 0, 'f', 2)
-            .arg(top.objectPixelSizeUm, 0, 'f', 2);
-        details += localizedText("- 工程估算：DOF %1 mm，畸变边缘误差约 %2 um。\n",
-                                 "- Engineering estimate: DOF %1 mm, distortion edge error about %2 um.\n")
-            .arg(top.estimatedDofMm, 0, 'f', 2)
-            .arg(top.distortionErrorUm, 0, 'f', 2);
-        details += localizedText("- 公式：%1。\n", "- Formula: %1.\n").arg(top.formulaSummary);
-        details += localizedText("- 推荐理由：%1。\n", "- Reasons: %1.\n")
-            .arg(top.reasons.isEmpty() ? localizedText("按综合参数排名", "ranked by combined parameters") : top.reasons.join(localizedText("；", "; ")));
-        details += localizedText("- 风险：%1", "- Risks: %1")
-            .arg(top.risks.isEmpty() ? localizedText("无主要风险", "No major risk") : top.risks.join(localizedText("；", "; ")));
-    } else {
-        details += localizedText("- 没有符合当前限制的镜头候选。", "- No lens candidates match the current constraints.");
-    }
     m_calculationPage->setDetails(details);
 }
 void MainWindow::refreshCatalogTables()
@@ -1382,47 +1407,59 @@ void MainWindow::refreshCatalogTables()
 
 void MainWindow::handleCatalogMutation()
 {
+    m_assistantRequest.reset();
     refreshCatalogTables();
     calculate();
 }
 
-void MainWindow::importCameras()
+void MainWindow::importCatalog(CatalogDomain domain)
 {
-    const QString path = QFileDialog::getOpenFileName(this, localizedText("导入相机 CSV", "Import Camera CSV"), QString(), QStringLiteral("CSV (*.csv)"));
-    if (path.isEmpty())
-        return;
-    QString error;
-    if (!m_catalog.loadCameraCsv(path, &error)) {
-        showError(error);
-        return;
+    const QString path = QFileDialog::getOpenFileName(this, localizedText("导入产品 CSV", "Import product CSV"), {}, QStringLiteral("CSV (*.csv)"));
+    if (path.isEmpty()) return;
+    QDialog dialog(this);
+    dialog.setWindowTitle(localizedText("确认导入范围", "Review import changes"));
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *mode = new QComboBox(&dialog);
+    mode->addItem(localizedText("合并：按厂家和型号新增或更新，保留其他产品", "Merge: add or update by manufacturer and model; keep other products"));
+    mode->addItem(localizedText("替换：删除本类未包含在 CSV 中的产品", "Replace: remove products in this category absent from the CSV"));
+    layout->addWidget(mode);
+    auto *summary = new QLabel(&dialog); summary->setWordWrap(true); summary->setTextFormat(Qt::PlainText);
+    layout->addWidget(summary);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    const auto refresh = [&]() {
+        CatalogImportPreview preview; QString error;
+        const bool ok = m_catalog.previewImport(domain, path, mode->currentIndex() == 0 ? CatalogImportMode::Merge : CatalogImportMode::Replace, &preview, &error);
+        summary->setText(ok ? localizedText("新增 %1，更新 %2，删除 %3。提交前自动备份整个产品库。", "Add %1, update %2, remove %3. A complete catalog backup is saved before import.")
+            .arg(preview.added).arg(preview.updated).arg(preview.removed) : error);
+        buttons->button(QDialogButtonBox::Ok)->setEnabled(ok);
+    };
+    connect(mode, &QComboBox::currentIndexChanged, &dialog, refresh);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    refresh();
+    if (dialog.exec() != QDialog::Accepted) return;
+    QString error, backup;
+    if (!m_catalog.importCsv(domain, path, mode->currentIndex() == 0 ? CatalogImportMode::Merge : CatalogImportMode::Replace, &backup, &error)) {
+        showError(error); return;
     }
     handleCatalogMutation();
+    QMessageBox::information(this, localizedText("导入完成", "Import complete"),
+        localizedText("导入成功。恢复备份：\n%1", "Import succeeded. Recovery backup:\n%1").arg(backup));
+}
+void MainWindow::importCameras()
+{
+    importCatalog(CatalogDomain::Camera);
 }
 
 void MainWindow::importLenses()
 {
-    const QString path = QFileDialog::getOpenFileName(this, localizedText("导入镜头 CSV", "Import Lens CSV"), QString(), QStringLiteral("CSV (*.csv)"));
-    if (path.isEmpty())
-        return;
-    QString error;
-    if (!m_catalog.loadLensCsv(path, &error)) {
-        showError(error);
-        return;
-    }
-    handleCatalogMutation();
+    importCatalog(CatalogDomain::Lens);
 }
 
 void MainWindow::importLights()
 {
-    const QString path = QFileDialog::getOpenFileName(this, localizedText("导入光源 CSV", "Import Light CSV"), QString(), QStringLiteral("CSV (*.csv)"));
-    if (path.isEmpty())
-        return;
-    QString error;
-    if (!m_catalog.loadLightCsv(path, &error)) {
-        showError(error);
-        return;
-    }
-    handleCatalogMutation();
+    importCatalog(CatalogDomain::Light);
 }
 
 void MainWindow::exportCameras()
@@ -1782,7 +1819,7 @@ void MainWindow::exportBomCsv()
         showError(tr("Recommendation calculation is still running. Please export after it completes."));
         return;
     }
-    if (m_results.isEmpty()) {
+    if (m_selection.results.isEmpty()) {
         calculate();
         showError(tr("Recommendation calculation has started. Please export after it completes."));
         return;
@@ -1794,47 +1831,10 @@ void MainWindow::exportBomCsv()
     if (path.isEmpty())
         return;
 
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        showError(tr("Unable to write BOM CSV: %1").arg(path));
-        return;
+    QString error;
+    if (!BomCsvWriter().write(path, m_selection.request, m_selection.results, &error)) {
+        showError(error); return;
     }
-
-    QTextStream out(&file);
-    out.setEncoding(QStringConverter::Utf8);
-    out << "scheme,rank,category,manufacturer,model,key_specs,notes,project_notes\n";
-    const int count = qMin(5, m_results.size());
-    for (int i = 0; i < count; ++i) {
-        const SelectionResult &r = m_results.at(i);
-        const QString scheme = QStringLiteral("#%1 %2").arg(i + 1).arg(r.schemeTitle);
-        out << csvCell(scheme) << "," << (i + 1) << ","
-            << csvCell(tr("Camera")) << ","
-            << csvCell(r.camera.manufacturer) << ","
-            << csvCell(r.camera.model) << ","
-            << csvCell(bomSpecForCamera(r.camera, r)) << ","
-            << csvCell(QStringLiteral("FOV %1 x %2 mm; object pixel %3 um")
-                .arg(r.effectiveFovWidthMm, 0, 'f', 2)
-                .arg(r.effectiveFovHeightMm, 0, 'f', 2)
-                .arg(r.objectPixelSizeUm, 0, 'f', 2))
-            << "," << csvCell(m_request.projectNotes) << "\n";
-        out << csvCell(scheme) << "," << (i + 1) << ","
-            << csvCell(tr("Lens")) << ","
-            << csvCell(r.lens.manufacturer) << ","
-            << csvCell(r.lens.model) << ","
-            << csvCell(bomSpecForLens(r.lens, r)) << ","
-            << csvCell(QStringLiteral("distortion %1 um; lens MP utilization %2%")
-                .arg(r.distortionErrorUm, 0, 'f', 2)
-                .arg(r.lensMegapixelUtilizationPercent, 0, 'f', 0))
-            << "," << csvCell(m_request.projectNotes) << "\n";
-        out << csvCell(scheme) << "," << (i + 1) << ","
-            << csvCell(tr("Light")) << ","
-            << csvCell(r.light.manufacturer) << ","
-            << csvCell(r.light.model) << ","
-            << csvCell(bomSpecForLight(r.light, r)) << ","
-            << csvCell(riskSummary(r)) << ","
-            << csvCell(m_request.projectNotes) << "\n";
-    }
-    file.close();
     QMessageBox::information(this, tr("Export Complete"), path);
 }
 
@@ -1844,7 +1844,7 @@ void MainWindow::exportReportPdf()
         showError(tr("Recommendation calculation is still running. Please export after it completes."));
         return;
     }
-    if (m_results.isEmpty()) {
+    if (m_selection.results.isEmpty()) {
         calculate();
         showError(tr("Recommendation calculation has started. Please export after it completes."));
         return;
@@ -1858,7 +1858,7 @@ void MainWindow::exportReportPdf()
 
     PdfReportWriter writer;
     QString error;
-    if (!writer.write(path, m_request, m_results, &error)) {
+    if (!writer.write(path, m_selection.request, m_selection.results, &error)) {
         showError(error);
         return;
     }

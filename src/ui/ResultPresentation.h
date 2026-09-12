@@ -13,6 +13,7 @@ enum class ResultRiskLevel {
 
 struct ResultPresentation {
     bool compatible = false;
+    bool needsConfirmation = false;
     bool matchAvailable = false;
     int relativeMatchPercent = 0;
     QStringList riskItems;

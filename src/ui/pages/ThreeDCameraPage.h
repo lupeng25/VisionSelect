@@ -19,6 +19,8 @@ class QTextBrowser;
 class QTextEdit;
 class QSplitter;
 class QFrame;
+class QPushButton;
+class QScrollArea;
 
 class ThreeDCameraPage : public QWidget
 {
@@ -70,8 +72,15 @@ private:
     QTextEdit *m_samplingOutput = nullptr;
     QSplitter *m_productSplitter = nullptr;
     QFrame *m_advancedFilters = nullptr;
+    QScrollArea *m_filterScroll = nullptr;
+    QPushButton *m_filterToggle = nullptr;
+    QPushButton *m_detailsToggle = nullptr;
+    QFrame *m_detailsPanel = nullptr;
+    bool m_filtersDirty = false;
 
+    void buildProductToolbar(QLayout *parentLayout);
     void buildFilters(QLayout *parentLayout);
+    void updateFilterButton();
     void buildSamplingPanel(QLayout *parentLayout);
     bool ensureLoaded();
     void populateFilterOptions();

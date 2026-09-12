@@ -200,6 +200,66 @@ QTableWidgetItem *indexedItem(const QString &text, int sourceIndex)
     return tableItem;
 }
 
+namespace {
+class NumericTableItem : public QTableWidgetItem {
+public:
+    NumericTableItem(const QString &text, std::optional<double> value)
+        : QTableWidgetItem(text), m_value(value) {}
+    bool operator<(const QTableWidgetItem &other) const override
+    {
+        const auto *numeric = dynamic_cast<const NumericTableItem *>(&other);
+        if (!numeric) return QTableWidgetItem::operator<(other);
+        if (m_value.has_value() != numeric->m_value.has_value()) {
+            const bool descending = tableWidget()
+                && tableWidget()->horizontalHeader()->sortIndicatorOrder() == Qt::DescendingOrder;
+            return m_value ? !descending : descending;
+        }
+        if (m_value && *m_value != *numeric->m_value) return *m_value < *numeric->m_value;
+        return QTableWidgetItem::operator<(other);
+    }
+private:
+    std::optional<double> m_value;
+};
+}
+
+QTableWidgetItem *numericItem(const QString &text, std::optional<double> value)
+{
+    auto *tableItem = new NumericTableItem(text, value);
+    tableItem->setFlags(tableItem->flags() & ~Qt::ItemIsEditable);
+    tableItem->setToolTip(text);
+    return tableItem;
+}
+
+QString candidateStatusText(const CandidateChecks &checks, bool hardPassed)
+{
+    if (!hardPassed || checks.failed()) return localizedText("不满足", "Failed");
+    if (checks.unknown()) return localizedText("待确认", "Pending");
+    return localizedText("初筛通过", "Screened");
+}
+
+void decorateCandidateStatus(QTableWidgetItem *item, const CandidateChecks &checks, bool hardPassed)
+{
+    QFont font = item->font();
+    font.setBold(true);
+    item->setFont(font);
+    if (!UiThemeManager::instance().highContrast())
+        item->setForeground(QColor(!hardPassed || checks.failed() ? "#b42318" : checks.unknown() ? "#966000" : "#176641"));
+}
+
+QString candidateChecksHtml(const CandidateChecks &checks)
+{
+    QString html = QStringLiteral("<table cellspacing='4' cellpadding='2'>");
+    for (const auto state : {CandidateCheckState::Failed, CandidateCheckState::Unknown, CandidateCheckState::Passed}) {
+        for (size_t i = 0; i < checks.states.size(); ++i) {
+            if (checks.states[i] != state) continue;
+            html += QStringLiteral("<tr><td><b>%1</b></td><td>%2</td></tr>")
+                .arg(candidateCheckStateLabel(state).toHtmlEscaped(),
+                     candidateCheckLabel(static_cast<CandidateCheck>(i)).toHtmlEscaped());
+        }
+    }
+    return html + QStringLiteral("</table>");
+}
+
 int rowSourceIndex(const QTableWidget *table, int row)
 {
     if (!table || row < 0 || row >= table->rowCount())
@@ -284,21 +344,18 @@ QString productLabel(const QString &manufacturer, const QString &model)
 
 QString compatibilityText(const SelectionResult &result)
 {
-    return result.hardConstraintsPassed
-        ? QCoreApplication::translate("UiHelpers", "Compatible")
-        : QCoreApplication::translate("UiHelpers", "Not compatible");
+    return candidateStatusText(result.checks, result.hardConstraintsPassed);
 }
 
-QString riskSummary(const SelectionResult &result)
+QString riskSummary(const SelectionResult &source)
 {
-    QStringList risks = result.score.risks;
-    const QString separator = QCoreApplication::translate("UiHelpers", "; ");
-    if (!result.hardFailures.isEmpty())
-        risks.prepend(QCoreApplication::translate("UiHelpers", "Hard mismatch: %1")
-            .arg(result.hardFailures.join(separator)));
+    const SelectionResult result = localizedResult(source);
+    QStringList risks = candidateCheckMessages(result.checks, CandidateCheckState::Failed)
+        + result.hardFailures + candidateCheckMessages(result.checks, CandidateCheckState::Unknown) + result.score.risks;
+    risks.removeDuplicates();
     return risks.isEmpty()
-        ? QCoreApplication::translate("UiHelpers", "No major risk")
-        : risks.join(separator);
+        ? localizedText("无主要风险", "No major risk")
+        : risks.join(localizedText("；", "; "));
 }
 
 QString exposureText(double exposureUs)

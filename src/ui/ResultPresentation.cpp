@@ -6,16 +6,19 @@
 QVector<ResultPresentation> buildResultPresentations(const QVector<SelectionResult> &results)
 {
     double bestCompatibleScore = 0.0;
-    for (const SelectionResult &result : results) {
+    for (const SelectionResult &source : results) {
+        const SelectionResult result = localizedResult(source);
         if (result.hardConstraintsPassed)
             bestCompatibleScore = qMax(bestCompatibleScore, result.score.score);
     }
 
     QVector<ResultPresentation> presentations;
     presentations.reserve(results.size());
-    for (const SelectionResult &result : results) {
+    for (const SelectionResult &source : results) {
+        const SelectionResult result = localizedResult(source);
         ResultPresentation presentation;
         presentation.compatible = result.hardConstraintsPassed;
+        presentation.needsConfirmation = result.checks.unknown();
         presentation.matchAvailable = presentation.compatible && bestCompatibleScore > 0.0;
         if (presentation.matchAvailable) {
             presentation.relativeMatchPercent = qBound(
@@ -32,7 +35,9 @@ QVector<ResultPresentation> buildResultPresentations(const QVector<SelectionResu
                 }
             }
         };
+        appendUnique(candidateCheckMessages(result.checks, CandidateCheckState::Failed));
         appendUnique(result.hardFailures);
+        appendUnique(candidateCheckMessages(result.checks, CandidateCheckState::Unknown));
         appendUnique(result.score.risks);
         presentation.riskLevel = !result.hardFailures.isEmpty()
             ? ResultRiskLevel::Error

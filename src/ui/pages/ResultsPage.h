@@ -13,6 +13,8 @@ class QEvent;
 class QTableWidget;
 class QTextEdit;
 class QSplitter;
+class QPushButton;
+class QFrame;
 
 class ResultsPage : public QWidget
 {
@@ -25,6 +27,7 @@ public:
     void setError(const QString &message);
     void setResults(const QVector<SelectionResult> &results,
                     const SelectionRequest &request);
+    void setRequestOutdated(bool outdated);
 
 signals:
     void exportPdfRequested();
@@ -37,12 +40,20 @@ protected:
 
 private:
     QVector<SelectionResult> m_results;
+    SelectionRequest m_resultRequest;
     QVector<ResultPresentation> m_presentations;
     QLabel *m_summaryLabel = nullptr;
     QHBoxLayout *m_cardsLayout = nullptr;
     QTableWidget *m_table = nullptr;
     QTextEdit *m_details = nullptr;
     QSplitter *m_splitter = nullptr;
+    QFrame *m_cards = nullptr;
+    QFrame *m_staleBanner = nullptr;
+    QLabel *m_countLabel = nullptr;
+    QLabel *m_selectionSummary = nullptr;
+    QPushButton *m_compareButton = nullptr;
+    QPushButton *m_detailsButton = nullptr;
+    int m_selectedSourceIndex = -1;
     void refreshCards(const SelectionRequest &request);
     void refreshTable(const SelectionRequest &request);
     void refreshDetails(int row);

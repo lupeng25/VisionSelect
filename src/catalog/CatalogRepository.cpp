@@ -1,4 +1,10 @@
 #include "catalog/CatalogRepository.h"
+#include "core/PixelFormat.h"
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QCryptographicHash>
+#include <QUuid>
 #include "core/SamplingPolicy.h"
 
 #include "core/Localization.h"
@@ -294,6 +300,10 @@ bool sameCameraSpec(const CameraSpec &left, const CameraSpec &right)
         && nearlyEqual(left.pixelSizeUm, right.pixelSizeUm)
         && left.sensorFormat == right.sensorFormat
         && left.colorMode == right.colorMode
+        && left.pixelFormat == right.pixelFormat
+        && left.bandwidthSource == right.bandwidthSource
+        && left.sourceUrl == right.sourceUrl
+        && left.sourceDate == right.sourceDate
         && left.shutterType == right.shutterType
         && nearlyEqual(left.maxFps, right.maxFps)
         && left.interfaceType == right.interfaceType
@@ -321,6 +331,7 @@ bool sameLensSpec(const LensSpec &left, const LensSpec &right)
         && nearlyEqual(left.maxSensorDiagonalMm, right.maxSensorDiagonalMm)
         && nearlyEqual(left.telecentricityDeg, right.telecentricityDeg)
         && nearlyEqual(left.dofMm, right.dofMm)
+        && left.dofConditionsConfirmed == right.dofConditionsConfirmed
         && nearlyEqual(left.numericalAperture, right.numericalAperture)
         && nearlyEqual(left.fNumber, right.fNumber)
         && left.coaxialIllumination == right.coaxialIllumination
@@ -408,6 +419,38 @@ double targetObjectPixelUmForRequest(const SelectionRequest &request)
 }
 }
 
+namespace {
+QString cameraMetadata(const CameraSpec &c) {
+    return QString::fromUtf8(QJsonDocument(QJsonObject{{"pixel_format", c.pixelFormat},
+        {"bandwidth_source", c.bandwidthSource}, {"source_url", c.sourceUrl}, {"source_date", c.sourceDate}}).toJson(QJsonDocument::Compact));
+}
+void readCameraMetadata(CameraSpec *c, const QVariant &value) {
+    const auto o = QJsonDocument::fromJson(value.toString().toUtf8()).object();
+    c->pixelFormat = o.value("pixel_format").toString();
+    c->bandwidthSource = o.value("bandwidth_source").toString(QStringLiteral("estimated"));
+    c->sourceUrl = o.value("source_url").toString(); c->sourceDate = o.value("source_date").toString();
+}
+QString lensMetadata(const LensSpec &l) {
+    return QString::fromUtf8(QJsonDocument(QJsonObject{{"dof_conditions_confirmed", l.dofConditionsConfirmed}}).toJson(QJsonDocument::Compact));
+}
+void readLensMetadata(LensSpec *l, const QVariant &value) {
+    l->dofConditionsConfirmed = QJsonDocument::fromJson(value.toString().toUtf8()).object().value("dof_conditions_confirmed").toBool();
+}
+QString catalogUpsert(const QStringList &columns, const QString &sourceKind, bool replaceExisting) {
+    if (!replaceExisting && sourceKind != QLatin1String("builtin")) return QStringLiteral(" ON CONFLICT DO NOTHING");
+    QStringList updates;
+    for (const auto &column : columns) {
+        if (column == QLatin1String("created_at")) continue;
+        updates.append(column + QStringLiteral("=excluded.") + column);
+    }
+    QString result = QStringLiteral(" ON CONFLICT(manufacturer_key,model_key) DO UPDATE SET ") + updates.join(',');
+    if (!replaceExisting) result += QStringLiteral(" WHERE source_kind='builtin' AND source_version<>excluded.source_version");
+    return result;
+}
+QString contentVersion(const QList<QVariant> &values) {
+    return QString::fromLatin1(QCryptographicHash::hash(QJsonDocument(QJsonArray::fromVariantList(values)).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex());
+}
+}
 CatalogRepository::CatalogRepository()
 {
     m_connectionName = QStringLiteral("visionselect_catalog_%1")
@@ -581,9 +624,6 @@ bool CatalogRepository::ensureDatabase(QString *errorMessage)
     const bool existed = QFileInfo::exists(databasePath());
     if (!openDatabase(errorMessage))
         return false;
-    if (!createSchema(errorMessage))
-        return false;
-
     QSqlQuery versionQuery(m_db);
     if (!versionQuery.exec(QStringLiteral("PRAGMA user_version"))) {
         if (errorMessage)
@@ -593,14 +633,21 @@ bool CatalogRepository::ensureDatabase(QString *errorMessage)
     int version = 0;
     if (versionQuery.next())
         version = versionQuery.value(0).toInt();
+    if (version > 2) {
+        if (errorMessage)
+            *errorMessage = CoreI18n::localizedText("产品库版本高于当前软件支持的版本，请使用更新的软件打开。", "This catalog requires a newer application version.");
+        return false;
+    }
+    if (!createSchema(errorMessage))
+        return false;
 
     if (!existed || version == 0) {
         if (!migrateInitialDatabase(errorMessage))
             return false;
-        if (!execSql(m_db, QStringLiteral("PRAGMA user_version = 1"), errorMessage))
+        if (!execSql(m_db, QStringLiteral("PRAGMA user_version = 2"), errorMessage))
             return false;
     }
-    return true;
+    return execSql(m_db, QStringLiteral("PRAGMA user_version = 2"), errorMessage);
 }
 
 bool CatalogRepository::createSchema(QString *errorMessage) const
@@ -713,6 +760,14 @@ bool CatalogRepository::createSchema(QString *errorMessage) const
     for (const QString &statement : statements) {
         if (!execSql(m_db, statement, errorMessage))
             return false;
+    }
+    for (const QString &table : {QStringLiteral("camera_products"), QStringLiteral("lens_products")}) {
+        QSqlQuery info(m_db);
+        if (!info.exec(QStringLiteral("PRAGMA table_info(%1)").arg(table))) return false;
+        bool found = false;
+        while (info.next()) found = found || info.value(1).toString() == QLatin1String("metadata");
+        info.finish();
+        if (!found && !execSql(m_db, QStringLiteral("ALTER TABLE %1 ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'").arg(table), errorMessage)) return false;
     }
     return true;
 }
@@ -1077,13 +1132,10 @@ bool CatalogRepository::insertCameraIntoDatabase(const CameraSpec &camera, const
     ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
-    const QString command = replaceExisting ? QStringLiteral("INSERT OR REPLACE") : QStringLiteral("INSERT OR IGNORE");
     QSqlQuery query(m_db);
-    query.prepare(command + QStringLiteral(
-        " INTO camera_products (model, manufacturer, manufacturer_key, model_key, resolution_x, resolution_y, pixel_size_um,"
-        " sensor_format, color_mode, shutter_type, max_fps, interface, bandwidth_mbps, bit_depth, dynamic_range_db, lens_mount,"
-        " search_text, source_kind, source_version, created_at, updated_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+    const QStringList columns = {QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("manufacturer_key"), QStringLiteral("model_key"), QStringLiteral("resolution_x"), QStringLiteral("resolution_y"), QStringLiteral("pixel_size_um"), QStringLiteral("sensor_format"), QStringLiteral("color_mode"), QStringLiteral("shutter_type"), QStringLiteral("max_fps"), QStringLiteral("interface"), QStringLiteral("bandwidth_mbps"), QStringLiteral("bit_depth"), QStringLiteral("dynamic_range_db"), QStringLiteral("lens_mount"), QStringLiteral("metadata"), QStringLiteral("search_text"), QStringLiteral("source_kind"), QStringLiteral("source_version"), QStringLiteral("created_at"), QStringLiteral("updated_at")};
+    query.prepare(QStringLiteral("INSERT INTO camera_products (model,manufacturer,manufacturer_key,model_key,resolution_x,resolution_y,pixel_size_um,sensor_format,color_mode,shutter_type,max_fps,interface,bandwidth_mbps,bit_depth,dynamic_range_db,lens_mount,metadata,search_text,source_kind,source_version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        + catalogUpsert(columns, sourceKind, replaceExisting));
     const QString now = nowUtcIso();
     query.addBindValue(camera.model);
     query.addBindValue(camera.manufacturer);
@@ -1101,9 +1153,10 @@ bool CatalogRepository::insertCameraIntoDatabase(const CameraSpec &camera, const
     query.addBindValue(camera.bitDepth);
     query.addBindValue(camera.dynamicRangeDb);
     query.addBindValue(camera.lensMount);
+    query.addBindValue(cameraMetadata(camera));
     query.addBindValue(QStringList({camera.model, camera.manufacturer, camera.interfaceType, camera.lensMount, camera.sensorFormat, camera.colorMode, camera.shutterType}).join(QLatin1Char(' ')).toLower());
     query.addBindValue(sourceKind);
-    query.addBindValue(QStringLiteral("1"));
+    query.addBindValue(contentVersion(query.boundValues()));
     query.addBindValue(now);
     query.addBindValue(now);
     if (!query.exec()) {
@@ -1121,14 +1174,10 @@ bool CatalogRepository::insertLensIntoDatabase(const LensSpec &lens, const QStri
     ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
-    const QString command = replaceExisting ? QStringLiteral("INSERT OR REPLACE") : QStringLiteral("INSERT OR IGNORE");
     QSqlQuery query(m_db);
-    query.prepare(command + QStringLiteral(
-        " INTO lens_products (model, manufacturer, manufacturer_key, model_key, lens_type, lens_mount, focal_length_mm,"
-        " min_wd_mm, distortion_percent, image_circle_mm, megapixel_rating, recommended_min_pixel_um, pmag,"
-        " nominal_wd_mm, wd_tolerance_mm, max_sensor_diagonal_mm, telecentricity_deg, dof_mm, numerical_aperture,"
-        " f_number, coaxial_illumination, notes, search_text, source_kind, source_version, created_at, updated_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+    const QStringList columns = {QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("manufacturer_key"), QStringLiteral("model_key"), QStringLiteral("lens_type"), QStringLiteral("lens_mount"), QStringLiteral("focal_length_mm"), QStringLiteral("min_wd_mm"), QStringLiteral("distortion_percent"), QStringLiteral("image_circle_mm"), QStringLiteral("megapixel_rating"), QStringLiteral("recommended_min_pixel_um"), QStringLiteral("pmag"), QStringLiteral("nominal_wd_mm"), QStringLiteral("wd_tolerance_mm"), QStringLiteral("max_sensor_diagonal_mm"), QStringLiteral("telecentricity_deg"), QStringLiteral("dof_mm"), QStringLiteral("numerical_aperture"), QStringLiteral("f_number"), QStringLiteral("coaxial_illumination"), QStringLiteral("notes"), QStringLiteral("metadata"), QStringLiteral("search_text"), QStringLiteral("source_kind"), QStringLiteral("source_version"), QStringLiteral("created_at"), QStringLiteral("updated_at")};
+    query.prepare(QStringLiteral("INSERT INTO lens_products (model,manufacturer,manufacturer_key,model_key,lens_type,lens_mount,focal_length_mm,min_wd_mm,distortion_percent,image_circle_mm,megapixel_rating,recommended_min_pixel_um,pmag,nominal_wd_mm,wd_tolerance_mm,max_sensor_diagonal_mm,telecentricity_deg,dof_mm,numerical_aperture,f_number,coaxial_illumination,notes,metadata,search_text,source_kind,source_version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        + catalogUpsert(columns, sourceKind, replaceExisting));
     const QString now = nowUtcIso();
     query.addBindValue(lens.model);
     query.addBindValue(lens.manufacturer);
@@ -1152,9 +1201,10 @@ bool CatalogRepository::insertLensIntoDatabase(const LensSpec &lens, const QStri
     query.addBindValue(lens.fNumber);
     query.addBindValue(lens.coaxialIllumination ? 1 : 0);
     query.addBindValue(lens.notes);
+    query.addBindValue(lensMetadata(lens));
     query.addBindValue(QStringList({lens.model, lens.manufacturer, lensTypeKey(lens.lensType), lens.lensMount, lens.notes}).join(QLatin1Char(' ')).toLower());
     query.addBindValue(sourceKind);
-    query.addBindValue(QStringLiteral("1"));
+    query.addBindValue(contentVersion(query.boundValues()));
     query.addBindValue(now);
     query.addBindValue(now);
     if (!query.exec()) {
@@ -1172,12 +1222,10 @@ bool CatalogRepository::insertLightIntoDatabase(const LightSpec &light, const QS
     ScopedErrorLocalizer localizeError(errorMessage);
     if (!openDatabase(errorMessage))
         return false;
-    const QString command = replaceExisting ? QStringLiteral("INSERT OR REPLACE") : QStringLiteral("INSERT OR IGNORE");
     QSqlQuery query(m_db);
-    query.prepare(command + QStringLiteral(
-        " INTO light_products (model, manufacturer, manufacturer_key, model_key, light_type, color, wavelength_nm,"
-        " mode, active_width_mm, active_height_mm, best_for, search_text, source_kind, source_version, created_at, updated_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+    const QStringList columns = {QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("manufacturer_key"), QStringLiteral("model_key"), QStringLiteral("light_type"), QStringLiteral("color"), QStringLiteral("wavelength_nm"), QStringLiteral("mode"), QStringLiteral("active_width_mm"), QStringLiteral("active_height_mm"), QStringLiteral("best_for"), QStringLiteral("search_text"), QStringLiteral("source_kind"), QStringLiteral("source_version"), QStringLiteral("created_at"), QStringLiteral("updated_at")};
+    query.prepare(QStringLiteral("INSERT INTO light_products (model,manufacturer,manufacturer_key,model_key,light_type,color,wavelength_nm,mode,active_width_mm,active_height_mm,best_for,search_text,source_kind,source_version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        + catalogUpsert(columns, sourceKind, replaceExisting));
     const QString now = nowUtcIso();
     query.addBindValue(light.model);
     query.addBindValue(light.manufacturer);
@@ -1192,7 +1240,7 @@ bool CatalogRepository::insertLightIntoDatabase(const LightSpec &light, const QS
     query.addBindValue(light.bestFor);
     query.addBindValue(QStringList({light.model, light.manufacturer, lightTypeKey(light.lightType), light.color, light.mode, light.bestFor}).join(QLatin1Char(' ')).toLower());
     query.addBindValue(sourceKind);
-    query.addBindValue(QStringLiteral("1"));
+    query.addBindValue(contentVersion(query.boundValues()));
     query.addBindValue(now);
     query.addBindValue(now);
     if (!query.exec()) {
@@ -1307,7 +1355,7 @@ bool CatalogRepository::refreshSnapshots(QString *errorMessage)
     QSqlQuery cameraQuery(m_db);
     if (!cameraQuery.exec(QStringLiteral(
             "SELECT id, model, manufacturer, resolution_x, resolution_y, pixel_size_um, sensor_format, color_mode,"
-            " shutter_type, max_fps, interface, bandwidth_mbps, bit_depth, dynamic_range_db, lens_mount"
+            " shutter_type, max_fps, interface, bandwidth_mbps, bit_depth, dynamic_range_db, lens_mount, metadata"
             " FROM camera_products ORDER BY id"))) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("无法读取相机产品库：%1").arg(sqlErrorText(cameraQuery));
@@ -1330,6 +1378,7 @@ bool CatalogRepository::refreshSnapshots(QString *errorMessage)
         spec.bitDepth = cameraQuery.value(12).toDouble();
         spec.dynamicRangeDb = cameraQuery.value(13).toDouble();
         spec.lensMount = cameraQuery.value(14).toString();
+        readCameraMetadata(&spec, cameraQuery.value(15));
         m_cameras.append(spec);
     }
 
@@ -1337,7 +1386,7 @@ bool CatalogRepository::refreshSnapshots(QString *errorMessage)
     if (!lensQuery.exec(QStringLiteral(
             "SELECT id, model, manufacturer, lens_type, lens_mount, focal_length_mm, min_wd_mm, distortion_percent,"
             " image_circle_mm, megapixel_rating, recommended_min_pixel_um, pmag, nominal_wd_mm, wd_tolerance_mm,"
-            " max_sensor_diagonal_mm, telecentricity_deg, dof_mm, numerical_aperture, f_number, coaxial_illumination, notes"
+            " max_sensor_diagonal_mm, telecentricity_deg, dof_mm, numerical_aperture, f_number, coaxial_illumination, notes, metadata"
             " FROM lens_products ORDER BY id"))) {
         if (errorMessage)
             *errorMessage = QString::fromUtf8("无法读取镜头产品库：%1").arg(sqlErrorText(lensQuery));
@@ -1366,6 +1415,7 @@ bool CatalogRepository::refreshSnapshots(QString *errorMessage)
         spec.fNumber = lensQuery.value(18).toDouble();
         spec.coaxialIllumination = lensQuery.value(19).toInt() != 0;
         spec.notes = lensQuery.value(20).toString();
+        readLensMetadata(&spec, lensQuery.value(21));
         m_lenses.append(spec);
     }
 
@@ -1809,6 +1859,7 @@ CameraSpec cameraFromQuery(const QSqlQuery &query)
     spec.bitDepth = query.value(12).toDouble();
     spec.dynamicRangeDb = query.value(13).toDouble();
     spec.lensMount = query.value(14).toString();
+    readCameraMetadata(&spec, query.value(15));
     return spec;
 }
 
@@ -1835,6 +1886,7 @@ LensSpec lensFromQuery(const QSqlQuery &query)
     spec.fNumber = query.value(18).toDouble();
     spec.coaxialIllumination = query.value(19).toInt() != 0;
     spec.notes = query.value(20).toString();
+    readLensMetadata(&spec, query.value(21));
     return spec;
 }
 
@@ -1874,7 +1926,7 @@ CatalogPageResult<CameraSpec> CatalogRepository::queryCameras(const CatalogQuery
 
     QString sql = QStringLiteral(
         "SELECT id, model, manufacturer, resolution_x, resolution_y, pixel_size_um, sensor_format, color_mode,"
-        " shutter_type, max_fps, interface, bandwidth_mbps, bit_depth, dynamic_range_db, lens_mount"
+        " shutter_type, max_fps, interface, bandwidth_mbps, bit_depth, dynamic_range_db, lens_mount, metadata"
         " FROM camera_products")
         + where
         + QStringLiteral(" ORDER BY ") + stableOrderClause(CatalogDomain::Camera, catalogQuery.sort);
@@ -1920,7 +1972,7 @@ CatalogPageResult<LensSpec> CatalogRepository::queryLenses(const CatalogQuery &c
     QString sql = QStringLiteral(
         "SELECT id, model, manufacturer, lens_type, lens_mount, focal_length_mm, min_wd_mm, distortion_percent,"
         " image_circle_mm, megapixel_rating, recommended_min_pixel_um, pmag, nominal_wd_mm, wd_tolerance_mm,"
-        " max_sensor_diagonal_mm, telecentricity_deg, dof_mm, numerical_aperture, f_number, coaxial_illumination, notes"
+        " max_sensor_diagonal_mm, telecentricity_deg, dof_mm, numerical_aperture, f_number, coaxial_illumination, notes, metadata"
         " FROM lens_products")
         + where
         + QStringLiteral(" ORDER BY ") + stableOrderClause(CatalogDomain::Lens, catalogQuery.sort);
@@ -2145,7 +2197,7 @@ bool CatalogRepository::cameraById(qint64 id, CameraSpec *camera, QString *error
     QSqlQuery query(m_db);
     query.prepare(QStringLiteral(
         "SELECT id, model, manufacturer, resolution_x, resolution_y, pixel_size_um, sensor_format, color_mode,"
-        " shutter_type, max_fps, interface, bandwidth_mbps, bit_depth, dynamic_range_db, lens_mount"
+        " shutter_type, max_fps, interface, bandwidth_mbps, bit_depth, dynamic_range_db, lens_mount, metadata"
         " FROM camera_products WHERE id=?"));
     query.addBindValue(id);
     if (!query.exec() || !query.next()) {
@@ -2172,7 +2224,7 @@ bool CatalogRepository::lensById(qint64 id, LensSpec *lens, QString *errorMessag
     query.prepare(QStringLiteral(
         "SELECT id, model, manufacturer, lens_type, lens_mount, focal_length_mm, min_wd_mm, distortion_percent,"
         " image_circle_mm, megapixel_rating, recommended_min_pixel_um, pmag, nominal_wd_mm, wd_tolerance_mm,"
-        " max_sensor_diagonal_mm, telecentricity_deg, dof_mm, numerical_aperture, f_number, coaxial_illumination, notes"
+        " max_sensor_diagonal_mm, telecentricity_deg, dof_mm, numerical_aperture, f_number, coaxial_illumination, notes, metadata"
         " FROM lens_products WHERE id=?"));
     query.addBindValue(id);
     if (!query.exec() || !query.next()) {
@@ -2219,7 +2271,7 @@ bool CatalogRepository::updateCameraById(qint64 id, const CameraSpec &camera, QS
     query.prepare(QStringLiteral(
         "UPDATE camera_products SET model=?, manufacturer=?, manufacturer_key=?, model_key=?, resolution_x=?, resolution_y=?,"
         " pixel_size_um=?, sensor_format=?, color_mode=?, shutter_type=?, max_fps=?, interface=?, bandwidth_mbps=?,"
-        " bit_depth=?, dynamic_range_db=?, lens_mount=?, search_text=?, source_kind='local', updated_at=? WHERE id=?"));
+        " bit_depth=?, dynamic_range_db=?, lens_mount=?, search_text=?, source_kind='local', updated_at=?, metadata=? WHERE id=?"));
     query.addBindValue(camera.model);
     query.addBindValue(camera.manufacturer);
     query.addBindValue(keyForText(camera.manufacturer));
@@ -2238,6 +2290,7 @@ bool CatalogRepository::updateCameraById(qint64 id, const CameraSpec &camera, QS
     query.addBindValue(camera.lensMount);
     query.addBindValue(QStringList({camera.model, camera.manufacturer, camera.interfaceType, camera.lensMount, camera.sensorFormat, camera.colorMode, camera.shutterType}).join(QLatin1Char(' ')).toLower());
     query.addBindValue(nowUtcIso());
+    query.addBindValue(cameraMetadata(camera));
     query.addBindValue(id);
     if (!query.exec()) {
         if (errorMessage)
@@ -2263,7 +2316,7 @@ bool CatalogRepository::updateLensById(qint64 id, const LensSpec &lens, QString 
         " focal_length_mm=?, min_wd_mm=?, distortion_percent=?, image_circle_mm=?, megapixel_rating=?,"
         " recommended_min_pixel_um=?, pmag=?, nominal_wd_mm=?, wd_tolerance_mm=?, max_sensor_diagonal_mm=?,"
         " telecentricity_deg=?, dof_mm=?, numerical_aperture=?, f_number=?, coaxial_illumination=?, notes=?,"
-        " search_text=?, source_kind='local', updated_at=? WHERE id=?"));
+        " search_text=?, source_kind='local', updated_at=?, metadata=? WHERE id=?"));
     query.addBindValue(lens.model);
     query.addBindValue(lens.manufacturer);
     query.addBindValue(keyForText(lens.manufacturer));
@@ -2288,6 +2341,7 @@ bool CatalogRepository::updateLensById(qint64 id, const LensSpec &lens, QString 
     query.addBindValue(lens.notes);
     query.addBindValue(QStringList({lens.model, lens.manufacturer, lensTypeKey(lens.lensType), lens.lensMount, lens.notes}).join(QLatin1Char(' ')).toLower());
     query.addBindValue(nowUtcIso());
+    query.addBindValue(lensMetadata(lens));
     query.addBindValue(id);
     if (!query.exec()) {
         if (errorMessage)
@@ -2432,7 +2486,7 @@ QVector<CameraSpec> CatalogRepository::selectionCandidateCameras(const Selection
         QVector<CameraSpec> cameras;
         QString sql = QStringLiteral(
             "SELECT id, model, manufacturer, resolution_x, resolution_y, pixel_size_um, sensor_format, color_mode,"
-            " shutter_type, max_fps, interface, bandwidth_mbps, bit_depth, dynamic_range_db, lens_mount"
+            " shutter_type, max_fps, interface, bandwidth_mbps, bit_depth, dynamic_range_db, lens_mount, metadata"
             " FROM camera_products");
         if (!clauses.isEmpty())
             sql += QStringLiteral(" WHERE ") + clauses.join(QStringLiteral(" AND "));
@@ -2521,7 +2575,7 @@ QVector<LensSpec> CatalogRepository::selectionCandidateLenses(const SelectionReq
         QString sql = QStringLiteral(
             "SELECT id, model, manufacturer, lens_type, lens_mount, focal_length_mm, min_wd_mm, distortion_percent,"
             " image_circle_mm, megapixel_rating, recommended_min_pixel_um, pmag, nominal_wd_mm, wd_tolerance_mm,"
-            " max_sensor_diagonal_mm, telecentricity_deg, dof_mm, numerical_aperture, f_number, coaxial_illumination, notes"
+            " max_sensor_diagonal_mm, telecentricity_deg, dof_mm, numerical_aperture, f_number, coaxial_illumination, notes, metadata"
             " FROM lens_products");
         if (!clauses.isEmpty())
             sql += QStringLiteral(" WHERE ") + clauses.join(QStringLiteral(" AND "));
@@ -2694,7 +2748,7 @@ bool CatalogRepository::writeCameraCsv(const QString &filePath, const QVector<Ca
         QStringLiteral("model"), QStringLiteral("manufacturer"), QStringLiteral("resolution_x"), QStringLiteral("resolution_y"),
         QStringLiteral("pixel_size_um"), QStringLiteral("sensor_format"), QStringLiteral("color_mode"), QStringLiteral("shutter_type"),
         QStringLiteral("max_fps"), QStringLiteral("interface"), QStringLiteral("bandwidth_mbps"), QStringLiteral("bit_depth"),
-        QStringLiteral("dynamic_range_db"), QStringLiteral("lens_mount")
+        QStringLiteral("dynamic_range_db"), QStringLiteral("lens_mount"), QStringLiteral("pixel_format"), QStringLiteral("bandwidth_source"), QStringLiteral("source_url"), QStringLiteral("source_date")
     };
     out << headers.join(QLatin1Char(',')) << "\n";
     for (const CameraSpec &c : cameras) {
@@ -2702,7 +2756,8 @@ bool CatalogRepository::writeCameraCsv(const QString &filePath, const QVector<Ca
         row << c.model << c.manufacturer << QString::number(c.resolutionX) << QString::number(c.resolutionY)
             << QString::number(c.pixelSizeUm, 'g', 12) << c.sensorFormat << c.colorMode << c.shutterType
             << QString::number(c.maxFps, 'g', 12) << c.interfaceType << QString::number(c.bandwidthMBps, 'g', 12)
-            << QString::number(c.bitDepth, 'g', 12) << QString::number(c.dynamicRangeDb, 'g', 12) << c.lensMount;
+            << QString::number(c.bitDepth, 'g', 12) << QString::number(c.dynamicRangeDb, 'g', 12) << c.lensMount
+            << c.pixelFormat << c.bandwidthSource << c.sourceUrl << c.sourceDate;
         for (QString &value : row)
             value = csvField(value);
         out << row.join(QLatin1Char(',')) << "\n";
@@ -2746,7 +2801,7 @@ bool CatalogRepository::writeLensCsv(const QString &filePath, const QVector<Lens
         QStringLiteral("image_circle_mm"), QStringLiteral("megapixel_rating"), QStringLiteral("recommended_min_pixel_um"),
         QStringLiteral("pmag"), QStringLiteral("nominal_wd_mm"), QStringLiteral("wd_tolerance_mm"),
         QStringLiteral("max_sensor_diagonal_mm"), QStringLiteral("telecentricity_deg"), QStringLiteral("dof_mm"),
-        QStringLiteral("numerical_aperture"), QStringLiteral("f_number"), QStringLiteral("coaxial_illumination"), QStringLiteral("notes")
+        QStringLiteral("numerical_aperture"), QStringLiteral("f_number"), QStringLiteral("coaxial_illumination"), QStringLiteral("notes"), QStringLiteral("dof_conditions_confirmed")
     };
     out << headers.join(QLatin1Char(',')) << "\n";
     for (const LensSpec &l : lenses) {
@@ -2763,7 +2818,7 @@ bool CatalogRepository::writeLensCsv(const QString &filePath, const QVector<Lens
             << (l.hasTelecentricity() ? QString::number(l.telecentricityDeg, 'g', 12) : QString())
             << QString::number(l.dofMm, 'g', 12) << QString::number(l.numericalAperture, 'g', 12)
             << QString::number(l.fNumber, 'g', 12) << (l.coaxialIllumination ? QStringLiteral("true") : QStringLiteral("false"))
-            << l.notes;
+            << l.notes << (l.dofConditionsConfirmed ? QStringLiteral("true") : QStringLiteral("false"));
         for (QString &value : row)
             value = csvField(value);
         out << row.join(QLatin1Char(',')) << "\n";
@@ -3187,6 +3242,13 @@ bool CatalogRepository::loadCameraRows(const QVector<Row> &rows, const QString &
         spec.pixelSizeUm = number(row, QStringLiteral("pixel_size_um"));
         spec.sensorFormat = normalizeCameraSensorFormat(text(row, QStringLiteral("sensor_format")), spec.resolutionX, spec.resolutionY, spec.pixelSizeUm);
         spec.colorMode = normalizeCameraColorMode(text(row, QStringLiteral("color_mode")));
+        spec.pixelFormat = text(row, QStringLiteral("pixel_format"));
+        const QString legacyFormat = text(row, QStringLiteral("color_mode"));
+        if (spec.pixelFormat.isEmpty() && PixelFormat::layout(legacyFormat)) spec.pixelFormat = legacyFormat;
+        spec.bandwidthSource = text(row, QStringLiteral("bandwidth_source"));
+        if (spec.bandwidthSource.isEmpty()) spec.bandwidthSource = QStringLiteral("estimated");
+        spec.sourceUrl = text(row, QStringLiteral("source_url"));
+        spec.sourceDate = text(row, QStringLiteral("source_date"));
         spec.shutterType = text(row, QStringLiteral("shutter_type"));
         spec.maxFps = number(row, QStringLiteral("max_fps"));
         spec.interfaceType = normalizeCameraInterface(text(row, QStringLiteral("interface")));
@@ -3241,6 +3303,7 @@ bool CatalogRepository::loadLensRows(const QVector<Row> &rows, const QString &so
         spec.maxSensorDiagonalMm = number(row, QStringLiteral("max_sensor_diagonal_mm"));
         spec.telecentricityDeg = number(row, QStringLiteral("telecentricity_deg"), -1.0);
         spec.dofMm = number(row, QStringLiteral("dof_mm"));
+        spec.dofConditionsConfirmed = text(row, QStringLiteral("dof_conditions_confirmed")).compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
         spec.numericalAperture = number(row, QStringLiteral("numerical_aperture"));
         spec.fNumber = number(row, QStringLiteral("f_number"));
         spec.coaxialIllumination = parseBool(text(row, QStringLiteral("coaxial_illumination")));

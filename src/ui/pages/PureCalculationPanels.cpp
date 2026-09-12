@@ -18,7 +18,7 @@ using namespace ParameterUi;
 ParameterNumberField *PureCalculationPage::addNumber(QGridLayout *grid, const QString &key, const QString &label,
                                                     const QString &unit, int row, int column, bool integer)
 {
-    auto *field = new ParameterNumberField(key, label, unit, integer);
+    auto *field = new ParameterNumberField(key, label, unit, integer, grid->parentWidget());
     m_fields.insert(key, field);
     m_wrappers.insert(key, field);
     grid->addWidget(field, row, column);
@@ -29,14 +29,14 @@ ParameterNumberField *PureCalculationPage::addNumber(QGridLayout *grid, const QS
 QComboBox *PureCalculationPage::addChoice(QGridLayout *grid, const QString &key, const QString &label,
                                          const QStringList &labels, const QStringList &values, int row, int column, int span)
 {
-    auto *wrapper = new QWidget;
+    auto *wrapper = new QWidget(grid->parentWidget());
     wrapper->setObjectName(QStringLiteral("ParameterField"));
     auto *layout = new QVBoxLayout(wrapper);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(5);
-    auto *caption = new QLabel(label);
+    auto *caption = new QLabel(label, wrapper);
     caption->setWordWrap(true);
-    auto *combo = new QComboBox;
+    auto *combo = new QComboBox(wrapper);
     combo->setObjectName(key);
     combo->setAccessibleName(label);
     combo->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
@@ -52,7 +52,7 @@ QComboBox *PureCalculationPage::addChoice(QGridLayout *grid, const QString &key,
 }
 QCheckBox *PureCalculationPage::addFlag(QGridLayout *grid, const QString &key, const QString &label, int row)
 {
-    auto *flag = new QCheckBox(label);
+    auto *flag = new QCheckBox(label, grid->parentWidget());
     flag->setObjectName(key);
     flag->setAccessibleName(label);
     grid->addWidget(flag, row, 0, 1, 2);
@@ -63,13 +63,13 @@ QCheckBox *PureCalculationPage::addFlag(QGridLayout *grid, const QString &key, c
 }
 QLineEdit *PureCalculationPage::addText(QGridLayout *grid, const QString &key, const QString &label, int row, int column, int span)
 {
-    auto *wrapper = new QWidget;
+    auto *wrapper = new QWidget(grid->parentWidget());
     wrapper->setObjectName(QStringLiteral("ParameterField"));
     auto *layout = new QVBoxLayout(wrapper);
     layout->setContentsMargins(0, 0, 0, 0);
-    auto *caption = new QLabel(label);
+    auto *caption = new QLabel(label, wrapper);
     caption->setWordWrap(true);
-    auto *edit = new QLineEdit;
+    auto *edit = new QLineEdit(wrapper);
     edit->setObjectName(key);
     edit->setAccessibleName(label);
     edit->setPlaceholderText(localizedText("未填写", "Not entered"));
@@ -87,11 +87,11 @@ QLineEdit *PureCalculationPage::addText(QGridLayout *grid, const QString &key, c
 }
 QGridLayout *PureCalculationPage::makePanel(const QString &description)
 {
-    auto *panel = new QWidget;
+    auto *panel = new QWidget(m_inputs);
     panel->setObjectName(QStringLiteral("ParameterInputPanel"));
     auto *layout = new QVBoxLayout(panel);
     layout->setContentsMargins(0, 0, 0, 0);
-    auto *intro = new QLabel(description);
+    auto *intro = new QLabel(description, panel);
     intro->setWordWrap(true);
     layout->addWidget(intro);
     auto *grid = new QGridLayout;

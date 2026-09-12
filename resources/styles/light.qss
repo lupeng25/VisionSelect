@@ -5,6 +5,10 @@ QMainWindow { background: transparent; }
 QWidget#ApplicationShell, QWidget#ShellWorkspace, QStackedWidget { background: #f4f5f8; }
 QWidget#PageHeader, QWidget[headerSurface="true"], QWidget#ParameterField, QWidget#ParameterInputPanel,
 QWidget#FilterHeaderText, QWidget#FilterField, QWidget#FilterCheckGroup, QWidget#CalculationResultHeader { background: transparent; }
+QWidget#ThreeDProductToolbar { background: transparent; }
+QLabel#ThreeDResultSummary { color: #656a7c; font-size: 12px; }
+QFrame#ThreeDDetailsPanel { background: #ffffff; border: 1px solid #e1e3e8; border-radius: 8px; }
+QPushButton#ThreeDFiltersToggle:checked, QPushButton#ThreeDDetailsToggle:checked { color: #5362c9; background: #edf0fb; border-color: #cccfd8; }
 
 /* 窗口与导航 */
 QFrame#ShellTopBar { background: #ffffff; border: none; border-bottom: 1px solid #e0e2e7; }
@@ -97,9 +101,9 @@ QToolButton::menu-indicator { image: url(:/icons/ui/arrow-down.svg); }
 QPushButton, QToolButton { color: #494f61; background: #ffffff; border: 1px solid #d7d9e1; border-radius: 7px; padding: 7px 14px; font-weight: 500; }
 QPushButton:hover, QToolButton:hover { color: #343845; background: #eff0f3; border-color: #a1a6b8; }
 QPushButton:pressed, QToolButton:pressed { background: #e1e3e8; }
-QPushButton#PrimaryButton, QPushButton#RunSelectionButton { color: #ffffff; background: #5362c9; border: 1px solid #5362c9; font-weight: 600; }
-QPushButton#PrimaryButton:hover, QPushButton#RunSelectionButton:hover { background: #4352b5; border-color: #4352b5; }
-QPushButton#PrimaryButton:pressed, QPushButton#RunSelectionButton:pressed { background: #35439e; }
+QPushButton#PrimaryButton, QPushButton#RunSelectionButton, QPushButton#ThreeDApplyFilters { color: #ffffff; background: #5362c9; border: 1px solid #5362c9; font-weight: 600; }
+QPushButton#PrimaryButton:hover, QPushButton#RunSelectionButton:hover, QPushButton#ThreeDApplyFilters:hover { background: #4352b5; border-color: #4352b5; }
+QPushButton#PrimaryButton:pressed, QPushButton#RunSelectionButton:pressed, QPushButton#ThreeDApplyFilters:pressed { background: #35439e; }
 QPushButton#SecondaryButton, QToolButton#SecondaryButton { color: #53596e; background: #ffffff; border: 1px solid #d7d9e1; }
 QPushButton#SecondaryButton:hover, QToolButton#SecondaryButton:hover { color: #5362c9; border-color: #9399ad; background: #f4f5f7; }
 QPushButton#SummaryToggleButton:checked { color: #5362c9; background: #edf0fb; border-color: #cccfd8; }

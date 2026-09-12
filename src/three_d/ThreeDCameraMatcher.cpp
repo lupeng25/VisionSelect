@@ -147,12 +147,40 @@ ThreeDCameraMatch ThreeDCameraMatcher::matchOne(const ThreeDCameraRequirement &r
         result.rejectionReasons.append(text("技术路线不匹配：需要 %1", "Technology mismatch: requires %1").arg(requirement.technologyLabel));
     }
 
-    checkMinimum(maxKnown(camera.xFovNearMm, camera.xFovReferenceMm, camera.xFovFarMm),
-        requirement.targetXCoverageMm, text("X 覆盖", "X coverage"), QStringLiteral(" mm"),
-        &result.missingFields, &result.rejectionReasons);
-    checkMinimum(maxKnown(camera.yFovNearMm, camera.yFovReferenceMm, camera.yFovFarMm),
-        requirement.targetYCoverageMm, text("Y 覆盖", "Y coverage"), QStringLiteral(" mm"),
-        &result.missingFields, &result.rejectionReasons);
+    // X/Y 必须来自同一个公开测量平面；未给出插值模型时不推测中间距离的视野。
+    if (threeDHasValue(requirement.targetXCoverageMm) || threeDHasValue(requirement.targetYCoverageMm)) {
+        struct Plane { double distance, x, y; };
+        const Plane planes[] = {
+            {camera.workingDistanceMinMm, camera.xFovNearMm, camera.yFovNearMm},
+            {camera.referenceDistanceMm, camera.xFovReferenceMm, camera.yFovReferenceMm},
+            {camera.workingDistanceMaxMm, camera.xFovFarMm, camera.yFovFarMm}
+        };
+        QStringList bestMissing, bestRejected;
+        bool found = false;
+        for (const Plane &plane : planes) {
+            if (threeDHasValue(requirement.workingDistanceMm)
+                && (!threeDHasValue(plane.distance)
+                    || qAbs(plane.distance - requirement.workingDistanceMm) > 1e-8))
+                continue;
+            QStringList missing, rejected;
+            checkMinimum(plane.x, requirement.targetXCoverageMm, text("X 覆盖", "X coverage"),
+                QStringLiteral(" mm"), &missing, &rejected);
+            checkMinimum(plane.y, requirement.targetYCoverageMm, text("Y 覆盖", "Y coverage"),
+                QStringLiteral(" mm"), &missing, &rejected);
+            if (!found || rejected.size() < bestRejected.size()
+                || (rejected.size() == bestRejected.size() && missing.size() < bestMissing.size())) {
+                bestMissing = missing;
+                bestRejected = rejected;
+                found = true;
+            }
+        }
+        if (!found)
+            addMissing(&result.missingFields, text("当前工作距离处的视野/几何模型", "FOV / geometry model at the requested working distance"));
+        else {
+            result.missingFields += bestMissing;
+            result.rejectionReasons += bestRejected;
+        }
+    }
     checkMinimum(camera.zMeasurementRangeMm, requirement.zMeasurementRangeMm,
         text("Z 量程", "Z range"), QStringLiteral(" mm"), &result.missingFields, &result.rejectionReasons);
     checkMaximum(camera.zRepeatabilityUm, requirement.maxZRepeatabilityUm,
@@ -170,13 +198,8 @@ ThreeDCameraMatch ThreeDCameraMatcher::matchOne(const ThreeDCameraRequirement &r
                     .arg(camera.workingDistanceMaxMm, 0, 'f', 1));
             }
         } else if (threeDHasValue(camera.referenceDistanceMm)) {
-            const double tolerance = qMax(5.0, camera.referenceDistanceMm * 0.15);
-            if (qAbs(requirement.workingDistanceMm - camera.referenceDistanceMm) > tolerance) {
-                result.rejectionReasons.append(text("工作/参考距离偏离较大：需要 %1 mm，官方参考距离 %2 mm",
-                                                    "Working/reference distance differs significantly: requires %1 mm, official reference distance %2 mm")
-                    .arg(requirement.workingDistanceMm, 0, 'f', 1)
-                    .arg(camera.referenceDistanceMm, 0, 'f', 1));
-            }
+            if (qAbs(requirement.workingDistanceMm - camera.referenceDistanceMm) > 1e-8)
+                addMissing(&result.missingFields, text("工作距离范围（仅公开参考点）", "Working distance range (only a reference point is published)"));
         } else {
             addMissing(&result.missingFields, text("工作/参考距离", "Working/reference distance"));
         }

@@ -1,31 +1,19 @@
-param(
-    [string]$QtBin = "",
-    [string]$TestExe = ".\bin\VisionSelectTests.exe"
-)
-
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-
-$repoRoot = Split-Path -Parent $PSScriptRoot
-Set-Location $repoRoot
-
-if (!(Test-Path $TestExe)) {
-    throw "Test executable not found: $TestExe"
-}
-
-if ([string]::IsNullOrWhiteSpace($QtBin)) {
-    $candidates = @(
-        "C:\Qt\Qt5.12.9\5.12.9\msvc2015_64\bin",
-        "D:\Qt\Qt5.12.9\5.12.9\msvc2015_64\bin"
-    )
-    $QtBin = ($candidates | Where-Object { Test-Path $_ } | Select-Object -First 1)
-    if ([string]::IsNullOrWhiteSpace($QtBin)) {
-        throw "Qt bin directory not found. Pass -QtBin explicitly."
+param([string]$QtBin='', [string]$TestExe='build/windows-msvc2022-release/bin/VisionSelectTests.exe', [int]$Runs=3)
+$ErrorActionPreference='Stop'
+$projectRoot=Split-Path -Parent $PSScriptRoot
+Push-Location $projectRoot
+try {
+    if (-not $QtBin -and $env:QT_ROOT) { $QtBin=Join-Path $env:QT_ROOT 'bin' }
+    if ($QtBin) { $env:PATH="$QtBin;$env:PATH" }
+    if (-not (Test-Path -LiteralPath $TestExe)) { throw '未找到测试程序，请先构建对应 Release 配置。' }
+    if ($Runs -lt 1) { throw '重复次数必须大于零。' }
+    $env:VISIONSELECT_PERF_GATE='1'
+    for($run=1;$run -le $Runs;$run++) {
+        Write-Output "大目录性能验证 $run/$Runs"
+        $logPath = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $TestExe).Path) "performance-gate-$run.txt"
+        & $TestExe catalogPerformanceGate -o "$logPath,txt"
+        $testExitCode = $LASTEXITCODE
+        if(Test-Path -LiteralPath $logPath) { Get-Content -LiteralPath $logPath -Encoding utf8 }
+        if($testExitCode -ne 0) { throw '性能门槛未通过。' }
     }
-}
-
-$env:PATH = "$QtBin;$env:PATH"
-$env:VISIONSELECT_PERF_GATE = "1"
-
-& $TestExe catalogPerformanceGate -o -,txt
-exit $LASTEXITCODE
+} finally { Pop-Location }

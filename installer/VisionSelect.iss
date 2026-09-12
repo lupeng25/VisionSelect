@@ -1,7 +1,9 @@
 #define MyAppName "VisionSelect"
-#define MyAppVersion "1.0.0"
+#ifndef MyAppVersion
+  #error 请通过打包脚本传入 CMake 项目版本
+#endif
 #define MyAppPublisher "VisionSelect"
-#define MyAppExeName "VisionSelect.exe"
+#define MyAppExeName "bin\VisionSelect.exe"
 
 [Setup]
 AppId={{8F5F9958-17F8-46D1-A28F-9799AAB5F0C1}
@@ -28,7 +30,7 @@ Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\dist\VisionSelect\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MyAppSource}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

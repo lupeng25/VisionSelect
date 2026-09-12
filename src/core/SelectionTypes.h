@@ -5,6 +5,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include "core/CandidateChecks.h"
 
 enum class DetectionType {
     Measurement,
@@ -62,6 +63,8 @@ struct SelectionRequest {
     bool preferMono = true;
     bool allowTelecentric = true;
 
+    bool operator==(const SelectionRequest &) const = default;
+
     bool hasContinuousMotion() const
     {
         return motionMode == MotionMode::Continuous && motionSpeedMmS > 0.0;
@@ -76,6 +79,11 @@ struct CameraSpec {
     double pixelSizeUm = 0.0;
     QString sensorFormat;
     QString colorMode;
+    QString pixelFormat;
+    // specified=目录明确值，estimated=经验估算，unknown=未公开。
+    QString bandwidthSource = QStringLiteral("specified");
+    QString sourceUrl;
+    QString sourceDate;
     QString shutterType;
     double maxFps = 0.0;
     QString interfaceType;
@@ -90,6 +98,7 @@ struct CameraSpec {
     double megapixels() const;
     bool isMono() const;
     bool isGlobalShutter() const;
+    QString transportPixelFormat() const { return pixelFormat.isEmpty() ? colorMode : pixelFormat; }
 };
 
 struct LensSpec {
@@ -110,6 +119,7 @@ struct LensSpec {
     double maxSensorDiagonalMm = 0.0;
     double telecentricityDeg = -1.0;
     double dofMm = 0.0;
+    bool dofConditionsConfirmed = false;
     double numericalAperture = 0.0;
     double fNumber = 0.0;
     bool coaxialIllumination = false;
@@ -141,6 +151,7 @@ struct CandidateScore {
 };
 
 struct SelectionResult {
+    CandidateChecks checks;
     CameraSpec camera;
     LensSpec lens;
     LightSpec light;
@@ -167,9 +178,18 @@ struct SelectionResult {
     CandidateScore score;
     QString schemeTitle;
     QString formulaSummary;
+    QStringList diagnosticReasons;
+    QStringList diagnosticRisks;
+    QString diagnosticScheme;
+    QString diagnosticFormula;
+    bool hasDiagnosticSource = false;
+    int searchedCameras = 0, catalogCameras = 0;
+    int searchedLenses = 0, catalogLenses = 0;
 
     bool isTelecentric() const;
 };
+
+SelectionResult localizedResult(const SelectionResult &result, const QString &language = {});
 
 QString detectionTypeLabel(DetectionType type);
 QString surfaceTypeLabel(SurfaceType type);

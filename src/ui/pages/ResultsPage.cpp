@@ -13,6 +13,7 @@
 #include <QLayoutItem>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QSplitter>
@@ -38,14 +39,14 @@ void selectRowBySourceIndex(QTableWidget *table, int sourceIndex)
 QString lensCategory(const SelectionResult &result)
 {
     return result.isTelecentric()
-        ? localizedText("远心", "Telecentric")
-        : localizedText("普通", "Fixed-focal");
+        ? localizedText("远心", "Tele")
+        : localizedText("普通", "Fixed");
 }
 
 QString shortProduct(const QString &manufacturer, const QString &model)
 {
     const QString label = productLabel(manufacturer, model);
-    return label.size() > 34 ? label.left(31) + QStringLiteral("...") : label;
+    return label;
 }
 
 QString htmlText(const QString &text)
@@ -66,8 +67,8 @@ ResultsPage::ResultsPage(QWidget *parent)
     : QWidget(parent)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(26, 22, 26, 22);
-    layout->setSpacing(14);
+    layout->setContentsMargins(16, 14, 16, 14);
+    layout->setSpacing(8);
 
     QHBoxLayout *resultActions = new QHBoxLayout;
     QPushButton *exportPdfButton = actionButton(localizedText("导出 PDF", "Export PDF"), QStringLiteral(":/icons/ui/export.png"), true);
@@ -80,8 +81,8 @@ ResultsPage::ResultsPage(QWidget *parent)
     QWidget *actionsWidget = new QWidget;
     actionsWidget->setLayout(resultActions);
     layout->addWidget(pageHeader(localizedText("推荐结果", "Recommended Results"),
-        localizedText("优先展示可交付方案、主要风险和核心 BOM，保留完整明细用于工程复核。",
-                      "Prioritize deliverable plans, key risks, and core BOM while preserving full engineering detail."),
+        localizedText("先校核必要条件与待确认资料，再比较候选方案。",
+                      "Check requirements and missing specifications before comparing candidates."),
         actionsWidget));
 
     m_summaryLabel = new QLabel;
@@ -89,27 +90,59 @@ ResultsPage::ResultsPage(QWidget *parent)
     m_summaryLabel->setWordWrap(true);
     layout->addWidget(m_summaryLabel);
 
+    m_staleBanner = new QFrame;
+    m_staleBanner->setObjectName("ResultsOutdatedBanner");
+    auto *staleLayout = new QHBoxLayout(m_staleBanner);
+    staleLayout->setContentsMargins(8, 4, 8, 4);
+    auto *staleText = new QLabel(localizedText("需求已修改，当前仍是上次结果；导出保留该次需求。",
+        "Requirements changed. Results and exports still use the previous calculation."));
+    staleText->setWordWrap(true);
+    staleLayout->addWidget(staleText, 1);
+    auto *recalculate = actionButton(localizedText("按新需求重算", "Recalculate"), {}, true);
+    connect(recalculate, &QPushButton::clicked, this, &ResultsPage::retryRequested);
+    staleLayout->addWidget(recalculate);
+    layout->addWidget(m_staleBanner);
+    m_staleBanner->hide();
+
+    auto *tableActions = new QHBoxLayout;
+    m_countLabel = new QLabel;
+    m_countLabel->setWordWrap(true);
+    tableActions->addWidget(m_countLabel, 1);
+    m_compareButton = actionButton(localizedText("前三方案", "Top candidates"), {}, true);
+    m_compareButton->setObjectName("ResultsCompareToggle");
+    m_compareButton->setCheckable(true);
+    tableActions->addWidget(m_compareButton);
+    m_detailsButton = actionButton(localizedText("校核详情", "Check details"), {}, true);
+    m_detailsButton->setObjectName("ResultsDetailsToggle");
+    m_detailsButton->setCheckable(true);
+    tableActions->addWidget(m_detailsButton);
+    layout->addLayout(tableActions);
+
     QFrame *cards = new QFrame;
+    m_cards = cards;
     cards->setObjectName(QStringLiteral("SectionCard"));
     m_cardsLayout = new QHBoxLayout(cards);
     m_cardsLayout->setContentsMargins(12, 12, 12, 12);
     m_cardsLayout->setSpacing(12);
     layout->addWidget(cards);
+    cards->hide();
+    connect(m_compareButton, &QPushButton::toggled, cards, &QWidget::setVisible);
 
     m_table = new QTableWidget;
     m_table->setObjectName(QStringLiteral("results/table"));
+    m_table->setProperty("headerStateKey", "results/table-v2");
     m_table->setAccessibleName(localizedText("推荐方案表", "Recommended plans table"));
     setupTable(m_table);
     m_table->setColumnCount(11);
     m_table->setHorizontalHeaderLabels({
-        localizedText("类型", "Type"), localizedText("状态", "Status"), localizedText("匹配度", "Match"),
+        localizedText("类型", "Type"), localizedText("状态", "Status"), localizedText("相对分", "Score"),
         localizedText("相机", "Camera"), localizedText("镜头", "Lens"), localizedText("光源", "Light"),
         QStringLiteral("FOV(mm)"), localizedText("物方像素", "Obj Pixel"),
         localizedText("倍率/焦距", "Mag/Focal"), QStringLiteral("WD/DOF"),
         localizedText("风险", "Risk")
     });
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-    const int resultColumnWidths[] = {70, 96, 78, 150, 150, 140, 96, 96, 100, 110};
+    const int resultColumnWidths[] = {60, 100, 72, 166, 172, 116, 108, 88, 96, 120};
     for (int column = 0; column < 10; ++column)
         m_table->setColumnWidth(column, resultColumnWidths[column]);
     m_table->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Stretch);
@@ -125,23 +158,37 @@ ResultsPage::ResultsPage(QWidget *parent)
     m_details->setAccessibleName(localizedText("方案工程详情", "Plan engineering details"));
     m_details->setReadOnly(true);
     m_details->setMinimumHeight(150);
+    m_details->setMaximumHeight(260);
 
     m_splitter = new QSplitter(Qt::Vertical, this);
-    m_splitter->setObjectName(QStringLiteral("results/main"));
+    m_splitter->setObjectName(QStringLiteral("results/browse-v2"));
     m_splitter->addWidget(m_table);
     m_splitter->addWidget(m_details);
     m_splitter->setStretchFactor(0, 3);
     m_splitter->setStretchFactor(1, 1);
     m_splitter->setSizes({430, 180});
-    UiSettings::instance().restoreSplitter(QStringLiteral("results/main"), m_splitter);
-    UiSettings::instance().restoreHeader(QStringLiteral("results/table"), m_table->horizontalHeader());
+    m_details->hide();
+    connect(m_detailsButton, &QPushButton::toggled, this, [this](bool visible) {
+        m_details->setVisible(visible);
+        if (visible) { m_splitter->setSizes({480, 210}); refreshDetails(m_selectedSourceIndex); }
+    });
+    connect(m_table, &QTableWidget::cellDoubleClicked, this, [this]() { m_detailsButton->setChecked(true); });
+    UiSettings::instance().restoreHeader(QStringLiteral("results/table-v2"), m_table->horizontalHeader());
+    // 工程参数保留在校核详情中，默认把横向空间留给型号、成像指标和风险。
+    m_table->setColumnHidden(8, true);
+    m_table->setColumnHidden(9, true);
     layout->addWidget(m_splitter, 1);
+    m_selectionSummary = new QLabel;
+    m_selectionSummary->setObjectName("ResultsSelectionSummary");
+    m_selectionSummary->setTextFormat(Qt::PlainText);
+    m_selectionSummary->setWordWrap(true);
+    m_selectionSummary->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(m_selectionSummary);
 }
 
 ResultsPage::~ResultsPage()
 {
-    UiSettings::instance().saveSplitter(QStringLiteral("results/main"), m_splitter);
-    UiSettings::instance().saveHeader(QStringLiteral("results/table"), m_table ? m_table->horizontalHeader() : nullptr);
+    UiSettings::instance().saveHeader(QStringLiteral("results/table-v2"), m_table ? m_table->horizontalHeader() : nullptr);
 }
 
 void ResultsPage::setBusy(const SelectionRequest &request)
@@ -149,6 +196,13 @@ void ResultsPage::setBusy(const SelectionRequest &request)
     Q_UNUSED(request)
     m_results.clear();
     m_presentations.clear();
+    m_selectedSourceIndex = -1;
+    setRequestOutdated(false);
+    m_cards->show();
+    m_countLabel->clear();
+    m_selectionSummary->clear();
+    m_detailsButton->setEnabled(false);
+    m_compareButton->setEnabled(false);
 
     if (m_cardsLayout) {
         while (QLayoutItem *child = m_cardsLayout->takeAt(0)) {
@@ -177,6 +231,8 @@ void ResultsPage::setBusy(const SelectionRequest &request)
 
 void ResultsPage::setError(const QString &message)
 {
+    setRequestOutdated(false);
+    m_cards->show();
     m_results.clear();
     m_presentations.clear();
     while (QLayoutItem *child = m_cardsLayout->takeAt(0)) {
@@ -210,9 +266,28 @@ void ResultsPage::setError(const QString &message)
 void ResultsPage::setResults(const QVector<SelectionResult> &results,
                              const SelectionRequest &request)
 {
-    m_results = results;
+    m_results.clear();
+    for (const auto &result : results) m_results.append(localizedResult(result));
+    m_resultRequest = request;
     m_presentations = buildResultPresentations(results);
+    setRequestOutdated(false);
+    m_detailsButton->setEnabled(!results.isEmpty());
+    m_compareButton->setEnabled(!results.isEmpty());
+    m_cards->setVisible(m_compareButton->isChecked() || results.isEmpty());
+    int passed = 0, unknown = 0, failed = 0;
+    for (const auto &result : results) {
+        if (!result.hardConstraintsPassed) ++failed;
+        else if (result.checks.unknown()) ++unknown;
+        else ++passed;
+    }
+    m_countLabel->setText(localizedText("初筛通过 %1 · 待确认 %2 · 不满足 %3", "Passed %1 · Pending %2 · Failed %3")
+        .arg(passed).arg(unknown).arg(failed));
     refreshTable(request);
+}
+
+void ResultsPage::setRequestOutdated(bool outdated)
+{
+    m_staleBanner->setVisible(outdated);
 }
 
 void ResultsPage::refreshCards(const SelectionRequest &request)
@@ -268,7 +343,9 @@ void ResultsPage::refreshCards(const SelectionRequest &request)
         card->setCursor(Qt::PointingHandCursor);
         card->setAccessibleName(localizedText("推荐方案卡", "Recommendation card") + QStringLiteral(" %1").arg(i + 1));
         card->installEventFilter(this);
-        setWidgetState(card, presentation.compatible ? QStringLiteral("success") : QStringLiteral("error"));
+        const QString state = !presentation.compatible ? QStringLiteral("error")
+            : presentation.needsConfirmation ? QStringLiteral("warning") : QStringLiteral("success");
+        setWidgetState(card, state);
         QVBoxLayout *cardLayout = new QVBoxLayout(card);
         cardLayout->setContentsMargins(14, 12, 14, 12);
         cardLayout->setSpacing(7);
@@ -277,7 +354,7 @@ void ResultsPage::refreshCards(const SelectionRequest &request)
         QLabel *rank = new QLabel(QStringLiteral("#%1  %2").arg(i + 1).arg(lensCategory(r)));
         rank->setObjectName(QStringLiteral("MetricLabel"));
         top->addWidget(rank, 1);
-        top->addWidget(statusBadge(compatibilityText(r), presentation.compatible ? QStringLiteral("success") : QStringLiteral("error")));
+        top->addWidget(statusBadge(compatibilityText(r), state));
         cardLayout->addLayout(top);
 
         const QString matchText = !presentation.compatible
@@ -286,7 +363,7 @@ void ResultsPage::refreshCards(const SelectionRequest &request)
                 ? QStringLiteral("%1%").arg(presentation.relativeMatchPercent)
                 : QStringLiteral("—"));
         QLabel *score = new QLabel(matchText);
-        score->setObjectName(QStringLiteral("MetricValue"));
+        score->setObjectName(QStringLiteral("MetricDetail"));
         score->setWordWrap(true);
         score->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         score->setToolTip(localizedText("算法原始分：%1；相对匹配度仅用于本批候选比较。",
@@ -344,35 +421,46 @@ void ResultsPage::refreshTable(const SelectionRequest &request)
         .arg(SelectionEngine::requiredFovHeight(request), 0, 'f', 2)
         .arg(SelectionEngine::targetObjectPixelUm(request), 0, 'f', 2)
         .arg(m_results.size()));
+    if (!m_results.isEmpty() && m_results.first().catalogCameras > 0) {
+        const auto &r = m_results.first();
+        m_summaryLabel->setText(m_summaryLabel->text() + localizedText("\n已比较相机 %1/%2、镜头 %3/%4；相对分仅比较本批候选。", "\nCompared cameras %1/%2, lenses %3/%4; scores compare this batch only.")
+            .arg(r.searchedCameras).arg(r.catalogCameras).arg(r.searchedLenses).arg(r.catalogLenses));
+    }
 
+    const QSignalBlocker blocker(m_table);
     m_table->setSortingEnabled(false);
     m_table->setRowCount(m_results.size());
     for (int row = 0; row < m_results.size(); ++row) {
         const SelectionResult &r = m_results.at(row);
         const ResultPresentation presentation = m_presentations.value(row);
         m_table->setItem(row, 0, indexedItem(lensCategory(r), row));
-        m_table->setItem(row, 1, item(compatibilityText(r)));
+        m_table->setItem(row, 1, numericItem(compatibilityText(r), !r.hardConstraintsPassed ? 2.0 : r.checks.unknown() ? 1.0 : 0.0));
+        decorateCandidateStatus(m_table->item(row, 1), r.checks, r.hardConstraintsPassed);
         const QString matchText = !presentation.compatible
             ? localizedText("不兼容", "Incompatible")
             : (presentation.matchAvailable
                 ? QStringLiteral("%1%").arg(presentation.relativeMatchPercent)
                 : QStringLiteral("—"));
-        QTableWidgetItem *matchItem = item(matchText);
+        QTableWidgetItem *matchItem = numericItem(matchText, presentation.matchAvailable
+            ? std::optional<double>(presentation.relativeMatchPercent) : std::nullopt);
         matchItem->setToolTip(localizedText("算法原始分：%1", "Raw algorithm score: %1").arg(r.score.score, 0, 'f', 1));
         m_table->setItem(row, 2, matchItem);
         m_table->setItem(row, 3, item(productLabel(r.camera.manufacturer, r.camera.model)));
         m_table->setItem(row, 4, item(productLabel(r.lens.manufacturer, r.lens.model)));
         m_table->setItem(row, 5, item(productLabel(r.light.manufacturer, r.light.model)));
-        m_table->setItem(row, 6, item(QStringLiteral("%1 x %2")
+        m_table->setItem(row, 6, numericItem(QStringLiteral("%1 x %2")
             .arg(r.effectiveFovWidthMm, 0, 'f', 1)
-            .arg(r.effectiveFovHeightMm, 0, 'f', 1)));
-        m_table->setItem(row, 7, item(QStringLiteral("%1 um").arg(r.objectPixelSizeUm, 0, 'f', 2)));
-        m_table->setItem(row, 8, item(r.isTelecentric()
+            .arg(r.effectiveFovHeightMm, 0, 'f', 1), r.effectiveFovWidthMm));
+        m_table->setItem(row, 7, numericItem(QStringLiteral("%1 um").arg(r.objectPixelSizeUm, 0, 'f', 2), r.objectPixelSizeUm));
+        m_table->setItem(row, 8, numericItem(r.isTelecentric()
             ? QStringLiteral("%1x").arg(r.magnification, 0, 'f', 3)
-            : QStringLiteral("%1 mm").arg(r.lens.focalLengthMm, 0, 'f', 1)));
-        m_table->setItem(row, 9, item(r.isTelecentric()
-            ? QStringLiteral("WD %1 / DOF %2").arg(r.lens.nominalWorkingDistanceMm, 0, 'f', 0).arg(r.estimatedDofMm, 0, 'f', 1)
-            : QStringLiteral("min WD %1 / DOF %2").arg(r.lens.minWorkingDistanceMm, 0, 'f', 0).arg(r.estimatedDofMm, 0, 'f', 1)));
+            : QStringLiteral("%1 mm").arg(r.lens.focalLengthMm, 0, 'f', 1), r.isTelecentric() ? r.magnification : 1000000.0 + r.lens.focalLengthMm));
+        const double wd = r.isTelecentric() ? r.lens.nominalWorkingDistanceMm : r.lens.minWorkingDistanceMm;
+        const QString wdText = wd > 0.0 ? number(wd, 0) : localizedText("未知", "Unknown");
+        const QString dofText = r.estimatedDofMm > 0.0 ? number(r.estimatedDofMm, 2) : localizedText("未知", "Unknown");
+        m_table->setItem(row, 9, numericItem(QStringLiteral("%1 %2 / DOF %3")
+            .arg(r.isTelecentric() ? QStringLiteral("WD") : QStringLiteral("min WD"), wdText, dofText),
+            wd > 0.0 ? std::optional(wd) : std::nullopt));
         m_table->setItem(row, 10, item(presentation.riskItems.isEmpty()
             ? localizedText("✓ 无主要风险", "✓ No major risk")
             : localizedText("%1 项：%2", "%1: %2").arg(presentation.riskItems.size()).arg(presentation.riskItems.first())));
@@ -383,6 +471,8 @@ void ResultsPage::refreshTable(const SelectionRequest &request)
         refreshDetails(0);
     } else if (m_details) {
         m_details->clear();
+        m_selectionSummary->clear();
+        m_selectedSourceIndex = -1;
     }
 }
 
@@ -392,14 +482,35 @@ void ResultsPage::refreshDetails(int row)
         return;
 
     const SelectionResult &r = m_results.at(row);
+    m_selectedSourceIndex = row;
+    const ResultPresentation presentation = m_presentations.value(row);
+    const QStringList issues = candidateCheckMessages(r.checks, CandidateCheckState::Failed)
+        + candidateCheckMessages(r.checks, CandidateCheckState::Unknown);
+    m_selectionSummary->setText(compatibilityText(r) + QStringLiteral("  |  ")
+        + productLabel(r.camera.manufacturer, r.camera.model) + QStringLiteral(" + ")
+        + productLabel(r.lens.manufacturer, r.lens.model) + QStringLiteral("\n")
+        + (issues.isEmpty() ? (presentation.riskItems.isEmpty() ? localizedText("逐项初筛通过，可展开工程详情。", "Screening passed. Open details for engineering checks.")
+             : presentation.riskItems.first()) : issues.join(QStringLiteral("；"))));
+    if (m_details->isHidden()) return;
     QString text;
     text += QStringLiteral("<h3>") + htmlText(r.schemeTitle) + localizedText("：", ": ")
         + htmlText(productLabel(r.camera.manufacturer, r.camera.model)) + QStringLiteral(" + ")
         + htmlText(productLabel(r.lens.manufacturer, r.lens.model)) + QStringLiteral(" + ")
         + htmlText(productLabel(r.light.manufacturer, r.light.model)) + QStringLiteral("</h3>");
-    text += localizedText("<p><b>公式：</b>%1</p>", "<p><b>Formula:</b> %1</p>").arg(htmlText(r.formulaSummary));
     text += localizedText("<p><b>适配状态：</b>%1</p>", "<p><b>Compatibility:</b> %1</p>").arg(htmlText(compatibilityText(r)));
-    const ResultPresentation presentation = m_presentations.value(row);
+    const double catalogWd = r.isTelecentric() ? r.lens.nominalWorkingDistanceMm : r.lens.minWorkingDistanceMm;
+    text += localizedText("<p><b>安装与成像：</b>本次 WD %1 mm；目录 %2 %3；高度波动 %4 mm；DOF %5；%6。</p>",
+        "<p><b>Mounting and imaging:</b> requested WD %1 mm; catalog %2 %3; height variation %4 mm; DOF %5; %6.</p>")
+        .arg(m_resultRequest.workingDistanceMm, 0, 'f', 1)
+        .arg(r.isTelecentric() ? localizedText("标称 WD", "nominal WD") : localizedText("最小 WD", "minimum WD"))
+        .arg(catalogWd > 0.0 ? QStringLiteral("%1 mm").arg(catalogWd, 0, 'f', 1) : localizedText("未知", "unknown"))
+        .arg(m_resultRequest.heightVariationMm, 0, 'f', 2)
+        .arg(r.estimatedDofMm > 0.0 ? QStringLiteral("%1 mm").arg(r.estimatedDofMm, 0, 'f', 2) : localizedText("未知", "unknown"))
+        .arg(r.isTelecentric() ? QStringLiteral("PMAG %1x").arg(r.magnification, 0, 'f', 3)
+                              : localizedText("焦距 %1 mm", "focal length %1 mm").arg(r.lens.focalLengthMm, 0, 'f', 1));
+    text += candidateChecksHtml(r.checks);
+    text += localizedText("<p><b>风险提示：</b>%1</p>", "<p><b>Risks:</b> %1</p>")
+        .arg(htmlList(presentation.riskItems, localizedText("；", "; ")));
     const QString relativeText = presentation.matchAvailable
         ? QStringLiteral("%1%").arg(presentation.relativeMatchPercent)
         : localizedText("不可用", "Unavailable");
@@ -413,13 +524,18 @@ void ResultsPage::refreshDetails(int row)
         .arg(r.effectiveFovHeightMm, 0, 'f', 2)
         .arg(r.objectPixelSizeUm, 0, 'f', 2)
         .arg(r.bandwidthRequiredMBps, 0, 'f', 1);
-    text += localizedText("<p><b>接口/存储：</b>单帧 %1 MB；接口余量 %2 MB/s；带宽利用率 %3%；原始存储约 %4 GB/h；镜头 MP 利用率 %5%。</p>",
-                          "<p><b>Interface / storage:</b> frame %1 MB; interface margin %2 MB/s; bandwidth utilization %3%; raw storage about %4 GB/h; lens MP utilization %5%.</p>")
+    text += localizedText("<p><b>接口/存储：</b>单帧 %1 MB；接口容量 %2 MB/s；带宽利用率 %3%；原始存储约 %4 GB/h；镜头 MP 利用率 %5%。</p>",
+                          "<p><b>Interface / storage:</b> frame %1 MB; interface capacity %2 MB/s; bandwidth utilization %3%; raw storage about %4 GB/h; lens MP utilization %5%.</p>")
         .arg(r.framePayloadMB, 0, 'f', 2)
         .arg(r.interfaceCapacityMBps, 0, 'f', 1)
         .arg(r.bandwidthUtilizationPercent, 0, 'f', 0)
         .arg(r.storagePerHourGB, 0, 'f', 0)
         .arg(r.lensMegapixelUtilizationPercent, 0, 'f', 0);
+    text += localizedText("<p><b>接口剩余量：</b>%1（容量减去估算占用；负值表示不足）。</p>",
+                          "<p><b>Interface headroom:</b> %1 (capacity minus estimated use; negative means insufficient).</p>")
+        .arg(r.interfaceCapacityMBps > 0.0 ? QStringLiteral("%1 MB/s").arg(r.interfaceCapacityMBps - r.bandwidthRequiredMBps, 0, 'f', 1)
+                                          : localizedText("待确认", "Needs confirmation"));
+    text += localizedText("<p><b>公式：</b>%1</p>", "<p><b>Formula:</b> %1</p>").arg(htmlText(r.formulaSummary));
     if (r.maxExposureUsForOnePixelBlur > 0.0) {
         text += localizedText("<p><b>运动模糊：</b>建议曝光不高于 %1 us，约束在 1 个目标物方像素内。</p>",
                               "<p><b>Motion blur:</b> keep exposure no higher than %1 us to stay near one target object pixel.</p>")

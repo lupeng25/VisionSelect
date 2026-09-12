@@ -35,6 +35,7 @@ namespace {
 class TaskStack : public QStackedWidget
 {
 public:
+    using QStackedWidget::QStackedWidget;
     QSize sizeHint() const override { return currentWidget() ? currentWidget()->sizeHint() : QSize(0, 0); }
     QSize minimumSizeHint() const override { return QSize(0, 0); }
 };
@@ -47,7 +48,7 @@ PureCalculationPage::PureCalculationPage(QWidget *parent) : QWidget(parent)
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(16, 8, 16, 0);
     root->setSpacing(12);
-    auto *actions = new QWidget;
+    auto *actions = new QWidget(this);
     auto *actionLayout = new QHBoxLayout(actions);
     actionLayout->setContentsMargins(0, 0, 0, 0);
     auto *example = actionButton(localizedText("载入示例", "Load example"), QString(), true);
@@ -65,7 +66,7 @@ PureCalculationPage::PureCalculationPage(QWidget *parent) : QWidget(parent)
         localizedText("选择要解决的问题，填写已知量，逐项核对结果。", "Choose a task, enter known values, and inspect the results."), actions));
     connect(example, &QPushButton::clicked, this, &PureCalculationPage::resetDefaults);
 
-    m_tasks = new QTabBar;
+    m_tasks = new QTabBar(this);
     m_tasks->setObjectName(QStringLiteral("WorkbenchTasks"));
     m_tasks->setAccessibleName(localizedText("计算任务", "Calculation task"));
     m_tasks->setExpanding(false);
@@ -82,7 +83,7 @@ PureCalculationPage::PureCalculationPage(QWidget *parent) : QWidget(parent)
     }
     root->addWidget(m_tasks);
 
-    m_cameraPanel = new QFrame;
+    m_cameraPanel = new QFrame(this);
     m_cameraPanel->setObjectName(QStringLiteral("ParameterGroup"));
     auto *cameraLayout = new QVBoxLayout(m_cameraPanel);
     auto *cameraHeading = new QHBoxLayout;
@@ -96,25 +97,25 @@ PureCalculationPage::PureCalculationPage(QWidget *parent) : QWidget(parent)
     cameraHeading->addWidget(m_importCamera);
     cameraLayout->addLayout(cameraHeading);
     auto *cameraGrid = new QGridLayout;
+    cameraLayout->addLayout(cameraGrid);
     cameraGrid->setHorizontalSpacing(14);
     addNumber(cameraGrid, "camera.nx", localizedText("有效分辨率 X", "Effective resolution X"), "px", 0, 0, true);
     addNumber(cameraGrid, "camera.ny", localizedText("有效分辨率 Y", "Effective resolution Y"), "px", 0, 1, true);
     addNumber(cameraGrid, "camera.pixel", localizedText("像元尺寸", "Pixel pitch"), "μm", 0, 2);
-    cameraLayout->addLayout(cameraGrid);
     root->addWidget(m_cameraPanel);
 
-    m_scroll = new QScrollArea;
+    m_scroll = new QScrollArea(this);
     m_scroll->setObjectName(QStringLiteral("WorkbenchScroll"));
     m_scroll->setWidgetResizable(true);
     m_scroll->setFrameShape(QFrame::NoFrame);
     m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    auto *content = new QWidget;
+    auto *content = new QWidget(m_scroll->viewport());
     content->setObjectName(QStringLiteral("ParameterInputPanel"));
     auto *contentLayout = new QVBoxLayout(content);
     contentLayout->setContentsMargins(0, 0, 6, 0);
     m_columns = new QBoxLayout(QBoxLayout::LeftToRight);
     m_columns->setSpacing(16);
-    auto *inputFrame = new QFrame;
+    auto *inputFrame = new QFrame(content);
     inputFrame->setObjectName(QStringLiteral("ParameterGroup"));
     inputFrame->setMinimumWidth(0);
     auto *inputLayout = new QVBoxLayout(inputFrame);
@@ -131,14 +132,14 @@ PureCalculationPage::PureCalculationPage(QWidget *parent) : QWidget(parent)
     lensActions->addWidget(m_importLens);
     lensActions->addWidget(m_matchLens);
     inputLayout->addLayout(lensActions);
-    m_inputs = new TaskStack;
+    m_inputs = new TaskStack(inputFrame);
     m_inputs->setObjectName(QStringLiteral("ParameterInputPanel"));
     m_inputs->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     buildPanels();
     inputLayout->addWidget(m_inputs);
     inputLayout->addStretch();
 
-    auto *outputFrame = new QFrame;
+    auto *outputFrame = new QFrame(content);
     outputFrame->setObjectName(QStringLiteral("ParameterGroup"));
     outputFrame->setMinimumWidth(0);
     auto *outputLayout = new QVBoxLayout(outputFrame);
@@ -149,7 +150,7 @@ PureCalculationPage::PureCalculationPage(QWidget *parent) : QWidget(parent)
     outputLayout->addWidget(m_resultStatus);
     auto *metrics = new QGridLayout;
     for (int i = 0; i < 3; ++i) {
-        auto *card = new QFrame;
+        auto *card = new QFrame(outputFrame);
         card->setObjectName(QStringLiteral("WorkbenchMetric"));
         auto *layout = new QVBoxLayout(card);
         layout->setContentsMargins(10, 10, 10, 10);
@@ -203,7 +204,7 @@ PureCalculationPage::PureCalculationPage(QWidget *parent) : QWidget(parent)
     m_compareToggle = new QCheckBox(localizedText("展开 A/B 独立快照对照", "Show independent A/B snapshots"));
     m_compareToggle->setObjectName(QStringLiteral("WorkbenchCompareToggle"));
     contentLayout->addWidget(m_compareToggle);
-    m_compare = new QTextBrowser;
+    m_compare = new QTextBrowser(content);
     m_compare->setObjectName(QStringLiteral("WorkbenchComparison"));
     m_compare->setMinimumHeight(300);
     m_compare->setVisible(false);

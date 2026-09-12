@@ -10,6 +10,7 @@ class QLabel;
 class QTableWidget;
 class QTextEdit;
 class QSplitter;
+class QPushButton;
 
 class CalculationPage : public QWidget
 {
@@ -23,7 +24,7 @@ public:
     ~CalculationPage() override;
 
     void setSummary(const QString &text);
-    void setCameraEstimates(const QVector<CameraEstimate> &estimates);
+    void setCameraEstimates(const QVector<CameraEstimate> &estimates, const CameraSpec *initialCamera = nullptr);
     void setLensEstimates(const QVector<LensEstimate> &estimates);
     void setDetails(const QString &text);
     int selectedCameraEstimateRow() const;
@@ -34,6 +35,15 @@ signals:
     void cameraSelectionChanged(int row);
 
 private:
+    void refreshCameraSummary();
+    void refreshLensDetails();
+    QVector<CameraEstimate> m_cameras;
+    QVector<LensEstimate> m_lenses;
+    QString m_requirementDetails;
+    QLabel *m_cameraSummary = nullptr;
+    QLabel *m_lensSummary = nullptr;
+    QLabel *m_selectionSummary = nullptr;
+    QPushButton *m_detailsButton = nullptr;
     QLabel *m_summaryLabel = nullptr;
     QTableWidget *m_cameraTable = nullptr;
     QTableWidget *m_lensTable = nullptr;

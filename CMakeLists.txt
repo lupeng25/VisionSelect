@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-find_package(Qt6 6.10.1 REQUIRED COMPONENTS Core Gui Widgets Sql Concurrent PrintSupport Test Svg)
+find_package(Qt6 6.10.1 REQUIRED COMPONENTS Core Gui Widgets Sql Concurrent PrintSupport Test Svg LinguistTools)
 qt_standard_project_setup(REQUIRES 6.10)
 
 if(MSVC)
@@ -25,8 +25,6 @@ set(VS_RESOURCE_FILES
     resources/data/lenses.csv
     resources/data/lights.csv
     resources/data/three_d_cameras.json
-    resources/i18n/visionselect_zh_CN.qm
-    resources/i18n/visionselect_en_US.qm
     resources/license/public_key.json
     resources/icons/visionselect_icon_256.png
     resources/icons/visionselect_icon_64.png
@@ -54,7 +52,21 @@ set(VS_RESOURCE_FILES
     resources/icons/ui/warning.png
 )
 
+# 翻译随正常构建生成，避免修改 TS 后继续嵌入旧 QM。
+set(VS_TRANSLATIONS)
+foreach(language IN ITEMS zh_CN en_US)
+    set(qm "${CMAKE_CURRENT_BINARY_DIR}/i18n/visionselect_${language}.qm")
+    add_custom_command(OUTPUT "${qm}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/i18n"
+        COMMAND Qt6::lrelease "${CMAKE_CURRENT_SOURCE_DIR}/resources/i18n/visionselect_${language}.ts" -qm "${qm}"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/i18n/visionselect_${language}.ts" VERBATIM)
+    set_source_files_properties("${qm}" PROPERTIES GENERATED TRUE QT_RESOURCE_ALIAS "i18n/visionselect_${language}.qm")
+    list(APPEND VS_TRANSLATIONS "${qm}")
+endforeach()
+list(APPEND VS_RESOURCE_FILES ${VS_TRANSLATIONS})
+add_custom_target(visionselect_translations DEPENDS ${VS_TRANSLATIONS})
 add_library(visionselect_core STATIC
+    src/core/CandidateChecks.cpp
     src/core/SamplingPolicy.cpp
     src/core/PixelFormat.cpp
     src/core/Localization.cpp
@@ -64,11 +76,12 @@ add_library(visionselect_core STATIC
 target_include_directories(visionselect_core PUBLIC "${VS_INCLUDE_DIR}")
 target_link_libraries(visionselect_core PUBLIC Qt6::Core)
 
-add_library(visionselect_catalog STATIC src/catalog/CatalogRepository.cpp)
+add_library(visionselect_catalog STATIC src/catalog/CatalogRepository.cpp src/catalog/CatalogImport.cpp)
 target_include_directories(visionselect_catalog PUBLIC "${VS_INCLUDE_DIR}")
 target_link_libraries(visionselect_catalog PUBLIC visionselect_core Qt6::Sql)
 
 add_library(visionselect_selection STATIC
+    src/selection/CandidateValidator.cpp
     src/selection/ParameterCalculator.cpp
     src/selection/CalculationAssistant.cpp
     src/selection/SelectionEngine.cpp
@@ -102,7 +115,7 @@ add_library(visionselect_ui_support STATIC
 target_include_directories(visionselect_ui_support PUBLIC "${VS_INCLUDE_DIR}")
 target_link_libraries(visionselect_ui_support PUBLIC visionselect_core Qt6::Widgets Qt6::Svg)
 
-add_library(visionselect_report STATIC src/report/PdfReportWriter.cpp)
+add_library(visionselect_report STATIC src/report/PdfReportWriter.cpp src/report/BomCsvWriter.cpp)
 target_include_directories(visionselect_report PUBLIC "${VS_INCLUDE_DIR}")
 target_link_libraries(visionselect_report PUBLIC visionselect_selection visionselect_ui_support Qt6::PrintSupport)
 
@@ -166,6 +179,7 @@ target_link_libraries(VisionSelectLicenseGenerator PRIVATE visionselect_license 
 qt_add_executable(VisionSelectTests
     tests/test_selection.cpp
 )
+set_target_properties(VisionSelectTests PROPERTIES WIN32_EXECUTABLE FALSE)
 target_include_directories(VisionSelectTests PRIVATE "${VS_INCLUDE_DIR}")
 target_link_libraries(VisionSelectTests PRIVATE
     visionselect_catalog
@@ -182,7 +196,10 @@ qt_add_resources(VisionSelectTests visionselect_test_resources
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
     FILES ${VS_RESOURCE_FILES}
 )
-add_test(NAME VisionSelectTests COMMAND VisionSelectTests)
+add_test(NAME VisionSelectTests COMMAND "${CMAKE_COMMAND}"
+    "-DTEST_PROGRAM=$<TARGET_FILE:VisionSelectTests>"
+    "-DTEST_LOG=${CMAKE_CURRENT_BINARY_DIR}/VisionSelectTests-results.txt"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/run_qt_test.cmake")
 set_tests_properties(VisionSelectTests PROPERTIES
     ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
 )
@@ -190,6 +207,7 @@ set_tests_properties(VisionSelectTests PROPERTIES
 qt_add_executable(VisionSelectUiTests
     tests/test_ui.cpp
 )
+set_target_properties(VisionSelectUiTests PROPERTIES WIN32_EXECUTABLE FALSE)
 target_include_directories(VisionSelectUiTests PRIVATE "${VS_INCLUDE_DIR}")
 target_link_libraries(VisionSelectUiTests PRIVATE
     visionselect_ui
@@ -201,18 +219,36 @@ qt_add_resources(VisionSelectUiTests visionselect_ui_test_resources
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
     FILES ${VS_RESOURCE_FILES}
 )
-add_test(NAME VisionSelectUiTests COMMAND VisionSelectUiTests)
+add_test(NAME VisionSelectUiTests COMMAND "${CMAKE_COMMAND}"
+    "-DTEST_PROGRAM=$<TARGET_FILE:VisionSelectUiTests>"
+    "-DTEST_LOG=${CMAKE_CURRENT_BINARY_DIR}/VisionSelectUiTests-results.txt"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/run_qt_test.cmake")
 set_tests_properties(VisionSelectUiTests PROPERTIES
     ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}"
 )
 
 include(GNUInstallDirs)
-install(TARGETS VisionSelect VisionSelectLicenseGenerator
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(TARGETS VisionSelect RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
+install(TARGETS VisionSelectLicenseGenerator RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT LicenseTools)
+if(MSVC)
+    # 两种发布组件都携带本地 C++ 运行库，不依赖开发机的全局安装。
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+    include(InstallRequiredSystemLibraries)
+    foreach(component IN ITEMS Runtime LicenseTools)
+        install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+            DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT ${component})
+    endforeach()
+endif()
 
 qt_generate_deploy_app_script(
     TARGET VisionSelect
     OUTPUT_SCRIPT visionselect_deploy_script
     NO_UNSUPPORTED_PLATFORM_ERROR
 )
-install(SCRIPT "${visionselect_deploy_script}")
+install(SCRIPT "${visionselect_deploy_script}" COMPONENT Runtime)
+
+qt_generate_deploy_app_script(TARGET VisionSelectLicenseGenerator OUTPUT_SCRIPT license_tools_deploy_script NO_UNSUPPORTED_PLATFORM_ERROR)
+install(SCRIPT ${license_tools_deploy_script} COMPONENT LicenseTools)
+foreach(target IN ITEMS VisionSelect VisionSelectTests VisionSelectUiTests)
+    add_dependencies(${target} visionselect_translations)
+endforeach()

@@ -13,14 +13,14 @@ $coolensRawPath = Join-Path $Root "resources\data\coolens_lenses_raw.csv"
 $cameraHeaders = @(
     "model", "manufacturer", "resolution_x", "resolution_y", "pixel_size_um", "sensor_format",
     "color_mode", "shutter_type", "max_fps", "interface", "bandwidth_mbps",
-    "bit_depth", "dynamic_range_db", "lens_mount"
+    "bit_depth", "dynamic_range_db", "lens_mount", "pixel_format", "bandwidth_source", "source_url", "source_date"
 )
 $lensHeaders = @(
     "model", "manufacturer", "lens_type", "lens_mount", "focal_length_mm", "min_wd_mm",
     "distortion_percent", "image_circle_mm", "megapixel_rating",
     "recommended_min_pixel_um", "pmag", "nominal_wd_mm", "wd_tolerance_mm",
     "max_sensor_diagonal_mm", "telecentricity_deg", "dof_mm",
-    "numerical_aperture", "f_number", "coaxial_illumination", "notes"
+    "numerical_aperture", "f_number", "coaxial_illumination", "notes", "dof_conditions_confirmed"
 )
 
 function New-Row($headers, $values) {
@@ -45,7 +45,7 @@ function Clean-Row($row, $headers) {
 }
 
 function Add-ToMap([hashtable]$map, $row) {
-    if ($row.model) { $map[$row.model] = $row }
+    if ($row.model) { $map[(([string]$row.manufacturer).Trim().ToLowerInvariant() + "`n" + ([string]$row.model).Trim().ToLowerInvariant())] = $row }
 }
 
 function First-Number([string]$text, [double]$default = 0) {
@@ -99,7 +99,7 @@ function Interface-Bandwidth([string]$text) {
     if ($t -match 'camera\s*link|cameralink') { return 680 }
     if ($t -match 'usb') { return 380 }
     if ($t -match 'gige|ethernet|poe') { return 120 }
-    return 120
+    return 0
 }
 
 function Normalize-Mount([string]$text) {
@@ -266,11 +266,13 @@ function Get-CoolensProductFields([string]$productId, [string]$listId) {
 }
 
 function Update-CoolensLensDetail([hashtable]$map, [string]$model, [hashtable]$detail) {
-    if ([string]::IsNullOrWhiteSpace($model) -or !$map.ContainsKey($model) -or !$detail -or $detail.Count -eq 0) {
+    if ([string]::IsNullOrWhiteSpace($model)) { return }
+    $productKey = 'coolens' + "`n" + $model.Trim().ToLowerInvariant()
+    if (!$map.ContainsKey($productKey) -or !$detail -or $detail.Count -eq 0) {
         return
     }
 
-    $row = $map[$model]
+    $row = $map[$productKey]
     if ($row.manufacturer -ne "COOLENS" -or ($row.lens_type -ne "ObjectTelecentric" -and $row.lens_type -ne "BiTelecentric")) {
         return
     }
@@ -386,10 +388,12 @@ function Add-Camera([hashtable]$map, [string]$model, [int]$rx, [int]$ry, [double
         pixel_size_um = $pixel
         sensor_format = $sensor
         color_mode = (Normalize-ColorMode $model $color "" "")
+        pixel_format = $(if ($color -match '^(Mono(8|10|12|14|16)(p|Packed)?|Bayer(RG|GB|GR|BG)(8|10|12|16)(p|Packed)?|RGB8|BGR8)$') { $color } else { '' })
         shutter_type = $shutter
         max_fps = $fps
         interface = $ifaceNorm
         bandwidth_mbps = (Interface-Bandwidth $iface)
+        bandwidth_source = 'estimated'
         bit_depth = $bitDepth
         dynamic_range_db = $dynamicRange
         lens_mount = (Normalize-Mount $mount)

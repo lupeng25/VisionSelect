@@ -3,6 +3,8 @@
 #include "i18n/LanguageManager.h"
 
 #include <QtMath>
+#include <cmath>
+#include <limits>
 
 namespace {
 QString text(const char *zhUtf8, const char *enUtf8)
@@ -14,7 +16,7 @@ QString text(const char *zhUtf8, const char *enUtf8)
 
 bool positive(double value)
 {
-    return value > 0.0;
+    return std::isfinite(value) && value > 0.0;
 }
 
 void markInvalid(ThreeDMotionSamplingResult *result, const QString &risk)
@@ -74,13 +76,30 @@ ThreeDMotionSamplingResult ThreeDCalculation::estimateMotionSampling(const Three
         markInvalid(&result, text("安全系数建议在 0 到 1 之间。", "Safety factor should be between 0 and 1."));
     if (input.triggerMode == ThreeDTriggerMode::Encoder && input.encoderPulsesPerProfile <= 0)
         markInvalid(&result, text("每轮廓脉冲数必须大于 0。", "Pulses per profile must be greater than 0."));
-    if (input.exposureTimeUs < 0.0)
+    if (!std::isfinite(input.exposureTimeUs) || input.exposureTimeUs < 0.0)
         markInvalid(&result, text("曝光时间不能小于 0。", "Exposure time cannot be negative."));
-    if (input.readoutMarginUs < 0.0)
+    if (!std::isfinite(input.readoutMarginUs) || input.readoutMarginUs < 0.0)
         markInvalid(&result, text("读出/复位余量不能小于 0。", "Readout/reset margin cannot be negative."));
 
-    if (positive(input.scanDistanceMm) && positive(input.profileIntervalMm))
-        result.profileCount = input.scanDistanceMm / input.profileIntervalMm;
+    if (positive(input.scanDistanceMm) && positive(input.profileIntervalMm)) {
+        const double intervals = input.scanDistanceMm / input.profileIntervalMm;
+        const double rounded = std::ceil(intervals - qMin(1e-9, 1e-12 * qMax(1.0, intervals)));
+        if (!std::isfinite(rounded) || rounded >= static_cast<double>(std::numeric_limits<qint64>::max()))
+            markInvalid(&result, text("采集轮廓数超过支持范围。", "Profile count exceeds the supported range."));
+        else
+            result.profileCount = qMax<qint64>(1, static_cast<qint64>(rounded));
+    }
+    if (!std::isfinite(input.targetAxisSpeedMmS) || !std::isfinite(input.encoderPulseFrequencyHz)
+        || !std::isfinite(input.overrideXPixelPitchMm))
+        markInvalid(&result, text("采样参数必须是有限数值。", "Sampling parameters must be finite."));
+    if (camera && input.triggerMode == ThreeDTriggerMode::Encoder) {
+        if (camera->supportsEncoder == 0) {
+            result.triggerSupported = false;
+            result.risks.append(text("当前型号不支持编码器触发。", "The selected model does not support encoder triggering."));
+        } else if (camera->supportsEncoder < 0) {
+            result.risks.append(text("编码器触发能力未公开，需确认。", "Encoder triggering capability is unpublished; confirmation is required."));
+        }
+    }
     if (positive(input.axisTravelMm) && input.pulseCount > 0)
         result.pulseIntervalMm = input.axisTravelMm / input.pulseCount;
     if (positive(result.pulseIntervalMm) && input.refinementPoints > 0)
@@ -176,6 +195,7 @@ ThreeDMotionSamplingResult ThreeDCalculation::estimateMotionSampling(const Three
         result.reasons.append(text("有效轮廓频率按外部线触发/触发输入频率计算。",
                                    "Effective profile rate is based on the external line trigger rate."));
         if (camera && camera->supportsExternalTrigger == 0) {
+            result.triggerSupported = false;
             result.risks.append(text("当前型号标记为不支持外部触发。",
                                      "The selected model is marked as not supporting external trigger."));
         } else if (camera && camera->supportsExternalTrigger < 0) {
@@ -256,7 +276,7 @@ ThreeDMotionSamplingResult ThreeDCalculation::estimateMotionSampling(const Three
     }
 
     if (result.valid
-        && (!result.samplingRateWithinCameraLimit
+        && (!result.triggerSupported || !result.samplingRateWithinCameraLimit
             || !result.encoderRateWithinCameraLimit
             || !result.exposureWithinProfilePeriod
             || !result.exposureWithinCameraRange

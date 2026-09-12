@@ -18,6 +18,11 @@ enum class CatalogDomain {
     Light
 };
 
+enum class CatalogImportMode { Merge, Replace };
+struct CatalogImportPreview {
+    int added = 0, updated = 0, removed = 0;
+};
+
 struct CatalogSort {
     QString field;
     bool ascending = true;
@@ -57,6 +62,10 @@ public:
     bool loadCameraCsv(const QString &filePath, QString *errorMessage = nullptr);
     bool loadLensCsv(const QString &filePath, QString *errorMessage = nullptr);
     bool loadLightCsv(const QString &filePath, QString *errorMessage = nullptr);
+    bool previewImport(CatalogDomain domain, const QString &filePath, CatalogImportMode mode,
+                       CatalogImportPreview *preview, QString *errorMessage = nullptr);
+    bool importCsv(CatalogDomain domain, const QString &filePath, CatalogImportMode mode,
+                   QString *backupPath = nullptr, QString *errorMessage = nullptr);
     bool exportCameraCsv(const QString &filePath, QString *errorMessage = nullptr) const;
     bool exportLensCsv(const QString &filePath, QString *errorMessage = nullptr) const;
     bool exportLightCsv(const QString &filePath, QString *errorMessage = nullptr) const;

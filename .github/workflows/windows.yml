@@ -1,33 +1,64 @@
 name: Windows CI
-
 on:
   push:
   pull_request:
-
 jobs:
   build-and-test:
     runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: windows-msvc2022
+            arch: win64_msvc2022_64
+          - preset: windows-msvc2022-release
+            arch: win64_msvc2022_64
+          - preset: windows-mingw64-release
+            arch: win64_mingw
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
+        if: contains(matrix.preset, 'msvc')
         with:
           arch: x64
       - uses: jurplel/install-qt-action@v4
         id: qt
         with:
           version: 6.10.1
-          arch: win64_msvc2022_64
+          arch: ${{ matrix.arch }}
+          modules: qtsvg
+          tools: ${{ contains(matrix.preset, 'mingw') && 'tools_mingw1310,qt.tools.win64_mingw1310' || '' }}
           cache: true
-      - name: 配置与构建
+      - name: 配置、构建与测试
         shell: pwsh
         env:
           QT_ROOT: ${{ steps.qt.outputs.dir }}
         run: |
-          cmake --preset windows-msvc2022
-          cmake --build --preset windows-msvc2022 --parallel
-      - name: 执行测试
+          if ('${{ matrix.preset }}' -match 'mingw') {
+            $qtBase = Split-Path (Split-Path $env:QT_ROOT)
+            $env:MINGW_ROOT = (Get-ChildItem -LiteralPath (Join-Path $qtBase 'Tools') -Directory -Recurse -Filter 'mingw1310_64' | Select-Object -First 1).FullName
+            if (-not $env:MINGW_ROOT) { throw '未找到 MinGW 13.1' }
+            $env:PATH = "$env:MINGW_ROOT/bin;$env:PATH"
+          }
+          cmake --preset ${{ matrix.preset }}
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build --preset ${{ matrix.preset }} --parallel
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ctest --test-dir build/${{ matrix.preset }} --output-on-failure
+          exit $LASTEXITCODE
+      - name: 大目录性能门槛
+        if: matrix.preset == 'windows-msvc2022-release'
         shell: pwsh
-        run: ctest --test-dir build/windows-msvc2022 --output-on-failure
+        env:
+          QT_ROOT: ${{ steps.qt.outputs.dir }}
+        run: ./tools/run_catalog_performance_gate.ps1 -Runs 3
+      - name: 发布目录验收
+        if: contains(matrix.preset, 'release')
+        shell: pwsh
+        run: |
+          ./tools/package_windows.ps1 -BuildDirectory build/${{ matrix.preset }} -OutputDirectory .codex_tmp/ci-package -SkipBuild
+          if (-not (Test-Path .codex_tmp/ci-package/plugins/platforms/qwindows.dll)) { throw '缺少 Windows 平台插件' }
+          if (-not (Test-Path .codex_tmp/ci-package/bin/Qt6Core.dll)) { throw '缺少 Qt 运行库' }
       - name: 检查文本编码
         shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/check_text_encoding.ps1
+        run: ./tools/check_text_encoding.ps1

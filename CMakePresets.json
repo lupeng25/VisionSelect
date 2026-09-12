@@ -42,6 +42,7 @@
       "name": "windows-msvc2022-release",
       "displayName": "Windows MSVC 2022 x64 Release",
       "inherits": "windows-msvc2022",
+      "binaryDir": "${sourceDir}/build/windows-msvc2022-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }

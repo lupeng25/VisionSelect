@@ -387,9 +387,9 @@ Parameters::SystemResult Parameters::checkSystem(const SystemInput &input)
             : L("按镜头最小工作距离校核。", "Checked against the minimum lens working distance."));
     if (!input.telecentric && input.model == OpticsModel::ThinLens)
         result.checks.last().status = CalculationStatus::Unknown;
-    add("dof", input.heightVariationMm, positive(input.dofMm) ? input.dofMm : Number(), "mm", false,
-        L("高度范围按峰峰值填写；景深需适用于当前倍率、光圈及评价标准。",
-          "Enter peak-to-peak height range. DOF must apply to the current magnification, aperture and acceptance criterion."));
+    add("dof", input.heightVariationMm ? Number(*input.heightVariationMm * 1.5) : Number(), positive(input.dofMm) ? input.dofMm : Number(), "mm", false,
+        L("要求景深 = 高度峰峰值 × 1.5；须确认当前倍率、光圈及评价标准。",
+          "Required DOF = peak-to-peak height × 1.5; confirm magnification, aperture and acceptance criterion."));
     if (input.heightVariationMm && *input.heightVariationMm == 0.0) result.checks.last().status = CalculationStatus::NotApplicable;
     else if (!input.dofConditionsConfirmed) result.checks.last().status = CalculationStatus::Unknown;
     Number error;

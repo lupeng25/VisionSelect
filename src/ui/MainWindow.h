@@ -11,6 +11,7 @@
 #include <QMainWindow>
 #include <QString>
 #include <QVector>
+#include <optional>
 
 class QComboBox;
 class QCloseEvent;
@@ -39,6 +40,7 @@ class MainWindow : public QMainWindow
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+    const SelectionJobResult &selectionSnapshot() const { return m_selection; }
 
 protected:
     void changeEvent(QEvent *event) override;
@@ -48,13 +50,14 @@ protected:
 
 private:
     CatalogRepository m_catalog;
-    QVector<SelectionResult> m_results;
-    SelectionRequest m_request;
+    SelectionJobResult m_selection;
     QFutureWatcher<SelectionJobResult> *m_selectionWatcher = nullptr;
     bool m_hasPendingSelectionRequest = false;
+    bool m_selectionCompleted = false;
     SelectionRequest m_pendingSelectionRequest;
 
     QStackedWidget *m_pages = nullptr;
+    int m_activePageIndex = -1;
     QVector<QPushButton *> m_navButtons;
     QFrame *m_sidebar = nullptr;
     QWidget *m_topBar = nullptr;
@@ -90,6 +93,8 @@ private:
 
     QVector<CameraCalculationEstimate> m_assistantCameraEstimates;
     QVector<LensCalculationEstimate> m_assistantLensEstimates;
+    QVector<LensSpec> m_assistantLensCandidates;
+    std::optional<SelectionRequest> m_assistantRequest;
     int m_assistantSelectedCameraRow = -1;
 
     void buildUi();
@@ -122,10 +127,11 @@ private:
     void startSelectionCalculation(const SelectionRequest &request);
     void finishSelectionCalculation();
     bool selectionCalculationRunning() const;
-    void refreshCalculationAssistant();
+    void refreshCalculationAssistant(bool force = false);
     void refreshAssistantLensTable();
     void refreshCatalogTables();
     void handleCatalogMutation();
+    void importCatalog(CatalogDomain domain);
     void importCameras();
     void importLenses();
     void importLights();

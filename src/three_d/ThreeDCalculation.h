@@ -41,7 +41,8 @@ struct ThreeDMotionSamplingInput
 
 struct ThreeDMotionSamplingResult
 {
-    double profileCount = 0.0;
+    // 半开扫描区间 [0, scanDistance)，起点采一帧，不重复采终点。
+    qint64 profileCount = 0;
     double pulseIntervalMm = 0.0;
     double yPixelPitchMm = 0.0;
     double xPixelPitchMm = -1.0;
@@ -67,6 +68,7 @@ struct ThreeDMotionSamplingResult
     bool exposureWithinProfilePeriod = true;
     bool exposureWithinCameraRange = true;
     bool effectiveRateMeetsTarget = true;
+    bool triggerSupported = true;
     QStringList reasons;
     QStringList risks;
 };
