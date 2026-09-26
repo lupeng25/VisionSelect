@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "本地工程工作台与文件选择对话框",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:window:allow-set-theme",
+    "core:window:allow-set-background-color",
+    "dialog:allow-open",
+    "dialog:allow-save"
+  ]
+}

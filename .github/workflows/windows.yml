@@ -1,64 +1,45 @@
-name: Windows CI
+name: Windows 验证与构建
 on:
   push:
   pull_request:
 jobs:
   build-and-test:
     runs-on: windows-2022
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - preset: windows-msvc2022
-            arch: win64_msvc2022_64
-          - preset: windows-msvc2022-release
-            arch: win64_msvc2022_64
-          - preset: windows-mingw64-release
-            arch: win64_mingw
     steps:
       - uses: actions/checkout@v4
-      - uses: ilammy/msvc-dev-cmd@v1
-        if: contains(matrix.preset, 'msvc')
+      - uses: actions/setup-node@v4
         with:
-          arch: x64
-      - uses: jurplel/install-qt-action@v4
-        id: qt
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          version: 6.10.1
-          arch: ${{ matrix.arch }}
-          modules: qtsvg
-          tools: ${{ contains(matrix.preset, 'mingw') && 'tools_mingw1310,qt.tools.win64_mingw1310' || '' }}
-          cache: true
-      - name: 配置、构建与测试
-        shell: pwsh
-        env:
-          QT_ROOT: ${{ steps.qt.outputs.dir }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: 安装前端依赖
+        run: npm ci
+      - name: Rust 格式与回归
         run: |
-          if ('${{ matrix.preset }}' -match 'mingw') {
-            $qtBase = Split-Path (Split-Path $env:QT_ROOT)
-            $env:MINGW_ROOT = (Get-ChildItem -LiteralPath (Join-Path $qtBase 'Tools') -Directory -Recurse -Filter 'mingw1310_64' | Select-Object -First 1).FullName
-            if (-not $env:MINGW_ROOT) { throw '未找到 MinGW 13.1' }
-            $env:PATH = "$env:MINGW_ROOT/bin;$env:PATH"
-          }
-          cmake --preset ${{ matrix.preset }}
+          cargo fmt --all --check
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          cmake --build --preset ${{ matrix.preset }} --parallel
+          cargo test --locked --workspace
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ctest --test-dir build/${{ matrix.preset }} --output-on-failure
-          exit $LASTEXITCODE
-      - name: 大目录性能门槛
-        if: matrix.preset == 'windows-msvc2022-release'
-        shell: pwsh
-        env:
-          QT_ROOT: ${{ steps.qt.outputs.dir }}
-        run: ./tools/run_catalog_performance_gate.ps1 -Runs 3
-      - name: 发布目录验收
-        if: contains(matrix.preset, 'release')
-        shell: pwsh
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: 前端类型、构建与回归
         run: |
-          ./tools/package_windows.ps1 -BuildDirectory build/${{ matrix.preset }} -OutputDirectory .codex_tmp/ci-package -SkipBuild
-          if (-not (Test-Path .codex_tmp/ci-package/plugins/platforms/qwindows.dll)) { throw '缺少 Windows 平台插件' }
-          if (-not (Test-Path .codex_tmp/ci-package/bin/Qt6Core.dll)) { throw '缺少 Qt 运行库' }
-      - name: 检查文本编码
+          npm run build
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm test
+      - name: 浏览器交互验证
+        run: |
+          npx playwright install chromium
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm run test:e2e
+      - name: 文本编码
         shell: pwsh
         run: ./tools/check_text_encoding.ps1
+      - name: 桌面安装包
+        run: npm run desktop:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VisionSelect-Windows
+          path: target/release/bundle/nsis/*.exe

@@ -1,36 +1,18 @@
-# Qt/qmake generated files
-.qmake.stash
-Makefile
-Makefile.*
-*.pro.user
-*.qmake.cache
-
-# Build outputs
-bin/
-build/
+# 依赖与构建产物
+node_modules/
+target/
 dist/
-debug/
-release/
-app/debug/
-app/release/
-tests/debug/
-tests/release/
+src-tauri/gen/
+*.tsbuildinfo
 
-# C++/MSVC artifacts
-.vs/
-*.obj
-*.ilk
-*.idb
-*.pdb
-*.pch
-*.res
-*.moc
-moc_*.cpp
-qrc_*.cpp
-moc_predefs.h
-
-# Local test/report outputs
-.deps/
+# 本地验证、数据与旧工程归档
 .codex_tmp/
-test_results.txt
+.deps/
+build/
+bin/
+test-results/
+playwright-report/
+coverage/
 *.log
+.vs/
+.DS_Store

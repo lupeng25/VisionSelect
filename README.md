@@ -1,83 +1,80 @@
-# VisionSelect
+# VisionSelect 工程工作台
 
-VisionSelect 是一个基于 Qt Widgets 的工业机器视觉元器件选型工具。项目唯一支持的技术基线为 C++20、Qt 6.10.1 和 CMake，包含相机、镜头、光源目录管理、二维选型、三维相机辅助评估、PDF 报告及许可证生成工具。
+面向工业机器视觉选型的本地桌面应用，使用 **Rust + React/TypeScript + Tauri 2**。围绕设备组合与现场条件工作，修改参数后即时校核二维成像或三维轮廓采样。新工程不再依赖 Qt、C++ 或 CMake。
 
-Qt SDK 需包含 Qt SVG 和 LinguistTools（Qt Tools 中的 `lrelease`）。中英文 QM 从 TS 随 CMake 构建生成，无需手动复制旧翻译文件。
+## 当前能力
 
-## 目录约定
+- 四套可切换皮肤：石墨、瓷白、暖砂、雾青。点击左下角“外观皮肤”即时切换，重启后自动恢复；页面、图示和原生标题栏同步适配。界面采用柔和层次与短时过渡，并支持系统减少动态效果偏好。
+- 四类硬件资料检索：1,393 款相机、1,004 款镜头、2,180 款光源、267 款三维相机，共 4,844 条。
+- 按硬件分类组合筛选规格，支持接口、类型、数值区间及“未公开”条件；常用条件直接显示，更多条件展开查看，可单项移除或一键清空。资料库与工作台选设备弹窗共用此功能，详见 [硬件规格筛选方案](docs/硬件规格筛选方案.md)。
+- 二维成像：视场、像素当量、接口、像圈、工作距离、景深条件、运动拖影和传输载荷。
+- 独立 2D 选型计算：最低分辨率、视场、定焦与远心倍率反算、运动曝光、传输与存储；支持手动输入、读取当前方案和明确应用参数，计算草稿独立保留。使用方法与计算边界见 [二维选型计算方案](docs/二维选型计算方案.md)。
+- 三维采样：量程、重复精度、公开截面覆盖、轮廓频率、曝光周期与编码器采样。快照设备不套用轮廓扫描公式。
+- 本地 SQLite 方案保存、设备参数快照、参考方案对照、JSON 导入导出。
+- CSV、三维 JSON 和旧版 SQLite 产品库的预览合并，提交前自动备份。
+- 导出中文 HTML 校核记录，可用浏览器打印为 PDF。
 
-- `build/windows-*/`：CMake 开发构建目录，可随时删除并重新生成；可执行文件位于其 `bin/` 子目录。
-- `dist/VisionSelect/`：通过 `cmake --install` 生成的可发布目录。
-- 根目录不再使用 `bin/`，项目也不再包含 qmake `.pro` 文件或 Qt 5 构建脚本。
+未公开规格显示“待确认”。物方像素当量并不等于测量精度，目录光源尺寸也不代表有效照明范围。方案不控制真实相机或运动设备。
 
-## MinGW 13.1 构建
+## Windows 开发
 
-在 PowerShell 中设置 Qt 6.10.1 和 MinGW 13.1 路径，然后使用统一构建脚本：
-
-```powershell
-$env:QT_ROOT = 'D:\Qt6\6.10.1\mingw_64'
-$env:MINGW_ROOT = 'D:\Qt6\Tools\mingw1310_64'
-.\build.ps1 -Toolchain MinGW -Configuration Debug -Test
-.\build.ps1 -Toolchain MinGW -Configuration Release -Test -Install
-```
-
-Debug 应用位于 `build/windows-mingw64/bin/VisionSelect.exe`，Release 应用位于 `build/windows-mingw64-release/bin/VisionSelect.exe`。安装步骤统一输出到 `dist/VisionSelect/`。
-
-## MSVC 2022 构建
-
-安装 Qt 6.10.1 MSVC 2022 x64 套件，在 Visual Studio 2022 x64 开发者 PowerShell 中执行：
+本次重建使用 Windows、Rust 1.96 MSVC 工具链、Node.js 24 和 PowerShell 7。需要 Microsoft C++ 构建工具及 Windows SDK 为 Rust 链接本机程序；运行桌面程序需要 WebView2。项目自身源码使用 Rust 与 TypeScript。
 
 ```powershell
-$env:QT_ROOT = 'D:\Qt6\6.10.1\msvc2022_64'
-.\build.ps1 -Toolchain MSVC -Configuration Release -Test -Install
+npm ci
+npm run desktop
 ```
 
-也可以直接使用 `CMakePresets.json` 中的 `windows-mingw64`、`windows-mingw64-release`、`windows-msvc2022` 和 `windows-msvc2022-release` 预设。
-
-## 发布与目录导入
-
-主程序和许可证生成器使用独立安装组件，发布主程序不会附带许可证生成器。Release 构建通过测试后，可执行：
+桌面模式由 Tauri 直接调用 Rust 核心，不需要单独运行 API 服务。用于浏览器开发和测试时，在两个终端分别运行：
 
 ```powershell
-.\tools\package_windows.ps1 -BuildDirectory build/windows-msvc2022-release -SkipBuild
-.\tools\package_license_generator.ps1 -BuildDirectory build/windows-msvc2022-release -SkipBuild
+npm run dev:api
 ```
-
-主程序输出到 `dist/VisionSelect/bin/VisionSelect.exe`；许可证工具默认输出到独立目录。指定 `-InstallerCompiler` 为 Inno Setup 的 `ISCC.exe` 可生成安装器，版本取自 CMake 项目版本。两个安装组件均部署 Qt 运行库；MSVC 构建另部署应用本地 C++ 运行库。
-
-界面导入 CSV 默认合并，以厂家和型号确定身份，预览显示新增、更新和删除数量。整类替换需要明确选择“替换”。提交前自动备份 SQLite 产品库，成功消息显示备份位置。旧 `load*Csv()` API 仍用于内部整类加载，交互入口应使用带明确模式的 `importCsv()`。
-
-相机 CSV 可提供 `pixel_format`、`bandwidth_source`（`specified` / `estimated` / `unknown`）、`source_url` 和 `source_date`。历史 CSV 缺少来源时，带宽按估算值处理；不能仅凭接口名称确认吞吐能力。镜头 `dof_conditions_confirmed` 默认关闭，只有确认目录景深适用于当前光圈、倍率和清晰度要求时才开启。
-
-全项目审查及修复记录见 [审查报告](docs/project_review_2026-09-12.md) 和 [修复说明](docs/project_review_fixes_2026-09-12.md)。
-
-## 测试
-
-CTest 会自动把 Qt 运行库目录加入测试进程的 `PATH`，并使用 Windows 平台插件运行：
-
-- `VisionSelectTests`：选型算法、候选排序、BOM、CSV、PDF 和许可证等非视觉逻辑。
-- `VisionSelectUiTests`：相对匹配度、主流程、状态持久化、目录工具栏、键盘焦点和无障碍属性。
-
-CTest 会保存并转发 QtTest 文本日志，避免部分 Windows 非交互环境缺少标准输出。十万条目录门槛单独执行 `tools/run_catalog_performance_gate.ps1 -Runs 3`，每轮日志保存在测试程序目录的 `performance-gate-轮次.txt`。
-
-单独运行当前 MinGW Debug 测试：
 
 ```powershell
-ctest --test-dir build/windows-mingw64 --output-on-failure
+npm run dev
 ```
 
-## UI 设置
+浏览器地址为 http://127.0.0.1:1420，开发 API 只绑定 127.0.0.1:4318。浏览器预览也调用真实 Rust 核心。默认开发数据位于 `.codex_tmp/rust-dev-data`，可用环境变量 `VISIONSELECT_DATA_DIR` 指定隔离数据目录。
 
-窗口几何、侧栏偏好、舒适/紧凑密度、分隔器、表头和 3D 高级筛选折叠状态由 `QSettings` 持久化。普通模式使用石墨黑导航、银灰工作区和低饱和蓝紫强调色，高对比模式跟随 Windows 系统对比度设置。Qt 安装需包含 Qt SVG 模块，以显示矢量控件图标。
-
-需求页使用参数编辑与实时成像目标双栏布局，视场示意随工件尺寸和装夹余量更新；窄窗口自动折叠导航，长表单和 3D 高级筛选使用局部滚动。界面设计与验证说明见 `docs/ui_redesign.md`。
-
-“参数校算”提供六任务工作台：视场与焦距、分辨率与采样、方案校核、远心倍率、运动与曝光、带宽与存储。支持产品库参数导入、正反算、未知状态、实测视场、单位切换及独立 A/B 快照。使用方式、模型区别和验证范围见 [工作台说明](docs/parameter_workbench.md)。
-
-## 编码约定
-
-所有项目文本文件均使用 UTF-8。修改中文界面、CSV 或文档后执行：
+## 验证与打包
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_text_encoding.ps1
+cargo fmt --all --check
+cargo test --workspace
+npm test
+npm run build
+npx playwright install chromium
+npm run test:e2e
+pwsh -NoProfile -File tools/check_text_encoding.ps1
+npm run desktop:build
 ```
+
+端到端测试自动启动 Rust API 和 Vite；运行前请停止占用上述两个端口的开发服务。测试数据使用独立的 `.codex_tmp/e2e-data` 目录，不读取桌面用户数据。
+
+桌面程序输出到 `target/release/visionselect-desktop.exe`，Windows 安装包输出到 `target/release/bundle/nsis/`。安装包会在缺少 WebView2 时引导安装运行时；完全离线环境需事先准备 WebView2。
+
+窗口关闭回归可在本机 Windows 桌面会话中运行 `pwsh -NoProfile -File tools/test_desktop_close.ps1`；指定其他构建时使用 `-Executable` 参数。脚本只操作自行启动的隔离验证窗口，检查直接关闭、保存后关闭以及未保存时的确认和取消。
+
+皮肤桌面回归使用 `pwsh -NoProfile -File tools/test_desktop_themes.ps1`，在隔离环境中检查四套皮肤、原生标题栏明暗同步与退出重开恢复。设计与验证范围见 [主题皮肤方案](docs/主题皮肤方案.md)。
+
+## 数据保护与迁移
+
+`resources/data/` 的 5 个原始硬件资料文件完整保留，不参与界面或算法重写。内置数据首次启动时导入 SQLite；用户导入与方案保存不修改这些文件。`coolens_lenses_raw.csv` 作为原始来源资料保留，不重复计入镜头数量。
+
+桌面用户数据默认位于系统应用数据目录下的 `com.visionselect.workbench`，具体路径可在“工作台说明”中查看；桌面模式也支持通过 `VISIONSELECT_DATA_DIR` 环境变量指定隔离数据目录。首次打开旧项目时，请在硬件资料库选择“导入硬件”，导入旧 SQLite 产品库或三维 JSON。先查看新增、更新数量，确认后合并；旧文件保持原样，新库备份写在同一用户目录内。
+
+保存的方案包含设备参数快照，后续更新硬件库不会静默改变已有方案。工作中的有效参数会保存为当前环境的本地草稿；正式方案使用“保存方案”写入 SQLite。
+
+## 工程结构
+
+| 路径 | 职责 |
+| --- | --- |
+| `crates/vision-core` | 方案模型、目录、校核、导入和 SQLite 持久化 |
+| `crates/vision-server` | 浏览器开发与交互测试使用的本机 API |
+| `src-tauri` | 桌面启动、原生文件对话框与 Rust 命令 |
+| `src` | React 工程工作台与界面样式 |
+| `resources/data` | 保留的硬件原始数据 |
+| `tests/e2e` | 连接真实 Rust API 的交互回归 |
+
+重建边界见 [重建方案](docs/重建方案.md)，测试范围见 [重建验证记录](docs/重建验证记录.md)。旧源码和重建前未提交改动已在本机 `.codex_tmp/rust-rebuild-backup/` 归档；该目录不提交、不参与新工程构建。

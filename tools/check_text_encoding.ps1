@@ -7,7 +7,8 @@ $ErrorActionPreference = "Stop"
 
 $textExtensions = @(
     ".bat", ".cpp", ".csv", ".editorconfig", ".gitattributes", ".gitignore",
-    ".h", ".json", ".md", ".pri", ".pro", ".ps1", ".qrc", ".qss", ".txt", ".ui", ".yml", ".yaml"
+    ".h", ".json", ".md", ".pri", ".pro", ".ps1", ".qrc", ".qss", ".txt", ".ui", ".yml", ".yaml",
+    ".rs", ".toml", ".ts", ".tsx", ".css", ".html", ".svg", ".lock"
 )
 
 $textNames = @(
@@ -45,7 +46,7 @@ function Get-MojibakeTerms {
 
 Push-Location $Root
 try {
-    $files = git ls-files --cached --others --exclude-standard
+    $files = git -c core.quotepath=false ls-files --cached --others --exclude-standard
     if ($LASTEXITCODE -ne 0) {
         throw "git ls-files failed."
     }

@@ -1,0 +1,206 @@
+/* 主题变量也用于皮肤预览，保证缩略图与实际界面一致。 */
+:root,
+[data-theme] {
+  --panel-line: color-mix(in srgb, var(--line) 38%, var(--surface));
+  --seam: color-mix(in srgb, var(--divider) 62%, transparent);
+  --surface-wash: color-mix(in srgb, var(--surface) 64%, var(--surface-subtle));
+  --metric-wash: color-mix(in srgb, var(--surface) 78%, var(--surface-raised));
+  --chrome: color-mix(in srgb, var(--canvas) 82%, var(--surface));
+  --selection-line: color-mix(in srgb, var(--accent-line) 48%, transparent);
+}
+:root,
+[data-theme="graphite"] {
+  color-scheme: dark;
+  --canvas: #2c3037;
+  --surface: #414956;
+  --surface-subtle: #343c47;
+  --surface-raised: #4c5a6d;
+  --surface-hover: #4e5b6d;
+  --field: #2b333e;
+  --sidebar: #272c33;
+  --ink: #ffffff;
+  --text: #e6edf7;
+  --muted: #c7d3e4;
+  --line: #687990;
+  --line-strong: #91a3bb;
+  --divider: #58677d;
+  --accent: #c0d5ff;
+  --accent-solid: #4362d3;
+  --accent-hover: #4d6edb;
+  --accent-soft: #355688;
+  --accent-line: #91b7ff;
+  --on-accent: #ffffff;
+  --success: #9de6c4;
+  --success-soft: #334e45;
+  --success-line: #71ac91;
+  --warning: #ffdb97;
+  --warning-soft: #574731;
+  --warning-line: #bd9a59;
+  --danger: #ffbcc8;
+  --danger-soft: #603f4b;
+  --danger-line: #ca8798;
+  --diagram-grid: #718197;
+  --diagram-axis: #8a9db8;
+  --diagram-fov: #466faa;
+  --diagram-object: #9caec5;
+  --diagram-object-line: #edf4ff;
+  --diagram-margin: #c0d0e6;
+  --diagram-plane: #41526b;
+  --diagram-line: #7b91ad;
+  --diagram-laser: #b2ccff;
+  --diagram-camera: #617699;
+  --diagram-lens: #d0e0ff;
+  --shadow-panel:
+    0 1px 2px rgb(0 0 0 / 10%), 0 7px 22px rgb(0 0 0 / 12%),
+    inset 0 1px 0 rgb(255 255 255 / 4%);
+  --shadow-lift: 0 4px 10px rgb(0 0 0 / 12%), 0 14px 28px rgb(0 0 0 / 16%);
+  --shadow-popover:
+    0 20px 64px rgb(0 0 0 / 30%), 0 0 0 1px rgb(255 255 255 / 5%);
+  --shadow-button:
+    0 2px 6px rgb(0 0 0 / 25%), inset 0 1px 0 rgb(255 255 255 / 12%);
+  --backdrop: rgb(22 27 35 / 48%);
+}
+[data-theme="porcelain"] {
+  color-scheme: light;
+  --canvas: #eef2f7;
+  --surface: #ffffff;
+  --surface-subtle: #f5f7fb;
+  --surface-raised: #e9eef6;
+  --surface-hover: #e1e8f2;
+  --field: #ffffff;
+  --sidebar: #f8fafc;
+  --ink: #18273f;
+  --text: #31435d;
+  --muted: #566780;
+  --line: #a2b0c3;
+  --line-strong: #778ba5;
+  --divider: #d6dee9;
+  --accent: #254a9e;
+  --accent-solid: #345ccc;
+  --accent-hover: #274bb5;
+  --accent-soft: #e5edff;
+  --accent-line: #829fe7;
+  --on-accent: #ffffff;
+  --success: #216243;
+  --success-soft: #e7f4ec;
+  --success-line: #70a78c;
+  --warning: #82551b;
+  --warning-soft: #fff2d8;
+  --warning-line: #c99a50;
+  --danger: #b12e45;
+  --danger-soft: #fce9ed;
+  --danger-line: #d68896;
+  --diagram-grid: #d1dce8;
+  --diagram-axis: #94a6bc;
+  --diagram-fov: #cfddf5;
+  --diagram-object: #8fa7bd;
+  --diagram-object-line: #344b65;
+  --diagram-margin: #687f9c;
+  --diagram-plane: #e0e9f5;
+  --diagram-line: #9bafc7;
+  --diagram-laser: #3559b7;
+  --diagram-camera: #7089b1;
+  --diagram-lens: #edf3ff;
+  --shadow-panel: 0 1px 2px rgb(26 48 80 / 3%), 0 7px 22px rgb(26 48 80 / 5%);
+  --shadow-lift: 0 4px 10px rgb(26 48 80 / 5%), 0 14px 28px rgb(26 48 80 / 7%);
+  --shadow-popover: 0 18px 60px rgb(26 48 80 / 18%);
+  --shadow-button:
+    0 2px 4px rgb(40 68 120 / 14%), inset 0 1px 0 rgb(255 255 255 / 15%);
+  --backdrop: rgb(35 48 70 / 24%);
+}
+[data-theme="sand"] {
+  color-scheme: light;
+  --canvas: #f1ede7;
+  --surface: #fffdf9;
+  --surface-subtle: #f8f3eb;
+  --surface-raised: #eee5d9;
+  --surface-hover: #e8ddcf;
+  --field: #fffdfa;
+  --sidebar: #ece4d9;
+  --ink: #342c27;
+  --text: #514339;
+  --muted: #685749;
+  --line: #b9a58f;
+  --line-strong: #957e68;
+  --divider: #ddd0c0;
+  --accent: #8b442b;
+  --accent-solid: #984a2e;
+  --accent-hover: #833a23;
+  --accent-soft: #f5e3d7;
+  --accent-line: #bd8265;
+  --on-accent: #ffffff;
+  --success: #346048;
+  --success-soft: #eaf1e7;
+  --success-line: #87a28a;
+  --warning: #80521a;
+  --warning-soft: #fff0d4;
+  --warning-line: #ba9658;
+  --danger: #a0333a;
+  --danger-soft: #fbe9e7;
+  --danger-line: #ca8e8b;
+  --diagram-grid: #ded3c4;
+  --diagram-axis: #b6a18a;
+  --diagram-fov: #ebd0ba;
+  --diagram-object: #b7a58e;
+  --diagram-object-line: #68533f;
+  --diagram-margin: #8b7054;
+  --diagram-plane: #eee0ce;
+  --diagram-line: #bda084;
+  --diagram-laser: #984a2e;
+  --diagram-camera: #b18268;
+  --diagram-lens: #fff5e7;
+  --shadow-panel: 0 1px 2px rgb(70 48 27 / 3%), 0 7px 22px rgb(70 48 27 / 5%);
+  --shadow-lift: 0 4px 10px rgb(70 48 27 / 5%), 0 14px 28px rgb(70 48 27 / 7%);
+  --shadow-popover: 0 18px 60px rgb(70 48 27 / 18%);
+  --shadow-button:
+    0 2px 4px rgb(100 52 30 / 14%), inset 0 1px 0 rgb(255 255 255 / 15%);
+  --backdrop: rgb(55 43 30 / 24%);
+}
+[data-theme="sage"] {
+  color-scheme: light;
+  --canvas: #eaf0ef;
+  --surface: #fbfdfc;
+  --surface-subtle: #f0f5f3;
+  --surface-raised: #e0ebe6;
+  --surface-hover: #d6e4de;
+  --field: #fcfffd;
+  --sidebar: #e0e9e5;
+  --ink: #203b35;
+  --text: #36534a;
+  --muted: #486259;
+  --line: #93ac9f;
+  --line-strong: #728f83;
+  --divider: #c9d8cf;
+  --accent: #25604f;
+  --accent-solid: #2b6a57;
+  --accent-hover: #225845;
+  --accent-soft: #dceee5;
+  --accent-line: #75a68e;
+  --on-accent: #ffffff;
+  --success: #276044;
+  --success-soft: #e3f2e6;
+  --success-line: #76a081;
+  --warning: #7b581b;
+  --warning-soft: #fbf1d5;
+  --warning-line: #bba160;
+  --danger: #a53342;
+  --danger-soft: #fae8ec;
+  --danger-line: #cc8c98;
+  --diagram-grid: #ccdcd4;
+  --diagram-axis: #97b2a5;
+  --diagram-fov: #c4e0d5;
+  --diagram-object: #a1b9b1;
+  --diagram-object-line: #365b4e;
+  --diagram-margin: #658f7c;
+  --diagram-plane: #d6e8df;
+  --diagram-line: #94b3a3;
+  --diagram-laser: #2b6a57;
+  --diagram-camera: #739685;
+  --diagram-lens: #eefbf3;
+  --shadow-panel: 0 1px 2px rgb(24 58 44 / 3%), 0 7px 22px rgb(24 58 44 / 5%);
+  --shadow-lift: 0 4px 10px rgb(24 58 44 / 5%), 0 14px 28px rgb(24 58 44 / 7%);
+  --shadow-popover: 0 18px 60px rgb(24 58 44 / 18%);
+  --shadow-button:
+    0 2px 4px rgb(24 68 48 / 14%), inset 0 1px 0 rgb(255 255 255 / 15%);
+  --backdrop: rgb(24 48 38 / 24%);
+}

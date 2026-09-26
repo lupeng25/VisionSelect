@@ -1,0 +1,15 @@
+[package]
+name = "visionselect-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+vision-core = { path = "../crates/vision-core" }
+serde_json.workspace = true
+tauri-plugin-dialog = "2"
+tempfile.workspace = true
