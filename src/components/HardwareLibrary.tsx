@@ -21,6 +21,8 @@ import {
   Upload,
 } from "lucide-react";
 import { request, errorText } from "../api";
+import { HardwareImport } from "./HardwareImport";
+import { HardwareImportEntry } from "./HardwareImportEntry";
 import {
   kinds,
   titles,
@@ -29,7 +31,13 @@ import {
   type Hardware,
   type Kind,
 } from "../types";
-import { format, spec, specificationLabels, summary } from "../format";
+import {
+  format,
+  lensTypeDisplay,
+  spec,
+  specificationLabels,
+  summary,
+} from "../format";
 import {
   CatalogFilters,
   catalogFilterError,
@@ -91,7 +99,8 @@ export function HardwareLibrary({
     updated: number;
   } | null>(null);
   const [importing, setImporting] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const [tableFile, setTableFile] = useState<File | null>(null);
+  const [importEntry, setImportEntry] = useState(false);
   const tableScroll = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (tableScroll.current) tableScroll.current.scrollTop = 0;
@@ -159,7 +168,13 @@ export function HardwareLibrary({
       clearTimeout(timeout);
     };
   }, [queryKey, filterError]);
-  async function previewFile(file: File) {
+  async function previewFile(file: File, targetKind = kind) {
+    if (/\.(csv|xlsx|xls)$/i.test(file.name)) {
+      setPreview(null);
+      setImportNotice(null);
+      setTableFile(file);
+      return;
+    }
     setImporting(true);
     setPreview(null);
     setImportNotice(null);
@@ -181,7 +196,11 @@ export function HardwareLibrary({
         type = extension === "json" ? "json" : "csv";
       }
       setPreview(
-        await request("import_preview", { kind, format: type, content }),
+        await request("import_preview", {
+          kind: targetKind,
+          format: type,
+          content,
+        }),
       );
     } catch (e) {
       setImportNotice({ text: errorText(e), error: true });
@@ -250,17 +269,20 @@ export function HardwareLibrary({
         </div>
         <button
           className="secondary small"
-          onClick={() => input.current?.click()}
+          onClick={() => {
+            setPreview(null);
+            setImportNotice(null);
+            setImportEntry(true);
+          }}
           disabled={importing}
         >
           <Upload size={15} />
           导入硬件
         </button>
         <input
-          ref={input}
           className="hidden"
           type="file"
-          accept=".csv,.json,.db,.sqlite"
+          accept=".xlsx,.xls,.csv,.json,.db,.sqlite"
           aria-label="导入硬件文件"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -269,6 +291,38 @@ export function HardwareLibrary({
           }}
         />
       </div>
+      {importEntry && (
+        <HardwareImportEntry
+          kind={kind}
+          onClose={() => setImportEntry(false)}
+          onFile={(file, importedKind) => {
+            setImportEntry(false);
+            setKind(importedKind);
+            void previewFile(file, importedKind);
+          }}
+        />
+      )}
+      {tableFile && (
+        <HardwareImport
+          file={tableFile}
+          kind={kind}
+          onClose={() => setTableFile(null)}
+          onImported={(result, importedKind) => {
+            setTableFile(null);
+            setKind(importedKind);
+            setRevision((v) => v + 1);
+            setOffset(0);
+            onImported();
+            onNotice(
+              `已导入 ${result.imported} 条设备，原库备份：${result.backup}`,
+            );
+            setImportNotice({
+              text: `已导入 ${result.imported} 条设备。原库已自动备份。`,
+              error: false,
+            });
+          }}
+        />
+      )}
       {preview && (
         <div className="import-preview">
           <div>
@@ -502,7 +556,17 @@ export function HardwareLibrary({
                 </div>
                 <dl className="specification-list" aria-label="设备详细规格">
                   {Object.entries(specificationLabels)
-                    .filter(([key]) => key in selected.specs)
+                    .filter(([key]) => {
+                      if (!(key in selected.specs)) return false;
+                      if (
+                        selected.kind === "lens" &&
+                        ["灿锐光学", "慕藤光", "桂林桂光仪器有限公司"].includes(
+                          selected.manufacturer,
+                        )
+                      )
+                        return selected.specs[key] !== "";
+                      return true;
+                    })
                     .map(([key, title]) => {
                       const value = selected.specs[key];
                       const content =
@@ -510,17 +574,23 @@ export function HardwareLibrary({
                           ? value
                             ? "是"
                             : "否"
-                          : spec(selected, key);
+                          : key === "lens_type"
+                            ? (lensTypeDisplay[spec(selected, key)] ??
+                              spec(selected, key))
+                            : spec(selected, key);
                       return (
                         <div key={key}>
-                          <dt>{title}</dt>
+                          <dt>
+                            {key === "bandwidth_mbps" &&
+                            selected.origin === "内置资料" &&
+                            selected.specs.bandwidth_source !== "specified"
+                              ? "历史目录带宽 / MB/s（口径待核）"
+                              : title}
+                          </dt>
                           <dd>
                             {content === "" ||
                             (Number(content) <= 0 &&
-                              ![
-                                "distortion_percent",
-                                "telecentricity_deg",
-                              ].includes(key))
+                              key !== "distortion_percent")
                               ? "未公开 / 不适用"
                               : content}
                           </dd>

@@ -13,3 +13,4 @@ vision-core = { path = "../crates/vision-core" }
 serde_json.workspace = true
 tauri-plugin-dialog = "2"
 tempfile.workspace = true
+base64 = "0.22"

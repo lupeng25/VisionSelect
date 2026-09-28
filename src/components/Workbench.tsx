@@ -27,6 +27,7 @@ import {
 } from "../types";
 import { fields, format, summary, type Field } from "../format";
 import { hardwareIcons } from "./HardwareLibrary";
+import { InstallationView } from "./InstallationView";
 
 function FieldInput({
   field,
@@ -75,11 +76,15 @@ function FieldInput({
 function Scene({
   project,
   evaluation,
+  onParameter,
 }: {
   project: Project;
   evaluation: Evaluation | null;
+  onParameter: (key: keyof Parameters, value: number | null) => void;
 }) {
   const p = project.parameters;
+  const [view, setView] = useState<"plane" | "installation">("plane");
+  const installation = project.mode === "imaging" && view === "installation";
   const known = evaluation?.fov_x != null && evaluation.fov_y != null;
   const w = Math.max(0.01, Number.isFinite(p.width) ? p.width : 20);
   const h = Math.max(0.01, Number.isFinite(p.height) ? p.height : 20);
@@ -94,19 +99,44 @@ function Scene({
   return (
     <div className="scene">
       <div className="scene-heading">
-        <span>
-          <Crosshair size={14} />
-          {project.mode === "imaging" ? "成像平面" : "运动采样"}
-        </span>
+        {project.mode === "imaging" ? (
+          <div className="scene-view-switch" role="group" aria-label="示意视图">
+            <button
+              type="button"
+              aria-pressed={view === "plane"}
+              onClick={() => setView("plane")}
+            >
+              <Crosshair size={14} />
+              成像平面
+            </button>
+            <button
+              type="button"
+              aria-pressed={view === "installation"}
+              onClick={() => setView("installation")}
+            >
+              <Layers2 size={14} />
+              安装主视图
+            </button>
+          </div>
+        ) : (
+          <span>
+            <Crosshair size={14} />
+            运动采样
+          </span>
+        )}
         <span className="scene-caption">
-          {project.mode === "imaging"
-            ? known
-              ? "按当前参数绘制"
-              : "等待设备参数"
-            : "结构示意 · 非等比例"}
+          {installation
+            ? "典型安装 · 非等比例"
+            : project.mode === "imaging"
+              ? known
+                ? "按当前参数绘制"
+                : "等待设备参数"
+              : "结构示意 · 非等比例"}
         </span>
       </div>
-      {project.mode === "imaging" ? (
+      {installation ? (
+        <InstallationView project={project} onParameter={onParameter} />
+      ) : project.mode === "imaging" ? (
         <svg
           viewBox="0 0 560 180"
           role="img"
@@ -176,7 +206,11 @@ function Scene({
           </text>
           <text x="18" y="164" fill="var(--muted)" fontSize="11">
             {known
-              ? "实际视场 " + format(fw) + " × " + format(fh) + " mm"
+              ? (p.measured ? "实测视场 " : "估算视场 ") +
+                format(fw) +
+                " × " +
+                format(fh) +
+                " mm"
               : "虚线表示所需视场"}
           </text>
         </svg>
@@ -437,7 +471,11 @@ export function Workbench({
             </span>
           </div>
           <div className="imaging-card">
-            <Scene project={project} evaluation={evaluation} />
+            <Scene
+              project={project}
+              evaluation={pending || validation ? null : evaluation}
+              onParameter={parameter}
+            />
             <div className="scene-note">
               <CircleHelp size={12} />
               <span>

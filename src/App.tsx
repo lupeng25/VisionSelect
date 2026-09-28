@@ -792,6 +792,7 @@ function Comparison({
       ? [
           "target",
           "acquisition",
+          "installation",
           ...(project.parameters.measured || ref.parameters.measured
             ? ["measured"]
             : []),

@@ -110,6 +110,12 @@ pub struct Parameters {
     pub margin: f64,
     pub pixel: f64,
     pub distance: f64,
+    #[serde(default)]
+    pub light_distance: Option<f64>,
+    #[serde(default)]
+    pub distance_tolerance: Option<f64>,
+    #[serde(default)]
+    pub light_distance_tolerance: Option<f64>,
     pub fps: f64,
     pub speed: f64,
     pub exposure: f64,
@@ -145,6 +151,9 @@ impl Default for Parameters {
             margin: 2.,
             pixel: 10.,
             distance: 110.,
+            light_distance: None,
+            distance_tolerance: None,
+            light_distance_tolerance: None,
             fps: 20.,
             speed: 0.,
             exposure: 100.,
@@ -218,6 +227,20 @@ impl Parameters {
             .is_some_and(|distance| !distance.is_finite() || distance <= 0. || distance > 1e8)
         {
             return Err("三维工作距离无效".into());
+        }
+        if self
+            .light_distance
+            .is_some_and(|v| !v.is_finite() || v <= 0. || v > 1e8)
+        {
+            return Err("光源工作距离必须是有效正数".into());
+        }
+        for tolerance in [self.distance_tolerance, self.light_distance_tolerance]
+            .into_iter()
+            .flatten()
+        {
+            if !tolerance.is_finite() || !(0.0..=1e8).contains(&tolerance) {
+                return Err("安装公差必须是有效非负数".into());
+            }
         }
         if !["free", "external", "encoder"].contains(&self.trigger.as_str()) {
             return Err("未知触发方式".into());

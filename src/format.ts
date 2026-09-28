@@ -13,6 +13,19 @@ export const spec = (h: Hardware | null | undefined, key: string) => {
       ? value.join(" / ")
       : String(value);
 };
+export const lensTypeDisplay: Record<string, string> = {
+  BiTelecentric: "双远心镜头",
+  ObjectTelecentric: "物方远心镜头",
+  Telecentric: "远心镜头",
+  FixedFocal: "定焦镜头",
+  FixedMagnification: "定倍率镜头",
+  LineScan: "线扫镜头",
+  Zoom: "变倍镜头",
+  MicroscopeObjective: "显微物镜",
+  TubeLens: "管镜",
+  OpticalAssembly: "组合光学组件",
+  Unclassified: "类型待核",
+};
 export const specNumber = (h: Hardware | null | undefined, key: string) => {
   const value = Number(h?.specs[key]);
   return Number.isFinite(value) && value > 0 ? value : null;
@@ -27,13 +40,29 @@ export function summary(h: Hardware): string {
       spec(h, "pixel_size_um") +
       " μm"
     );
-  if (h.kind === "lens")
-    return spec(h, "lens_type").toLowerCase().includes("telecentric")
-      ? "远心 " + spec(h, "pmag") + "× · WD " + spec(h, "nominal_wd_mm") + " mm"
-      : spec(h, "focal_length_mm") +
-          " mm · 像圈 " +
-          spec(h, "image_circle_mm") +
-          " mm";
+  if (h.kind === "lens") {
+    const type = spec(h, "lens_type").toLowerCase();
+    const magnification = spec(h, "pmag");
+    const catalogMagnification = spec(h, "catalog_magnification");
+    const distance = spec(h, "nominal_wd_mm");
+    if (type.includes("telecentric"))
+      return `远心 ${magnification ? `${magnification}×` : "倍率待确认"} · WD ${distance ? `${distance} mm` : "待确认"}`;
+    if (type === "fixedmagnification" && magnification)
+      return `定倍率 ${magnification}× · WD ${distance || "待确认"} mm`;
+    if (type === "zoom")
+      return `变倍镜头 · ${catalogMagnification ? `${catalogMagnification}×` : "倍率范围待确认"}`;
+    if (type === "microscopeobjective")
+      return `显微物镜 · ${catalogMagnification ? `${catalogMagnification}×` : "倍率待确认"}`;
+    if (type === "tubelens" || type === "opticalassembly")
+      return `${type === "tubelens" ? "管镜" : "组合光学组件"} · 配置需核对`;
+    const focal = spec(h, "focal_length_mm");
+    const circle = spec(h, "image_circle_mm");
+    if (type === "linescan")
+      return `线扫镜头 · ${focal ? `${focal} mm 焦距` : "焦距待确认"}`;
+    return focal
+      ? `${focal} mm · 像圈 ${circle || "待确认"} mm`
+      : "光学规格待确认";
+  }
   if (h.kind === "light")
     return (
       spec(h, "color") +
@@ -52,8 +81,35 @@ export interface Field {
   min: number;
   step: number;
   max?: number;
+  optional?: boolean;
 }
 export const fields: Record<string, Field[]> = {
+  installation: [
+    {
+      key: "light_distance",
+      title: "光源工作距离",
+      unit: "mm",
+      min: 0.01,
+      step: 1,
+      optional: true,
+    },
+    {
+      key: "distance_tolerance",
+      title: "镜头安装公差 ±",
+      unit: "mm",
+      min: 0,
+      step: 0.1,
+      optional: true,
+    },
+    {
+      key: "light_distance_tolerance",
+      title: "光源安装公差 ±",
+      unit: "mm",
+      min: 0,
+      step: 0.1,
+      optional: true,
+    },
+  ],
   target: [
     { key: "width", title: "工件宽度", unit: "mm", min: 0.01, step: 1 },
     { key: "height", title: "工件高度", unit: "mm", min: 0.01, step: 1 },
@@ -170,6 +226,7 @@ export const fields: Record<string, Field[]> = {
 export function inputError(p: Parameters): string | null {
   for (const f of Object.values(fields).flat()) {
     const value = p[f.key];
+    if (f.optional && value == null) continue;
     if (f.key === "scan_distance" && value === null) continue;
     if (
       typeof value !== "number" ||
@@ -197,11 +254,15 @@ export const specificationLabels: Record<string, string> = {
   bandwidth_source: "带宽来源",
   bit_depth: "位深 / bit",
   dynamic_range_db: "动态范围 / dB",
+  signal_noise_ratio_db: "信噪比 / dB",
+  signal_noise_ratio_condition: "信噪比测量条件",
+  unverifiedLegacyDb: "历史 dB 值（含义待核）",
   lens_mount: "镜头接口",
   lens_type: "镜头类型",
   focal_length_mm: "焦距 / mm",
   min_wd_mm: "最小工作距离 / mm",
   image_circle_mm: "像圈 / mm",
+  max_sensor_diagonal_mm: "适配靶面对角线 / mm",
   pmag: "远心倍率",
   nominal_wd_mm: "标称工作距离 / mm",
   wd_tolerance_mm: "距离容差 / mm",
@@ -211,6 +272,21 @@ export const specificationLabels: Record<string, string> = {
   megapixel_rating: "标称分辨率 / MP",
   distortion_percent: "畸变 / %",
   telecentricity_deg: "远心度 / °",
+  object_fov_mm: "物方视场 / mm",
+  object_resolution_um: "物方分辨率 / μm",
+  catalog_magnification: "原厂倍率原文",
+  catalog_sensor_format: "原厂靶面原文",
+  catalog_working_distance: "原厂工作距离原文",
+  catalog_mount: "原厂接口原文",
+  catalog_dof_mm: "原厂条件景深 / mm",
+  catalog_resolution_um: "原厂理论分辨率 / μm",
+  catalog_distortion: "原厂 TV 失真原文",
+  control_interface: "控制接口",
+  source_category: "原厂产品分类",
+  catalog_list_url: "原厂目录页",
+  source_content_ids: "原厂资料编号",
+  drawing_2d_url: "原厂 2D 图纸",
+  drawing_3d_url: "原厂 3D 图纸",
   light_type: "光源类型",
   color: "颜色",
   wavelength_nm: "波长 / nm",
@@ -220,6 +296,7 @@ export const specificationLabels: Record<string, string> = {
   best_for: "适用场景",
   technology: "技术路线",
   series: "系列",
+  status: "产品状态",
   referenceDistanceMm: "参考距离 / mm",
   workingDistanceMinMm: "最近工作距离 / mm",
   workingDistanceMaxMm: "最远工作距离 / mm",
@@ -244,6 +321,10 @@ export const specificationLabels: Record<string, string> = {
   accuracyCondition: "精度适用条件",
   geometryCorrectionNote: "几何规格校正说明",
   geometryCorrectionSource: "几何规格校正依据",
+  dataCorrectionNote: "数据核对说明",
+  dataCorrectionSource: "数据核对依据",
+  laserCorrectionNote: "激光规格核对说明",
+  laserCorrectionSource: "激光规格核对依据",
   sourceUrl: "来源链接",
   sourceDate: "来源日期",
   source_url: "来源链接",
@@ -251,5 +332,6 @@ export const specificationLabels: Record<string, string> = {
   notes: "备注",
   ipRating: "防护等级",
   lightSource: "光源",
+  wavelengthNm: "激光波长 / nm",
   materialScenarios: "材质场景",
 };

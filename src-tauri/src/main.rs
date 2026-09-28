@@ -7,6 +7,46 @@ use std::{
 use tauri::Manager;
 use vision_core::{model::Project, store::Store};
 
+fn read_import_path(path: &str) -> Result<Value, String> {
+    use base64::Engine;
+    use std::io::Read;
+    let path = std::path::Path::new(path);
+    let extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !["xlsx", "xls", "csv", "json", "db", "sqlite"].contains(&extension.as_str()) {
+        return Err("请选择 Excel、CSV、三维 JSON 或旧数据库文件".into());
+    }
+    let file = std::fs::File::open(path).map_err(|e| format!("无法读取文件：{e}"))?;
+    let metadata = file.metadata().map_err(|e| e.to_string())?;
+    const LIMIT: u64 = 32 * 1024 * 1024;
+    if !metadata.is_file() {
+        return Err("请拖入文件，不是文件夹".into());
+    }
+    if metadata.len() > LIMIT {
+        return Err("文件超过 32 MB 限制".into());
+    }
+    let mut bytes = Vec::new();
+    file.take(LIMIT + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > LIMIT {
+        return Err("文件超过 32 MB 限制".into());
+    }
+    Ok(
+        serde_json::json!({"name":path.file_name().unwrap_or_default().to_string_lossy(),"content":base64::engine::general_purpose::STANDARD.encode(bytes)}),
+    )
+}
+
+#[tauri::command]
+async fn read_hardware_import_file(path: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || read_import_path(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn request(
     state: tauri::State<'_, Arc<Mutex<Store>>>,
@@ -51,7 +91,11 @@ fn main() {
             )));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![request, export_file])
+        .invoke_handler(tauri::generate_handler![
+            request,
+            export_file,
+            read_hardware_import_file
+        ])
         .run(tauri::generate_context!())
         .expect("无法启动 VisionSelect 桌面应用");
 }
@@ -59,6 +103,37 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dropped_import_file_preserves_bytes_and_rejects_invalid_inputs() {
+        use base64::Engine;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("中文参数.CSV");
+        let bytes = b"model,manufacturer\ntest,vendor";
+        std::fs::write(&path, bytes).unwrap();
+        let result = read_import_path(path.to_str().unwrap()).unwrap();
+        assert_eq!(result["name"], "中文参数.CSV");
+        assert_eq!(
+            base64::engine::general_purpose::STANDARD
+                .decode(result["content"].as_str().unwrap())
+                .unwrap(),
+            bytes
+        );
+        let unsupported = dir.path().join("程序.exe");
+        std::fs::write(&unsupported, bytes).unwrap();
+        assert!(read_import_path(unsupported.to_str().unwrap()).is_err());
+        assert!(read_import_path(dir.path().to_str().unwrap()).is_err());
+        let large = dir.path().join("超大.csv");
+        std::fs::File::create(&large)
+            .unwrap()
+            .set_len(32 * 1024 * 1024 + 1)
+            .unwrap();
+        assert!(
+            read_import_path(large.to_str().unwrap())
+                .unwrap_err()
+                .contains("32 MB")
+        );
+    }
 
     #[test]
     fn native_export_roundtrips_and_replaces_existing_file() {

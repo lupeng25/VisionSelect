@@ -45,6 +45,9 @@ fn seven_lmi_models_match_near_far_and_do_not_invent_a_reference_section() {
         let fixed = catalog_corrections::corrected(&raw);
         near(fixed.number("workingDistanceMinMm"), cd);
         near(fixed.number("workingDistanceMaxMm"), far_distance);
+        near(fixed.number("wavelengthNm"), 660.);
+        assert_eq!(fixed.text("lightSource"), "红色激光（标准配置）");
+        assert_eq!(raw.number("wavelengthNm"), Some(405.));
         assert_eq!(fixed.number("referenceDistanceMm"), None);
         assert_eq!(fixed.number("xFovReferenceMm"), None);
         assert_eq!(fixed.specs["rawSpecs"], raw.specs["rawSpecs"]);
@@ -81,7 +84,7 @@ fn seven_lmi_models_match_near_far_and_do_not_invent_a_reference_section() {
 }
 
 #[test]
-fn correction_preserves_custom_records_and_only_changes_seven_builtin_models() {
+fn correction_preserves_custom_records_and_only_changes_verified_builtin_models() {
     let raw = original("Gocator 2320");
     let mut imported = raw.clone();
     imported.origin = "用户导入".into();
@@ -99,6 +102,17 @@ fn correction_preserves_custom_records_and_only_changes_seven_builtin_models() {
         assert!(!catalog_corrections::apply(&mut custom));
         assert_eq!(custom, before);
     }
+    let mut custom_laser = raw.clone();
+    custom_laser.specs.insert(
+        "laserVariantSource".into(),
+        json!("https://example.com/特定订货配置"),
+    );
+    assert!(catalog_corrections::apply(&mut custom_laser));
+    assert_eq!(custom_laser.number("wavelengthNm"), Some(405.));
+    // 升级前数据库可能已经保存几何校正，后续仍须补上激光修正。
+    custom_laser.specs.remove("laserVariantSource");
+    assert!(catalog_corrections::apply(&mut custom_laser));
+    assert_eq!(custom_laser.number("wavelengthNm"), Some(660.));
     let raw_items = catalog::parse_three_d(
         include_str!("../../../resources/data/three_d_cameras.json"),
         "内置资料",
@@ -109,7 +123,11 @@ fn correction_preserves_custom_records_and_only_changes_seven_builtin_models() {
         .iter()
         .filter(|raw| fixed.iter().find(|h| h.id == raw.id).unwrap() != *raw)
         .count();
-    assert_eq!(changed, 7);
+    assert_eq!(changed, 8);
+    let unknown = fixed.iter().find(|h| h.model == "Gocator 2390").unwrap();
+    assert_eq!(unknown.number("wavelengthNm"), None);
+    assert!(unknown.text("lightSource").is_empty());
+    assert_eq!(original("Gocator 2390").number("wavelengthNm"), Some(405.));
 }
 
 #[test]

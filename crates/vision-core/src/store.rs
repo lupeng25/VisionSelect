@@ -51,6 +51,47 @@ impl Store {
                 .map_err(|e| e.to_string())?;
             tx.commit().map_err(|e| e.to_string())?;
         }
+        // 旧用户库只在首次启动时写入过内置资料。新增厂家按批次补入，
+        // 已存在的同名型号保持原记录，避免覆盖用户导入和已有方案快照。
+        for (lens_batch, load) in [
+            (
+                "builtin_canrill_lenses_20260928",
+                catalog::canrill_lenses as fn() -> Result<Vec<Hardware>>,
+            ),
+            ("builtin_mvotem_lenses_20260928", catalog::mvotem_lenses),
+            ("builtin_guiguang_lenses_20260928", catalog::guiguang_lenses),
+        ] {
+            let applied: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM metadata WHERE key=?1)",
+                    [lens_batch],
+                    |row| row.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+            if applied {
+                continue;
+            }
+            let tx = connection.transaction().map_err(|e| e.to_string())?;
+            for item in load()? {
+                tx.execute(
+                    "INSERT OR IGNORE INTO hardware(id,kind,manufacturer,model,document) VALUES(?1,?2,?3,?4,?5)",
+                    params![
+                        item.id,
+                        item.kind.key(),
+                        item.manufacturer,
+                        item.model,
+                        serde_json::to_string(&item).map_err(|e| e.to_string())?
+                    ],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+            tx.execute(
+                "INSERT INTO metadata(key,value) VALUES(?1,'1')",
+                [lens_batch],
+            )
+            .map_err(|e| e.to_string())?;
+            tx.commit().map_err(|e| e.to_string())?;
+        }
         Ok(Self {
             connection,
             directory: directory.to_path_buf(),
@@ -139,6 +180,13 @@ impl Store {
                 Ok(json!({"content":engine::report(&project)?}))
             }
             "import_preview" => self.preview(&payload),
+            "table_import_inspect" => crate::table_import::inspect(&payload),
+            "table_import_fields" => {
+                let kind: Kind = serde_json::from_value(payload["kind"].clone())
+                    .map_err(|_| "请选择硬件分类")?;
+                serde_json::to_value(crate::table_import::fields(kind)).map_err(|e| e.to_string())
+            }
+            "table_import_preview" => self.preview_table(&payload),
             "import_commit" => self.commit(&payload),
             _ => Err("未知操作".into()),
         }
@@ -214,6 +262,92 @@ impl Store {
         }
         Ok(
             json!({"kind":kind,"items":items,"total":total,"category_total":category_total,"brands":brands,"offset":offset,"limit":limit,"filter_schema":schema}),
+        )
+    }
+    fn preview_table(&mut self, payload: &Value) -> Result<Value> {
+        self.pending_import = None;
+        let policy = payload["policy"].as_str().unwrap_or("fill");
+        if !["fill", "skip", "replace"].contains(&policy) {
+            return Err("未知重复处理方式".into());
+        }
+        let (items, errors) = crate::table_import::parse(payload)?;
+        let mut pending = Vec::new();
+        let mut rows = Vec::new();
+        let (mut added, mut updated, mut skipped, mut unchanged) = (0, 0, 0, 0);
+        for (row, incoming) in items {
+            let body: Option<String> = self
+                .connection
+                .query_row(
+                    "SELECT document FROM hardware WHERE id=?1",
+                    [&incoming.id],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(|e| e.to_string())?;
+            let original = body
+                .map(|s| serde_json::from_str::<Hardware>(&s).map_err(|e| e.to_string()))
+                .transpose()?;
+            let mut changes = Vec::new();
+            let action;
+            if let Some(mut existing) = original {
+                crate::catalog_corrections::apply(&mut existing);
+                if policy == "skip" {
+                    skipped += 1;
+                    action = "skipped";
+                } else {
+                    for (key, value) in &incoming.specs {
+                        let before = existing.specs.get(key);
+                        let blank = before.is_none_or(|v| {
+                            v.is_null() || v.as_str().is_some_and(|s| s.trim().is_empty())
+                        });
+                        let equivalent = before.is_some_and(|v| {
+                            v == value
+                                || value.as_f64().is_some_and(|n| {
+                                    v.as_str().and_then(|s| s.parse::<f64>().ok()) == Some(n)
+                                })
+                        });
+                        if !equivalent && (policy == "replace" || blank) {
+                            changes.push(json!({"key":key,"before":before,"after":value}));
+                            existing.specs.insert(key.clone(), value.clone());
+                        }
+                    }
+                    if changes.is_empty() {
+                        unchanged += 1;
+                        action = "unchanged";
+                    } else {
+                        existing.model = existing.text("model");
+                        existing.manufacturer = existing.text("manufacturer");
+                        existing.origin = "用户导入".into();
+                        existing.validate()?;
+                        pending.push(existing);
+                        updated += 1;
+                        action = "updated";
+                    }
+                }
+            } else {
+                for (key, value) in &incoming.specs {
+                    changes.push(json!({"key":key,"before":null,"after":value}));
+                }
+                pending.push(incoming.clone());
+                added += 1;
+                action = "added";
+            }
+            if rows.len() < 100 {
+                rows.push(json!({"row":row,"model":incoming.model,"manufacturer":incoming.manufacturer,"action":action,"changes":changes}));
+            }
+        }
+        let total = added + updated + skipped + unchanged + errors.len();
+        let can_commit = !pending.is_empty()
+            && (errors.is_empty() || payload["skip_invalid"].as_bool() == Some(true));
+        let token = if can_commit {
+            let token = uuid::Uuid::new_v4().to_string();
+            self.pending_import = Some((token.clone(), pending));
+            Some(token)
+        } else {
+            None
+        };
+        Ok(
+            json!({"token":token,"added":added,"updated":updated,"skipped":skipped,"unchanged":unchanged,"total":total,"rows":rows,"invalid":errors.len(),"errors":errors.into_iter().take(100).collect::<Vec<_>>() }),
         )
     }
     fn preview(&mut self, payload: &Value) -> Result<Value> {

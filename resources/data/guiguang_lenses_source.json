@@ -1,0 +1,20 @@
+{
+  "manufacturer": "桂林桂光仪器有限公司",
+  "description": "桂光官网单筒视频显微系统中独立镜头目录与产品页的型号级摘录；未公开字段不推断",
+  "sources": [
+    "https://www.cglg.net/cn/fixed-magnification-series.html",
+    "https://www.cglg.net/cn/zoom-lens-series.html",
+    "https://www.cglg.net/cn/motorized-zoom-lens-series.html",
+    "https://www.cglg.net/cn/product/Horizontal-series.html",
+    "https://www.cglg.net/cn/product/TL-62-Electric-zoom-lens.html"
+  ],
+  "models": [
+    {"model":"DXT2-WS50T","source_category":"卧式固定放大倍率系列","source_url":"https://www.cglg.net/cn/product/Horizontal-series.html","magnification":"2x","working_distance_mm":"49.7","catalog_dof_mm":"0.4","catalog_resolution_um":"6.7","catalog_distortion":"O.l%以下","catalog_sensor_format":"1/2英寸 CCD","catalog_mount":"C安装"},
+    {"model":"DXT2-WS23T","source_category":"卧式固定放大倍率系列","source_url":"https://www.cglg.net/cn/product/Horizontal-series.html","magnification":"2x","working_distance_mm":"23.2","catalog_dof_mm":"0.28","catalog_resolution_um":"4.8","catalog_distortion":"O.04%以下","catalog_sensor_format":"1/2英寸 CCD","catalog_mount":"C安装"},
+    {"model":"DXT2-WS30T","source_category":"卧式固定放大倍率系列","source_url":"https://www.cglg.net/cn/product/Horizontal-series.html","magnification":"2x","working_distance_mm":"29.5","catalog_dof_mm":"0.4","catalog_resolution_um":"6.7","catalog_distortion":"O.l%以下","catalog_sensor_format":"1/2英寸 CCD","catalog_mount":"C安装"},
+    {"model":"DXT4-WS50T","source_category":"卧式固定放大倍率系列","source_url":"https://www.cglg.net/cn/product/Horizontal-series.html","magnification":"4x","working_distance_mm":"49.6","catalog_dof_mm":"0.14","catalog_resolution_um":"4.8","catalog_distortion":"O.2%以下","catalog_sensor_format":"1/2英寸 CCD","catalog_mount":"C安装"},
+    {"model":"TL-60000","source_category":"手动变焦镜头","source_url":"https://www.cglg.net/cn/product/TL-60000-Zoom-lens-series.html","catalog_list_url":"https://www.cglg.net/cn/zoom-lens-series.html"},
+    {"model":"TL-68","source_category":"变焦镜头","source_url":"https://www.cglg.net/cn/product/TL-68-Zoom-lens-series.html","catalog_list_url":"https://www.cglg.net/cn/zoom-lens-series.html"},
+    {"model":"TL-62","source_category":"电动变焦镜头","source_url":"https://www.cglg.net/cn/product/TL-62-Electric-zoom-lens.html","magnification":"0.7X-4.5X","catalog_sensor_format":"2/3英寸 CCD","catalog_mount":"C安装","control_interface":"RS-232 或 USB"}
+  ]
+}

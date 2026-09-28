@@ -102,6 +102,9 @@ pub fn built_in() -> Result<Vec<Hardware>> {
         include_str!("../../../resources/data/lenses.csv"),
         "内置资料",
     )?);
+    items.extend(canrill_lenses()?);
+    items.extend(mvotem_lenses()?);
+    items.extend(guiguang_lenses()?);
     items.extend(parse_csv(
         Kind::Light,
         include_str!("../../../resources/data/lights.csv"),
@@ -115,6 +118,27 @@ pub fn built_in() -> Result<Vec<Hardware>> {
         crate::catalog_corrections::apply(item);
     }
     Ok(items)
+}
+pub fn canrill_lenses() -> Result<Vec<Hardware>> {
+    parse_csv(
+        Kind::Lens,
+        include_str!("../../../resources/data/canrill_lenses.csv"),
+        "内置资料",
+    )
+}
+pub fn mvotem_lenses() -> Result<Vec<Hardware>> {
+    parse_csv(
+        Kind::Lens,
+        include_str!("../../../resources/data/mvotem_lenses.csv"),
+        "内置资料",
+    )
+}
+pub fn guiguang_lenses() -> Result<Vec<Hardware>> {
+    parse_csv(
+        Kind::Lens,
+        include_str!("../../../resources/data/guiguang_lenses.csv"),
+        "内置资料",
+    )
 }
 pub fn parse_legacy_database(bytes: &[u8]) -> Result<Vec<Hardware>> {
     use rusqlite::{Connection, OpenFlags, types::ValueRef};

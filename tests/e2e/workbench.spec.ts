@@ -221,19 +221,32 @@ test("资料库分页、无结果、导入错误与预览提交", async ({ page 
     mimeType: "text/csv",
     buffer: Buffer.from("错误表头\n内容"),
   });
-  await expect(dialog.getByRole("alert")).toContainText("缺少必要字段");
-  const csv = "model,manufacturer,resolution_x\nVSTEST-IMPORT,测试厂家,1024";
+  const wizard = page.getByRole("dialog", {
+    name: "导入硬件参数表",
+    exact: true,
+  });
+  await expect(
+    wizard.getByRole("button", { name: "检查导入差异" }),
+  ).toBeDisabled();
+  await expect(wizard).toContainText("请保证型号与厂家已对应");
+  await wizard.getByRole("button", { name: "取消", exact: true }).click();
+  const importedModel = "VSTEST-IMPORT-" + Date.now();
+  const csv = `model,manufacturer,resolution_x\n${importedModel},测试厂家,1024`;
   await dialog.getByLabel("导入硬件文件").setInputFiles({
     name: "回归.csv",
     mimeType: "text/csv",
     buffer: Buffer.from(csv),
   });
-  await expect(dialog.locator(".import-preview")).toContainText("合并预览");
-  await dialog.getByRole("button", { name: "确认合并" }).click();
-  await expect(dialog.getByRole("status")).toContainText("已合并 1 条设备");
-  await dialog.getByLabel("搜索硬件").fill("VSTEST-IMPORT");
+  await wizard.getByRole("button", { name: "检查导入差异" }).click();
+  await wizard
+    .getByRole("button", { name: "确认导入 1 条", exact: true })
+    .click();
+  await expect(dialog.getByRole("status")).toContainText("已导入 1 条设备");
+  await dialog.getByLabel("搜索硬件").fill(importedModel);
   await expect(dialog.locator(".hardware-table tbody tr")).toHaveCount(1);
-  await dialog.getByRole("button", { name: "VSTEST-IMPORT 测试厂家" }).click();
+  await dialog
+    .getByRole("button", { name: importedModel + " 测试厂家" })
+    .click();
   await page.screenshot({
     path: ".codex_tmp/rust-ui/硬件资料库.png",
     fullPage: true,

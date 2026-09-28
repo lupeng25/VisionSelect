@@ -1629,6 +1629,28 @@ select {
   line-height: 1.8;
   margin-top: 8px;
 }
+@media (max-height: 780px) {
+  .detail-heading {
+    padding: 8px 12px 5px;
+  }
+  .detail-heading h3 {
+    font-size: 14px;
+    margin: 3px 0 0;
+  }
+  .detail-heading p,
+  .detail-action p {
+    display: none;
+  }
+  .detail-action {
+    padding: 7px 12px;
+  }
+  .specification-list {
+    padding: 0 12px 8px;
+  }
+  .specification-list > div {
+    padding: 5px 0;
+  }
+}
 .library-note {
   font-size: 12px;
   color: var(--muted);
@@ -2693,5 +2715,488 @@ select {
   }
   .modal::backdrop {
     animation: none !important;
+  }
+}
+
+/* 安装正投影图与尺寸标注 */
+.scene:has(.installation-view) .scene-heading {
+  height: auto;
+  min-height: 44px;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-block: 7px;
+}
+.scene-view-switch {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--panel-line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.scene-view-switch button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.scene-view-switch button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.scene:has(.scene-view-switch) .scene-heading {
+  min-height: 46px;
+}
+.installation-view {
+  container-type: inline-size;
+  padding: 0 16px 12px;
+}
+.installation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.installation-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.installation-toolbar select {
+  max-width: 210px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+}
+.installation-canvas {
+  overflow-x: auto;
+  border: 1px solid var(--panel-line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.installation-drawing {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  max-height: 405px;
+}
+.installation-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 0;
+}
+.installation-devices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--panel-line);
+}
+.installation-devices > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.installation-devices svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.installation-devices span {
+  min-width: 0;
+}
+.installation-devices small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+.installation-devices strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.installation-caption {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.installation-warning {
+  color: var(--warning);
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+@media (max-width: 900px) {
+  .installation-inputs {
+    gap: 8px;
+  }
+  .installation-devices {
+    grid-template-columns: 1fr;
+  }
+  .scene-heading:has(.scene-view-switch) {
+    height: auto;
+    padding-block: 7px;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+}
+@container (max-width: 520px) {
+  .installation-drawing text {
+    font-size: 16px;
+  }
+}
+
+/* Excel / CSV 导入向导 */
+.hardware-import {
+  border: 0;
+  margin: 0;
+  padding: 18px 24px;
+  min-width: 0;
+  max-height: 65dvh;
+  overflow: auto;
+}
+.import-steps {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  gap: 24px;
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.import-steps .active {
+  color: var(--accent);
+  font-weight: 600;
+}
+.import-file-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface-subtle);
+  border-radius: 10px;
+}
+.import-file-heading > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.import-file-heading small,
+.import-diff td > small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+.import-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0;
+}
+.import-options label,
+.import-policy label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text);
+}
+.import-options label {
+  flex: 1;
+  min-width: 135px;
+}
+.hardware-import input[type="number"],
+.hardware-import select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.import-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.import-section-heading h3 {
+  font-size: 14px;
+  margin: 12px 0;
+}
+.import-section-heading small {
+  color: var(--muted);
+  font-weight: normal;
+  margin-left: 8px;
+}
+.import-help,
+.import-policy p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 8px 0 12px;
+}
+.import-table-scroll {
+  overflow: auto;
+  max-height: 320px;
+  border: 1px solid var(--panel-line);
+  border-radius: 9px;
+}
+.import-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+.import-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-raised);
+  text-align: left;
+  color: var(--text);
+}
+.import-table td,
+.import-table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--seam);
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.import-table td:nth-child(2) {
+  color: var(--muted);
+}
+.import-table td select {
+  max-width: 100%;
+}
+.import-policy {
+  margin: 18px 0 8px;
+}
+.import-policy select {
+  max-width: 330px;
+}
+.import-skip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text);
+}
+.import-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.import-summary > div {
+  padding: 14px;
+  background: var(--surface-subtle);
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.import-summary strong {
+  display: block;
+  color: var(--text);
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+.import-errors {
+  max-height: 180px;
+  overflow: auto;
+  background: var(--danger-soft);
+  color: var(--danger);
+  padding: 12px 16px;
+  border-radius: 9px;
+  margin: 12px 0;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.import-errors ul {
+  padding-left: 18px;
+  margin: 8px 0;
+}
+.import-diff th:first-child {
+  width: 32%;
+}
+.import-diff th:nth-child(2) {
+  width: 12%;
+}
+.import-diff th:nth-child(3) {
+  width: 56%;
+}
+.import-diff td > strong {
+  display: block;
+  margin-top: 5px;
+  font-weight: 500;
+}
+.import-diff summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.import-diff dl {
+  margin: 8px 0;
+}
+.import-diff dl > div {
+  padding: 5px 0;
+}
+.import-diff dt {
+  color: var(--muted);
+}
+.import-diff dd {
+  margin: 3px 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.import-diff dd svg {
+  flex-shrink: 0;
+}
+.import-diff del {
+  color: var(--muted);
+}
+.import-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--seam);
+  background: var(--surface);
+}
+.import-footer p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+.import-footer > div {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+@media (max-height: 780px) {
+  .hardware-import {
+    max-height: 56dvh;
+  }
+}
+
+/* 点击入口先展示导入面板，再由用户选择文件 */
+.import-entry {
+  padding: 20px 24px 24px;
+  max-height: 70dvh;
+  overflow: auto;
+}
+.import-entry-kind {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.import-entry-kind select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--text);
+}
+.import-drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 13px;
+  background: var(--surface-subtle);
+}
+.import-drop-zone.dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.import-entry-icon {
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+}
+.import-drop-zone h3 {
+  font-size: 17px;
+  margin: 14px 0 5px;
+}
+.import-drop-zone p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 18px;
+  line-height: 1.6;
+}
+.import-drop-zone small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 16px;
+  line-height: 1.7;
+  max-width: 340px;
+}
+.import-entry-template {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+.import-entry-template > div {
+  flex: 1;
+  min-width: 0;
+}
+.import-entry-template strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.import-entry-template p,
+.import-entry-note {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 4px 0 0;
+}
+.import-entry-note {
+  border-top: 1px solid var(--seam);
+  padding-top: 14px;
+  margin-top: 16px;
+}
+@media (max-height: 780px) {
+  .import-entry {
+    max-height: 67dvh;
+  }
+  .import-drop-zone {
+    padding-block: 16px;
   }
 }

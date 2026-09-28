@@ -317,7 +317,7 @@ fn catalog_preserves_all_builtin_devices_and_unknown_fields() {
     let all = catalog::built_in().unwrap();
     for (kind, count) in [
         (Kind::Camera, 1393),
-        (Kind::Lens, 1004),
+        (Kind::Lens, 1809),
         (Kind::Light, 2180),
         (Kind::ThreeD, 267),
     ] {
@@ -392,7 +392,7 @@ fn hardware_import_previews_backs_up_then_commits_once() {
     let count: i64 = backup
         .query_row("SELECT COUNT(*) FROM hardware", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(count, 4844);
+    assert_eq!(count, 5649);
     assert_eq!(store.dispatch("catalog", query).unwrap()["total"], 1);
     assert!(
         store
@@ -424,7 +424,7 @@ fn failed_or_duplicate_import_does_not_change_catalog() {
     }
     assert_eq!(
         store.dispatch("bootstrap", json!({})).unwrap()["counts"]["lens"],
-        1004
+        1809
     );
     assert!(
         store

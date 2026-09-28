@@ -101,8 +101,15 @@ pub fn evaluate(project: &Project) -> Result<Evaluation> {
 }
 fn imaging(project: &Project, e: &mut Evaluation) {
     let p = &project.parameters;
-    let c = project.hardware[0].as_ref();
-    let l = project.hardware[1].as_ref();
+    // 旧方案快照仍保留原文；计算只使用核对后的内置设备字段。
+    let camera = project.hardware[0]
+        .as_ref()
+        .map(crate::catalog_corrections::corrected);
+    let lens = project.hardware[1]
+        .as_ref()
+        .map(crate::catalog_corrections::corrected);
+    let c = camera.as_deref();
+    let l = lens.as_deref();
     let light = project.hardware[2].as_ref();
     for kind in [Kind::Camera, Kind::Lens, Kind::Light] {
         if project.hardware[kind.index()].is_none() {
@@ -124,7 +131,23 @@ fn imaging(project: &Project, e: &mut Evaluation) {
     let sensor_x = rx.zip(pitch).map(|(r, s)| r * s / 1000.);
     let sensor_y = ry.zip(pitch).map(|(r, s)| r * s / 1000.);
     let tele = l.is_some_and(Hardware::telecentric);
-    let magnification = if tele {
+    let lens_type = text(l, "lens_type");
+    let line_scan_lens = lens_type.eq_ignore_ascii_case("LineScan");
+    if line_scan_lens {
+        push(
+            e,
+            "lens_application",
+            "镜头适用相机类型",
+            Status::Unknown,
+            None,
+            None,
+            "",
+            "线扫镜头的面阵适用性需核对厂家规格、像圈和安装条件；仅凭类别不能判定不兼容，实测视场也不代表完整成像质量已确认。",
+        );
+    }
+    let magnification = if line_scan_lens {
+        None
+    } else if tele {
         number(l, "pmag")
     } else {
         number(l, "focal_length_mm").map(|f| f / p.distance)
@@ -146,6 +169,11 @@ fn imaging(project: &Project, e: &mut Evaluation) {
             "近轴估算：视场 ≈ 传感器尺寸 × 工作距离 ÷ 焦距；建议以实测视场复核。"
         }
         .into();
+    }
+    if line_scan_lens && !p.measured {
+        e.model_note = "线扫镜头的面阵适用性待确认；不直接套用近轴模型，请核对厂家规格并填写当前安装条件下的实测视场。".into();
+    } else if lens_type.eq_ignore_ascii_case("FixedMagnification") && !p.measured {
+        e.model_note = "定倍率镜头仅有目录标称倍率，当前安装距离下的视场需要实测确认。".into();
     }
     bound(
         e,

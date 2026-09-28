@@ -15,6 +15,9 @@ export interface Parameters {
   margin: number;
   pixel: number;
   distance: number;
+  light_distance?: number | null;
+  distance_tolerance?: number | null;
+  light_distance_tolerance?: number | null;
   fps: number;
   speed: number;
   exposure: number;
@@ -129,6 +132,9 @@ export const defaultParameters: Parameters = {
   margin: 2,
   pixel: 10,
   distance: 110,
+  light_distance: null,
+  distance_tolerance: null,
+  light_distance_tolerance: null,
   fps: 20,
   speed: 0,
   exposure: 100,
